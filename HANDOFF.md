@@ -2,8 +2,9 @@
 
 **Updated:** 2026-11-17
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `087ea11ba7a49a863a9ab6f4233cc46a3fa6238a` (PR #5 combined personal Claude+GPT acceptance; **offline CI PASS, live Claude and native GPT test NOT performed**). Earlier PR #4 GPT error handling, PR #3 manual logout and PR #2 native GPT test-file tools/Linux refresh remain in source; their live tests are still pending.
+**Last merged development code version:** `04d2fdf93b377fb7fdd1f6db469709ee24bef52d` (PR #6 Windows/POSIX refresh lock, **offline CI PASS; native Windows/live OAuth NOT verified**). Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
+**Rollback before cross-platform lock PR #6:** `a9f69c397a541497a92e517a29126d549631c905` (main HEAD immediately before merge).
 **Rollback before combined acceptance PR #5:** `7e425a6e9b6da0e92de8b9566210583e82e2e619` (main HEAD immediately before merge).
 **Rollback before GPT error-handling PR #4:** `93fca68992aac8b5d7e371a90864557f677b0052` (main HEAD before merge).
 **Rollback before sign-out PR #3:** `9aa574dbdc18f0454386c2011c2a077dcc72e15d` (source main immediately before merge).
@@ -20,16 +21,24 @@
 - Local secrets, access and refresh tokens were **not** printed, moved to GitHub or sent in the chat. They are in the Codespace user's protected app-data directory outside this public repository. Credentials are not replicated to the current agent runtime.
 - Existing nonblocking browser fix: `ai_agent_engine/siwc.py` launches Firefox on a daemon thread while the loopback server waits for the callback. Before live authentication, 22/22 offline unit tests, compileall and offline demo passed. No production deployment.
 
-## In progress — phase 1.7 cross-platform session lock
+## Phase 1.7 cross-platform session lock — offline PASS
 
-Branch `phase-1-7-cross-platform-refresh-lock` updates
-`ai_agent_engine/session_refresh.py` and synthetic lock tests:
-Windows single-byte `msvcrt` locks, POSIX `flock`, shared bounded
-refresh/logout lock, persistent lock file, symlink/regular-file checks.
-The source branch still needs PR review and GitHub Actions CI.
-No real Windows validation, owner's OAuth refresh/revoke, production
-storage or VM transfer has occurred. Preserve 1.7 as **OPEN**.
-Current development rollback base: `a9f69c397a541497a92e517a29126d549631c905`.
+**2026-11-17 PR #6** [Windows/POSIX session locking](https://github.com/vl-ktk/ai-agent-engine/pull/6)
+merged to `main` as code version `04d2fdf93b377fb7fdd1f6db469709ee24bef52d`.
+Rollback to prior `main`: `a9f69c397a541497a92e517a29126d549631c905`.
+[GitHub Actions 43971352769](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43971352769):
+**3/3 PASS** Python 3.11, 3.12 and 3.13 with **84/84 synthetic
+offline tests on each version**, compile and demo PASS.
+
+POSIX now uses bounded nonblocking `flock`; Windows uses bounded
+single-byte `msvcrt.locking`; refresh and manual logout share a persistent
+private lock file. Reject symlinks/nonregular file, limit wait, never leak
+credentials to the lock file and do not rotate after lock acquisition fails.
+**Windows was simulated in Linux CI**, not executed on a Windows host.
+Existing Codespaces session, personal refresh/revocation, native Windows/macOS
+and self-hosted VM import all remain **NOT tested**. No new VM, API cost or
+production deployment. Keep phase 1.7 **OPEN**. Later owner-assisted
+live acceptance is still necessary; do not request repeated phone tasks.
 
 ## Verified offline-only change — combined personal acceptance
 
