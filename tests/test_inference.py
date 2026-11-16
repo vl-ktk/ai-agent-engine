@@ -169,6 +169,23 @@ class ProbeTests(unittest.TestCase):
         self.assertIn("ChatGPT model: gpt-test-1", output.getvalue())
         self.assertIn("Completed GPT reply: Hello, world!", output.getvalue())
 
+    def test_vscode_tasks_are_explicit_and_do_not_autorun(self):
+        root = Path(__file__).resolve().parent.parent
+        tasks = json.loads((root / ".vscode" / "tasks.json").read_text())
+        self.assertEqual(tasks["version"], "2.0.0")
+        by_label = {task["label"]: task for task in tasks["tasks"]}
+        self.assertEqual(len(by_label), 3)
+        self.assertEqual(
+            by_label["AI Agent Engine: 3. Send one GPT test request"]["args"],
+            ["-m", "ai_agent_engine.inference", "probe"],
+        )
+        for task in by_label.values():
+            self.assertEqual(task["type"], "process")
+            self.assertEqual(task["command"], "python3")
+            self.assertEqual(task["options"]["cwd"], "${workspaceFolder}")
+            self.assertNotEqual(task.get("runOptions", {}).get("runOn"), "folderOpen")
+            self.assertNotIn("token", str(task).lower())
+
     def test_blank_prompts_do_not_call_provider(self):
         with self.assertRaises(inference.InferenceError):
             inference.request_answer("gpt-test-1", " ", self.store,
