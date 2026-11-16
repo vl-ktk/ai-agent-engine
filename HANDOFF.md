@@ -31,10 +31,18 @@
 - `SandboxFiles` is adequate for controlled demo only; hostile workloads require real OS/container confinement and race-safe file operations.
 - No billing, API subscription usage, VPS purchase, model inference or production change has been authorized or carried out by this repository transfer.
 
+## Cloud-only development transition (owner-approved direction, 2026-11-16)
+
+- Owner is away from home and their Windows PC is powered off. Do not require that machine for development.
+- Existing 11 global roadmap phases remain unchanged. Work under phase 1.5 adds subitems 1.5.A (reproducible cloud environment), 1.5.B (GitHub Actions CI), 1.5.C (real SIWC sign-in without home PC).
+- This commit adds `.github/workflows/ci.yml` and `.devcontainer/devcontainer.json`; the actual CI run must be inspected before marking 1.5.B verified.
+- GitHub-hosted standard runners for the public repository are free; Codespaces has its own limited free quota and has **not** been started here. No paid VM has been procured.
+- SIWC still requires loopback `127.0.0.1/auth/callback` in the browser's host. A phone browser pointed at cloud CLI cannot reach its loopback server. A cloud VM with a browser on that same VM may work but has not been tested or rented; do not claim real login success.
+
 ## Next work
 
-1. Owner runs the new CLI on their **own Windows computer**: `py -m pip install -r requirements-siwc.txt`, then `py -m ai_agent_engine.auth login` and `py -m ai_agent_engine.auth status`. Do not copy OAuth tokens, authentication URLs or credential files into chat.
-2. Confirm that the real OIDC identity validation passed and `chatgpt.tokens.use.direct` + `resource.invoke` were granted. Keep 1.5 [ ] until this has happened.
+1. Inspect GitHub Actions results and validate the clean cloud environment; do not start a potentially metered Codespace without owner approval. Do not copy OAuth tokens, authentication URLs or credential files into chat.
+2. Arrange an owner-operated browser and OAuth callback on the same host without requiring the powered-off home Windows. Confirm real OIDC identity validation and `chatgpt.tokens.use.direct` + `resource.invoke`. Keep 1.5 [ ] until this has happened.
 3. Only after permission, test one actual GPT model request and official Claude Code `claude -p` under 1.6, assess limits and terms. No usage-billed API key without separate owner consent.
 4. Stage 1.7 will harden secure session refresh/revocation and VM migration; stage 4 begins only after owner decision on costs.
 

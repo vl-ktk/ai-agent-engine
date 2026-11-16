@@ -1,0 +1,39 @@
+name: CI (offline)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: offline-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-checks:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install optional OAuth test requirements
+        run: python -m pip install -r requirements-siwc.txt
+      - name: Compile application and tests
+        run: python -m compileall -q ai_agent_engine tests
+      - name: Run offline unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Run offline demo
+        run: python -m ai_agent_engine
