@@ -158,6 +158,33 @@ class AgentToolsTests(unittest.TestCase):
         self.assertFalse(passed)
         self.assertIn("arguments", err)
 
+    def test_quota_failure_in_tool_stream_aborts_without_file_side_effect(self):
+        quota_stream = (
+            b'data: {"type":"response.failed","response":{"error":'
+            b'{"code":"subscription_sharing_usage_limit_exceeded",'
+            b'"message":"private account details"}}}\\n\\n'
+        )
+        transport = FakeTransport(catalog(), quota_stream)
+        slug, result, passed, error = plan_agent.run_one_click(
+            self.store, opener=transport,
+        )
+        self.assertEqual(slug, "gpt-testing")
+        self.assertEqual(result.status, "failed")
+        self.assertFalse(passed)
+        self.assertIn("Pause requests", error)
+        self.assertNotIn("private account details", error)
+        self.assertEqual(len(transport.requests), 2)
+
+    def test_inconsistent_completed_event_status_is_not_accepted(self):
+        bad = b'data: {"type":"response.completed","response":{"status":"failed","output":[]}}\\n\\n'
+        transport = FakeTransport(catalog(), bad)
+        _, result, passed, error = plan_agent.run_one_click(
+            self.store, opener=transport,
+        )
+        self.assertEqual(result.status, "failed")
+        self.assertFalse(passed)
+        self.assertIn("valid output", error)
+
     def test_stream_reports_no_success_without_completed_event(self):
         with self.assertRaises(InferenceError):
             plan_agent._stream_output(BytesIO(
