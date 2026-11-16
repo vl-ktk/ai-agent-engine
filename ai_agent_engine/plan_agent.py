@@ -15,6 +15,7 @@ from typing import Any, Callable, Mapping
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from .api_errors import stream_plan_error
 from .core import Action, Agent, AgentResult, Message, ModelTurn
 from .inference import (
     API_ORIGIN, MAX_STREAM_BYTES, InferenceError, _access_token,
@@ -91,13 +92,14 @@ def _stream_output(response: Any) -> list[dict[str, Any]]:
             raise InferenceError("OpenAI returned an invalid tool stream")
         kind = event.get("type")
         if kind == "response.failed":
-            raise InferenceError("OpenAI tool request failed")
+            raise stream_plan_error(event)
         if kind == "response.incomplete":
             raise InferenceError("OpenAI tool response was incomplete")
         if kind == "response.completed":
             payload = event.get("response")
             output = payload.get("output") if isinstance(payload, dict) else None
-            if not isinstance(output, list) or any(not isinstance(item, dict) for item in output):
+            if (not isinstance(payload, dict) or payload.get("status") != "completed" or
+                    not isinstance(output, list) or any(not isinstance(item, dict) for item in output)):
                 raise InferenceError("OpenAI completed response contained no valid output")
             completed = output
 
