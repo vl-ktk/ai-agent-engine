@@ -7,12 +7,13 @@ from datetime import datetime, timezone
 import sys
 import time
 
+from .session_revoke import sign_out
 from .siwc import AuthError, CredentialStore, login
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Local ChatGPT sign-in (no API key)")
-    parser.add_argument("command", choices=("login", "status"))
+    parser.add_argument("command", choices=("login", "status", "logout"))
     parser.add_argument("--manual-browser", action="store_true",
                         help="print the sign-in URL for a browser on this same host")
     options = parser.parse_args(argv)
@@ -24,6 +25,13 @@ def main(argv: list[str] | None = None) -> int:
             print("ChatGPT plan permission:", "GRANTED" if info["sharing_enabled"] else "NOT GRANTED")
             if not info["sharing_enabled"]:
                 print("Enable ChatGPT plan usage before attempting a model request.")
+        elif options.command == "logout":
+            revoked = sign_out(store)
+            print("Local ChatGPT tokens removed (or no session existed).")
+            if revoked:
+                print("Remote revocation: CONFIRMED (or there was no saved session).")
+            else:
+                print("Remote revocation NOT CONFIRMED. Disconnect the app in ChatGPT Settings.")
         else:
             session = store.load_session()
             if session is None:
@@ -36,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
                     stamp = datetime.fromtimestamp(expiration, tz=timezone.utc).isoformat()
                     print("Access token expires:", stamp)
                     if expiration < time.time():
-                        print("Access token expired. Token refresh is a later task; use login again.")
+                        print("Access token expired. The next model request will attempt a safe refresh.")
         return 0
     except AuthError as exc:
         print("Login unavailable:", exc, file=sys.stderr)
