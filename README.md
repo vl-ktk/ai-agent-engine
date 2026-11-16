@@ -106,6 +106,50 @@ refreshes; never publish or copy tokens via GitHub/CI. See the
 [official OpenAI VM guide](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms).
 No VM or transfer is authorized or performed yet.
 
+## Future self-hosted VM session staging (phase 1.7 — offline only)
+
+The owner may later move a previously authorized **single ChatGPT account**
+from a trusted local host to an owner-approved, self-hosted VM. This has **not**
+happened. The CLI below never connects to a host, performs OAuth, copies or
+prints secrets, contacts the model or chooses a deployment.
+
+OpenAI's [self-hosted VM guidance](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms)
+requires a **separate persistent VM `ext_agent_host_id`** established before
+import, a protected transfer over a secure channel such as SSH, reuse of the
+issued OAuth registration and the VM taking over refresh afterward.
+
+Only **on the future VM**, when the owner has explicitly approved that server:
+
+```bash
+python3 -m ai_agent_engine.vm_credentials prepare-host
+python3 -m ai_agent_engine.vm_credentials check
+```
+
+These commands create (once) and inspect a **non-secret VM host ID**, not a
+token. Never use a laptop's `host.json` to replace this file. Later, an
+owner-controlled SSH stdin pipe carrying the existing protected source
+`session.json` may be offered to:
+
+- `python3 -m ai_agent_engine.vm_credentials validate-stdin` for **read-only
+  dry-run** validation (requires prepared VM ID and an empty destination).
+- `python3 -m ai_agent_engine.vm_credentials import-stdin --apply
+  --confirm-vm-host <VM_URN_UUID>` for **explicit one-time import**, after
+  review and separate owner authorization. It refuses mismatched VM IDs,
+  source/destination ID collisions, conflicting issued client registrations,
+  or overwriting a destination session. The persistent refresh/logout lock
+  serializes import against token operations; the VM's own ID replaces only
+  the source `ext_agent_host_id` metadata.
+
+Do **not** pass OAuth tokens via command arguments, shell history, chat,
+GitHub, workflow variables or issues. Do not send session files through
+public deployment systems. The tool checks fields and structure but **cannot
+prove a copied token is still valid, re-verify the original OAuth login, or
+guarantee success of remote refresh/revocation**. Origin login must be
+trusted; dry-run is not a live OAuth verification. The target credential
+store uses local file permissions; VM disk encryption, user isolation,
+backups and lifecycle hardening belong to separately authorized phase 4.
+No actual transfer or target VM was attempted in phase 1.7.
+
 ## Safe GPT plan errors (phase 1.6 — offline tested)
 
 The CLI and bounded sandbox model distinguish documented ChatGPT-plan errors:
