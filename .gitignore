@@ -12,3 +12,8 @@ secrets/
 credentials/
 demo-output/
 .pytest_cache/
+
+# SIWC credential records must never be committed if copied accidentally.
+host.json
+session.json
+pending-registration.json

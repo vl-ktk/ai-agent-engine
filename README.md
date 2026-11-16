@@ -2,8 +2,9 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
-> **Status: offline proof of concept, not production-ready.** This code does not
-> authenticate to OpenAI or Anthropic, call an LLM, or provide server access.
+> **Status: offline agent demo + locally testable Sign in with ChatGPT client.**
+> OAuth integration is implemented but **no real account sign-in has been verified**.
+> No GPT/Claude inference, server deployment or production access exists.
 
 ## What works in the prototype
 
@@ -25,6 +26,25 @@ python -m unittest discover -s tests -v
 
 The demo uses a disposable temporary directory and does not touch working projects.
 
+## Sign in with ChatGPT — local pilot (phase 1.5)
+
+The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.
+
+**Run on your own Windows PC**, with Python 3.11+ and a browser installed. From the checked-out repository directory:
+
+```powershell
+py -m pip install -r requirements-siwc.txt
+py -m ai_agent_engine.auth login
+py -m ai_agent_engine.auth status
+```
+
+On Linux/macOS replace `py` with `python3`. During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. Do not run login on a remote VM, in ChatGPT's sandbox, or in an unrelated browser on your phone.
+
+Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities; it does not yet refresh or revoke tokens (phase 1.7). On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
+
+**Limits:** Successful local code/tests do not prove that OpenAI will grant the required scope to your account. OAuth remains unverified until you actually complete `login`; model calls and subscription quota checks belong to phase 1.6. Signing in does not itself start a paid OpenAI API call.
+
+
 ## Project roadmap and architecture
 
 - [Implementation roadmap — 11 phases and detailed checkpoints](./IMPLEMENTATION_ROADMAP.md).
@@ -36,7 +56,7 @@ repositories remain separate; integrations require explicit owner authorization.
 
 ## Planned integrations (NOT implemented)
 
-- Sign in with ChatGPT for an eligible user-owned OSS/self-hosted instance.
+- Complete and verify real Sign in with ChatGPT authorization on the owner's PC; later refresh/revocation and self-hosted VM transfer.
 - Claude Code installed and authorized by the actual user through Anthropic's
   official sign-in flow, after confirming the intended use is permitted.
 - MCP, durable queue, permissions, persistent memory and safe service sandbox.
