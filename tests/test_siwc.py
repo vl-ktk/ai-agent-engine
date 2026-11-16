@@ -218,6 +218,65 @@ class TokenValidationTests(unittest.TestCase):
             self.assertIsNone(store._read("pending-registration.json"))
 
 
+    def test_blocking_browser_command_does_not_delay_oauth_callback(self):
+        """A foreground Firefox launcher must not block the loopback server."""
+        with TemporaryDirectory() as directory:
+            store = siwc.CredentialStore(Path(directory) / "private-data")
+            browser_release = threading.Event()
+            browser_finished = threading.Event()
+            callback_threads: list[threading.Thread] = []
+
+            def fake_browser(url: str, *, new: int) -> bool:
+                self.assertEqual(new, 1)
+                query = parse_qs(urlsplit(url).query)
+                redirect_uri = query["redirect_uri"][0]
+                state = query["state"][0]
+
+                def send_callback():
+                    from urllib.request import urlopen
+                    callback_url = (redirect_uri + "?state=" + state
+                                    + "&code=test-code&client_id=oaiapp_test")
+                    with urlopen(callback_url, timeout=5) as response:
+                        self.assertEqual(response.status, 200)
+
+                callback_thread = threading.Thread(target=send_callback)
+                callback_thread.start()
+                callback_threads.append(callback_thread)
+                # Simulates the BROWSER command waiting until Firefox is closed.
+                browser_release.wait(timeout=3)
+                browser_finished.set()
+                return True
+
+            def fake_exchange(*, client_id, code, verifier, redirect_uri):
+                self.assertEqual(client_id, "oaiapp_test")
+                self.assertEqual(code, "test-code")
+                return {
+                    "id_token": "dummy-id-token", "access_token": "dummy-access",
+                    "refresh_token": "dummy-refresh",
+                    "scope": "openid resource.invoke chatgpt.tokens.use.direct",
+                    "expires_in": 3600,
+                }
+
+            started = time.monotonic()
+            try:
+                with patch("ai_agent_engine.siwc.webbrowser.open",
+                           side_effect=fake_browser), \
+                     patch("ai_agent_engine.siwc._exchange_code",
+                           side_effect=fake_exchange), \
+                     patch("ai_agent_engine.siwc.validate_id_token",
+                           return_value={"sub": "user123", "email": "user@example.test"}):
+                    result = siwc.login(store, timeout=4)
+                duration = time.monotonic() - started
+            finally:
+                browser_release.set()
+                for thread in callback_threads:
+                    thread.join(timeout=5)
+            self.assertLess(duration, 2.5, "Browser process exit blocked OAuth callback")
+            self.assertTrue(browser_finished.wait(timeout=2))
+            self.assertTrue(result["sharing_enabled"])
+            self.assertEqual(store.load_session()["subject"], "user123")
+
+
     def test_manual_browser_mode_keeps_callback_on_same_host(self):
         """Offline remote-desktop scenario: never open an unrelated system browser."""
         with TemporaryDirectory() as directory:
