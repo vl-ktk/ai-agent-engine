@@ -136,6 +136,48 @@ class ProbeTests(unittest.TestCase):
         self.assertIn("401", str(caught.exception))
         self.assertNotIn("super-secret-token", str(caught.exception))
 
+    def test_http_quota_stops_without_retry_or_changing_session(self):
+        requests = []
+        def transport(request, timeout):
+            requests.append(request)
+            if request.full_url.endswith("/models"):
+                return BytesIO(MODEL_ROWS)
+            return None if False else self._quota_rejection(request)
+        from ai_agent_engine.api_errors import PlanRequestError
+        before = self.store.load_session()
+        with self.assertRaises(PlanRequestError) as caught:
+            inference.request_answer("gpt-test-1", "hello", self.store,
+                                     opener=transport)
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(caught.exception.http_status, 429)
+        self.assertEqual(caught.exception.body_shape, "error")
+        self.assertIn("Pause requests", str(caught.exception))
+        self.assertEqual(self.store.load_session(), before)
+
+    @staticmethod
+    def _quota_rejection(request):
+        return HTTPError(request.full_url, 429, "private provider message", {
+            "x-request-id": "req_quota1",
+        }, BytesIO(json.dumps({
+            "error": {"code": "subscription_sharing_usage_limit_exceeded",
+                      "message": "private subscriber details"},
+        }).encode("utf-8")))
+
+    def test_failed_stream_code_keeps_diagnostic_without_partial_success(self):
+        from ai_agent_engine.api_errors import PlanRequestError
+        stream = (
+            b'data: {"type":"response.output_text.delta","delta":"partial"}\\n\\n'
+            b'data: {"type":"response.failed","response":{"error":'
+            b'{"code":"subscription_sharing_usage_limit_exceeded",'
+            b'"message":"hidden provider details"}}}\\n\\n'
+        )
+        with self.assertRaises(PlanRequestError) as caught:
+            inference.request_answer("gpt-test-1", "hello", self.store,
+                                     opener=FakeTransport(MODEL_ROWS, stream))
+        self.assertEqual(caught.exception.body_shape, "stream.error")
+        self.assertIn("Pause requests", str(caught.exception))
+        self.assertNotIn("hidden provider details", str(caught.exception))
+
     def test_one_click_probe_chooses_first_visible_model(self):
         transport = FakeTransport(MODEL_ROWS, MODEL_ROWS, COMPLETE_STREAM)
         model, reply = inference.probe_first_model(self.store, opener=transport)
