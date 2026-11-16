@@ -14,16 +14,13 @@ from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from .api_errors import InferenceError, http_plan_error, stream_plan_error
 from .siwc import CredentialStore, DIRECT_SCOPE
 
 API_ORIGIN = "https://api.openai.com/v1"
 MAX_MODEL_RESPONSE_BYTES = 2_000_000
 MAX_STREAM_BYTES = 2_000_000
 MAX_OUTPUT_CHARS = 20_000
-
-
-class InferenceError(Exception):
-    """Safe diagnostic failure without raw credentials or provider bodies."""
 
 
 def _access_token(store: CredentialStore, *, now: float | None = None) -> str:
@@ -48,7 +45,7 @@ def _open(request: Request, *, opener: Callable[..., Any], timeout: int) -> Any:
     try:
         return opener(request, timeout=timeout)
     except HTTPError as exc:
-        raise InferenceError(f"OpenAI request rejected (HTTP {exc.code})") from None
+        raise http_plan_error(exc) from None
     except (URLError, TimeoutError, OSError) as exc:
         raise InferenceError("OpenAI request could not be completed") from None
 
@@ -124,10 +121,7 @@ def _consume_sse(response: Any) -> str:
                 raise InferenceError("OpenAI response exceeded the diagnostic text limit")
             parts.append(delta)
         elif kind == "response.failed":
-            error = event.get("response", {}).get("error") if isinstance(event.get("response"), dict) else None
-            code = error.get("code") if isinstance(error, dict) else None
-            safe_code = code if isinstance(code, str) and code.replace("_", "").isalnum() and len(code) <= 80 else "unknown_error"
-            raise InferenceError(f"OpenAI response failed ({safe_code})")
+            raise stream_plan_error(event)
         elif kind == "response.incomplete":
             raise InferenceError("OpenAI response was incomplete")
         elif kind == "response.completed":
