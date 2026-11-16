@@ -43,7 +43,7 @@ On Linux/macOS replace `py` with `python3`. For an **interactive remote desktop*
 
 During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. The owner completed a live same-host remote Firefox/OAuth callback on the GitHub Codespace. This does **not** authorize paid hosting.
 
-Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities. An explicit GPT diagnostic can refresh an expiring token on the Linux pilot; an explicit `auth logout` command attempts remote refresh-token revocation and removes the local tokens. Neither operation has undergone an owner-operated live integration test; phase 1.7 remains open. On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
+Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities. An explicit GPT diagnostic can refresh an expiring token using an OS-managed lock on Linux, macOS or Windows; an explicit `auth logout` command attempts remote refresh-token revocation and removes the local tokens. Neither operation has undergone an owner-operated live integration test; phase 1.7 remains open. On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
 
 To sign out manually when the owner chooses to disconnect this installation, run `python3 -m ai_agent_engine.auth logout` (or `py -m ai_agent_engine.auth logout` on Windows). It attempts the OpenAI OIDC refresh-token revocation with limited retries, then deletes the local tokens while retaining the issued client registration and host ID for later sign-in. **This command has NOT been run against the owner's live account.** If remote revocation could not be confirmed, the CLI explicitly advises disconnecting the app in ChatGPT Settings. Never invoke it automatically.
 
@@ -73,16 +73,38 @@ For a later combined owner-assisted session:
    verifies both calls against a real file in an automatically deleted
    temporary directory, and refuses to claim PASS without matching contents.
    The click may refresh the saved SIWC token if expired; OAuth refresh is
-   protected by a local Linux process lock and never printed. This is the
-   limited Linux Codespaces pilot, not the complete cross-platform phase 1.7.
+   protected by a bounded interprocess lock on Linux/macOS/Windows and never printed.
+   The Windows locking path has only synthetic offline tests, not a native Windows
+   OAuth acceptance. This is still an owner-controlled pilot, not production storage.
 
 The tasks do not run on workspace open. They keep OAuth credentials in the
 Codespace user's protected storage; no secrets are passed as task arguments
 or uploaded to GitHub. Tasks 1–3 keep their original expiry-only behavior. The new explicit
 sandbox test (task 4) attempts a safe, single-session token refresh as a
-prerequisite. Live verification of refresh and revocation, cross-platform handling and secure VM migration remain phase 1.7.
+prerequisite. Live verification of refresh/revocation, native Windows locking and secure VM migration remain phase 1.7.
 **The live request must be performed by the owner in the existing Codespace;
 CI cannot validate it and does not possess credentials.**
+
+## Cross-platform ChatGPT session locking (phase 1.7 — offline only)
+
+Refresh and explicit manual logout share the same persistent
+`.refresh.lock` inside the owner's private credential directory. POSIX uses
+`fcntl.flock`; Windows uses `msvcrt.locking` on one byte, with bounded
+waits and fail-closed errors. The file is never removed, avoiding races
+through replacement lock inodes. No token text enters the lock file, logs,
+source control or GitHub Actions. A failure to obtain the lock prevents
+credential rotation and leaves the saved session unchanged.
+
+**Validation:** Linux CI exercises the real POSIX lock and synthetic
+Windows `msvcrt` calls; the actual Windows operating system, its profile
+ACL protection, network-file-system behavior and a live OAuth refresh/revoke
+were not tested. This code does **not** implement VM credential import.
+For a future owner-approved VM, preserve a distinct persistent VM host ID,
+complete OAuth locally, transfer selected credentials through a protected
+SSH channel to the VM's local credential directory, and let the VM own later
+refreshes; never publish or copy tokens via GitHub/CI. See the
+[official OpenAI VM guide](https://developers.openai.com/siwc/token-sharing-open-source/self-hosted-vms).
+No VM or transfer is authorized or performed yet.
 
 ## Safe GPT plan errors (phase 1.6 — offline tested)
 

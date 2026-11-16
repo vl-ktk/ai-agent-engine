@@ -98,5 +98,98 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(self.store.load_session()["access_token"], "old-private-access")
 
 
+    def test_posix_lock_is_exclusive_bounded_and_released(self):
+        from ai_agent_engine.session_refresh import _session_lock
+        import os
+        if os.name != "posix":
+            self.skipTest("POSIX native lock is tested on Linux CI")
+        with _session_lock(self.store):
+            with self.assertRaisesRegex(SessionRefreshError, "Timed out"):
+                with _session_lock(self.store, wait_seconds=0):
+                    self.fail("A second process must not acquire the same lock")
+        with _session_lock(self.store, wait_seconds=0):
+            pass
+
+    def test_lock_file_is_never_unlinked_and_is_mode_0600(self):
+        from ai_agent_engine.session_refresh import _session_lock
+        import os
+        import stat
+        if os.name != "posix":
+            self.skipTest("File permission bits are POSIX-specific")
+        with _session_lock(self.store):
+            lock = self.store.root / ".refresh.lock"
+            self.assertTrue(lock.exists())
+            self.assertEqual(stat.S_IMODE(lock.stat().st_mode), 0o600)
+        self.assertTrue(lock.exists())
+
+    def test_symlink_lock_is_rejected_without_touching_target(self):
+        from ai_agent_engine.session_refresh import _session_lock
+        import os
+        if os.name != "posix":
+            self.skipTest("Symlink test requires POSIX filesystem behavior")
+        self.store._ensure_root()
+        target = self.store.root / "private-target"
+        target.write_text("unchanged", encoding="utf-8")
+        (self.store.root / ".refresh.lock").symlink_to(target)
+        with self.assertRaisesRegex(SessionRefreshError, "symlink"):
+            with _session_lock(self.store):
+                self.fail("Must never lock a symlink")
+        self.assertEqual(target.read_text(encoding="utf-8"), "unchanged")
+
+    def test_windows_lock_uses_msvcrt_single_byte_and_releases(self):
+        from ai_agent_engine import session_refresh
+        import os
+        import sys
+        from types import ModuleType
+        from unittest.mock import patch
+        fake = ModuleType("msvcrt")
+        fake.LK_NBLCK = 2
+        fake.LK_UNLCK = 0
+        seen = []
+
+        def lock(descriptor, mode, count):
+            seen.append((mode, count, os.lseek(descriptor, 0, os.SEEK_CUR)))
+        fake.locking = lock
+        with patch.dict(sys.modules, {"msvcrt": fake}):
+            with patch.object(session_refresh.os, "name", "nt"):
+                with session_refresh._session_lock(self.store):
+                    self.assertEqual(seen, [(fake.LK_NBLCK, 1, 0)])
+        self.assertEqual(seen[-1], (fake.LK_UNLCK, 1, 0))
+
+    def test_windows_lock_contention_retries_then_succeeds(self):
+        from ai_agent_engine import session_refresh
+        import errno
+        import sys
+        from types import ModuleType
+        from unittest.mock import patch
+        fake = ModuleType("msvcrt")
+        fake.LK_NBLCK = 2
+        fake.LK_UNLCK = 0
+        attempts = []
+
+        def lock(descriptor, mode, count):
+            attempts.append(mode)
+            if mode == fake.LK_NBLCK and attempts.count(fake.LK_NBLCK) == 1:
+                raise OSError(errno.EACCES, "busy (synthetic)")
+        fake.locking = lock
+        with patch.dict(sys.modules, {"msvcrt": fake}):
+            with patch.object(session_refresh.os, "name", "nt"):
+                with patch.object(session_refresh.time, "sleep", return_value=None):
+                    with session_refresh._session_lock(self.store):
+                        pass
+        self.assertEqual(attempts, [fake.LK_NBLCK, fake.LK_NBLCK, fake.LK_UNLCK])
+
+    def test_refresh_lock_hard_failure_does_not_change_saved_tokens(self):
+        from ai_agent_engine import session_refresh
+        from unittest.mock import patch
+        original = self.store.load_session()
+        with patch.object(session_refresh, "_session_lock",
+                          side_effect=SessionRefreshError("synthetic lock refusal")):
+            with self.assertRaises(SessionRefreshError):
+                refresh_if_needed(self.store, clock=lambda: 100)
+        self.assertEqual(original, self.store.load_session())
+
+
+
 if __name__ == "__main__":
     unittest.main()

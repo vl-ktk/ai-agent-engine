@@ -20,6 +20,17 @@
 - Local secrets, access and refresh tokens were **not** printed, moved to GitHub or sent in the chat. They are in the Codespace user's protected app-data directory outside this public repository. Credentials are not replicated to the current agent runtime.
 - Existing nonblocking browser fix: `ai_agent_engine/siwc.py` launches Firefox on a daemon thread while the loopback server waits for the callback. Before live authentication, 22/22 offline unit tests, compileall and offline demo passed. No production deployment.
 
+## In progress — phase 1.7 cross-platform session lock
+
+Branch `phase-1-7-cross-platform-refresh-lock` updates
+`ai_agent_engine/session_refresh.py` and synthetic lock tests:
+Windows single-byte `msvcrt` locks, POSIX `flock`, shared bounded
+refresh/logout lock, persistent lock file, symlink/regular-file checks.
+The source branch still needs PR review and GitHub Actions CI.
+No real Windows validation, owner's OAuth refresh/revoke, production
+storage or VM transfer has occurred. Preserve 1.7 as **OPEN**.
+Current development rollback base: `a9f69c397a541497a92e517a29126d549631c905`.
+
 ## Verified offline-only change — combined personal acceptance
 
 **2026-11-17: PR #5** [combined owner acceptance](https://github.com/vl-ktk/ai-agent-engine/pull/5)
