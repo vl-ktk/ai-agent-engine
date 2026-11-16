@@ -43,16 +43,21 @@ On Linux/macOS replace `py` with `python3`. For an **interactive remote desktop*
 
 During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. The owner completed a live same-host remote Firefox/OAuth callback on the GitHub Codespace. This does **not** authorize paid hosting.
 
-Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities; it does not yet refresh or revoke tokens (phase 1.7). On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
+Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities. An explicit GPT diagnostic can refresh an expiring token on the Linux pilot; an explicit `auth logout` command attempts remote refresh-token revocation and removes the local tokens. Neither operation has undergone an owner-operated live integration test; phase 1.7 remains open. On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
+
+To sign out manually when the owner chooses to disconnect this installation, run `python3 -m ai_agent_engine.auth logout` (or `py -m ai_agent_engine.auth logout` on Windows). It attempts the OpenAI OIDC refresh-token revocation with limited retries, then deletes the local tokens while retaining the issued client registration and host ID for later sign-in. **This command has NOT been run against the owner's live account.** If remote revocation could not be confirmed, the CLI explicitly advises disconnecting the app in ChatGPT Settings. Never invoke it automatically.
 
 **Limits:** The owner verified one completed streamed GPT answer using the ChatGPT plan allowance. Full native tool calling and Claude remain unverified (phase 1.6). Signing in itself does not start a paid OpenAI API call.
 
 
 
-## One-click GPT checks in Codespaces (phase 1.6)
+## Optional GPT checks in Codespaces (phase 1.6; owner live testing deferred)
 
-This repository includes voluntary VS Code Tasks so the owner can run the GPT
-checks by tapping menus on an iPhone without typing or pasting shell commands:
+This repository retains optional VS Code Tasks for when an owner-assisted live
+acceptance is genuinely needed. **Do not try to run these on an iPhone now:**
+the owner found Safari/VS Code Tasks unreliable, so all intermediate work uses
+automated offline GitHub Actions. The live function-call check remains unverified.
+For a later combined owner-assisted session:
 
 1. Open the existing owner-authorized GitHub Codespace in VS Code for the web.
 2. Once the branch with these files is available locally, select
@@ -75,7 +80,7 @@ The tasks do not run on workspace open. They keep OAuth credentials in the
 Codespace user's protected storage; no secrets are passed as task arguments
 or uploaded to GitHub. Tasks 1–3 keep their original expiry-only behavior. The new explicit
 sandbox test (task 4) attempts a safe, single-session token refresh as a
-prerequisite. Full session lifecycle and revocation remain phase 1.7.
+prerequisite. Live verification of refresh and revocation, cross-platform handling and secure VM migration remain phase 1.7.
 **The live request must be performed by the owner in the existing Codespace;
 CI cannot validate it and does not possess credentials.**
 
@@ -98,8 +103,8 @@ repositories remain separate; integrations require explicit owner authorization.
 
 ## Planned integrations (NOT implemented)
 
-- Live-verify native GPT tool actions in the isolated test directory; finish
-  full refresh/revocation and self-hosted VM migration separately.
+- Live-verify native GPT tool actions in the isolated test directory; complete
+  owner-assisted acceptance of refresh/revocation and VM migration separately.
 - Claude Code installed and authorized by the actual user through Anthropic's
   official sign-in flow, after confirming the intended use is permitted.
 - MCP, durable queue, permissions, persistent memory and safe service sandbox.
