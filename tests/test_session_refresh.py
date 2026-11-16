@@ -191,5 +191,64 @@ class RefreshTests(unittest.TestCase):
 
 
 
+    def test_native_interprocess_lock_blocks_second_python_process(self):
+        """Unlike mocked msvcrt tests, exercises the actual OS file lock.
+
+        Uses fabricated credentials only, and never invokes token endpoints.
+        Runs unmodified on the Windows runner and on the Linux runners.
+        """
+        from ai_agent_engine.session_refresh import _session_lock
+        import os
+        import subprocess
+        import sys
+
+        if os.name not in ("posix", "nt"):
+            self.skipTest("Native interprocess lock is unavailable")
+
+        child_script = """
+import sys
+from pathlib import Path
+from ai_agent_engine.session_refresh import _session_lock, SessionRefreshError
+from ai_agent_engine.siwc import CredentialStore
+
+try:
+    with _session_lock(CredentialStore(Path(sys.argv[1])), wait_seconds=0.25):
+        print("ACQUIRED")
+except SessionRefreshError:
+    print("BLOCKED")
+"""
+        def call_child():
+            result = subprocess.run(
+                [sys.executable, "-c", child_script, str(self.store.root)],
+                capture_output=True, text=True, timeout=12, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return result.stdout.strip()
+
+        lock_path = self.store.root / ".refresh.lock"
+        with _session_lock(self.store):
+            self.assertTrue(lock_path.is_file())
+            self.assertEqual(call_child(), "BLOCKED")
+        # Must unlock without removing/replacing the persistent lock file.
+        self.assertTrue(lock_path.is_file())
+        self.assertEqual(call_child(), "ACQUIRED")
+
+    def test_native_host_id_persists_across_python_process(self):
+        """A future VM cannot silently acquire a second host ID on reboot."""
+        import subprocess
+        import sys
+
+        host = self.store.host_id()
+        script = ("import sys; from pathlib import Path; "
+                  "from ai_agent_engine.siwc import CredentialStore; "
+                  "print(CredentialStore(Path(sys.argv[1])).host_id())")
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(self.store.root)],
+            capture_output=True, text=True, timeout=12, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), host)
+
+
 if __name__ == "__main__":
     unittest.main()
