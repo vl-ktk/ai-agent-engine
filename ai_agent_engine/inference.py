@@ -169,7 +169,6 @@ def request_answer(model: str, prompt: str, store: CredentialStore | None = None
         "input": [{"role": "user", "content": prompt}],
         "store": False,
         "stream": True,
-        "max_output_tokens": 128,
     }).encode("utf-8")
     request = _authorized_request(API_ORIGIN + "/responses", token, data=body)
     try:
