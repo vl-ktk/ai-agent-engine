@@ -80,6 +80,26 @@
         "clear": true,
         "focus": true
       }
+    },
+    {
+      "label": "AI Agent Engine: 5. Combined GPT + Claude acceptance (LIVE)",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "-m",
+        "ai_agent_engine.acceptance",
+        "run-live"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      }
     }
   ]
 }
