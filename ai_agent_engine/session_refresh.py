@@ -1,4 +1,4 @@
-"""Owner-controlled SIWC refresh for the current Linux Codespace pilot.
+"""Owner-controlled SIWC refresh for Linux, macOS and Windows.
 
 No token is printed, sent to the agent, or stored in the source repository.
 Refresh is serialized between local processes because OAuth refresh tokens rotate.
@@ -24,24 +24,76 @@ class SessionRefreshError(Exception):
 
 
 @contextmanager
-def _session_lock(store: CredentialStore) -> Iterator[None]:
-    """An OS-released lock prevents simultaneous refresh of a rotating token."""
-    if os.name != "posix":
-        raise SessionRefreshError("Automatic session refresh is supported only on the Linux pilot")
-    import fcntl
+def _session_lock(store: CredentialStore, *, wait_seconds: float = 10.0) -> Iterator[None]:
+    """Bounded interprocess lock for Linux/macOS/Windows token rotation.
 
+    Lock the same persistent file for refresh and explicit logout. Never
+    unlink the lock file: replacing its inode could permit two simultaneous
+    refreshes. Windows uses a one-byte msvcrt lock; POSIX uses flock.
+    """
+    if os.name not in ("posix", "nt"):
+        raise SessionRefreshError("Session refresh is unsupported on this platform")
+    if not 0 <= wait_seconds <= 120:
+        raise SessionRefreshError("Invalid credential lock timeout")
     store._ensure_root()
+    path = store.root / ".refresh.lock"
+    if path.is_symlink():
+        raise SessionRefreshError("Credential lock must not be a symlink")
     flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    flags |= getattr(os, "O_CLOEXEC", 0)
     try:
-        descriptor = os.open(store.root / ".refresh.lock", flags, 0o600)
+        descriptor = os.open(path, flags, 0o600)
     except OSError:
         raise SessionRefreshError("Could not secure the session refresh lock") from None
+    locked = False
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        import errno
+        import stat
+
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise SessionRefreshError("Credential lock must be a regular file")
+        if os.name == "posix":
+            os.fchmod(descriptor, 0o600)
+        if os.fstat(descriptor).st_size == 0:
+            os.write(descriptor, b"0")
+            os.fsync(descriptor)
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                locked = True
+                break
+            except OSError as exc:
+                if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                    raise SessionRefreshError("Credential lock acquisition failed") from None
+                if time.monotonic() >= deadline:
+                    raise SessionRefreshError("Timed out waiting for the credential lock") from None
+                time.sleep(min(0.1, max(0.0, deadline - time.monotonic())))
         yield
+    except OSError:
+        raise SessionRefreshError("Credential lock operation failed") from None
     finally:
-        fcntl.flock(descriptor, fcntl.LOCK_UN)
-        os.close(descriptor)
+        try:
+            if locked:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
 
 def refresh_if_needed(store: CredentialStore | None = None, *,
