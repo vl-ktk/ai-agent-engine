@@ -200,5 +200,28 @@ class AcceptanceTests(unittest.TestCase):
         probe.assert_not_called()
 
 
+    def test_owner_has_one_explicit_combined_live_vscode_task(self):
+        """One click later; no background/CI-triggered model request."""
+        from pathlib import Path
+
+        path = Path(__file__).resolve().parents[1] / ".vscode" / "tasks.json"
+        tasks = json.loads(path.read_text(encoding="utf-8"))["tasks"]
+        labels = [task["label"] for task in tasks]
+        self.assertEqual(len(labels), len(set(labels)))
+        self.assertEqual(len(tasks), 5)  # Four old diagnostics are preserved.
+        combined = [task for task in tasks if "Combined GPT + Claude" in task["label"]]
+        self.assertEqual(len(combined), 1)
+        task = combined[0]
+        self.assertIn("LIVE", task["label"])
+        self.assertEqual(task["type"], "process")
+        self.assertEqual(task["command"], "python3")
+        self.assertEqual(task["args"], [
+            "-m", "ai_agent_engine.acceptance", "run-live"
+        ])
+        self.assertEqual(task["options"]["cwd"], "${workspaceFolder}")
+        self.assertNotIn("runOptions", task)
+        self.assertEqual(task["problemMatcher"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

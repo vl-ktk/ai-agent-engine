@@ -169,8 +169,15 @@ remains open until a combined owner-approved live acceptance.
 ## Combined GPT + Claude Code acceptance (phase 1.6; not yet live tested)
 
 One owner-operated pilot replaces repeated phone-based VS Code Tasks. It has no
-auto-run, no scheduled job and no production integration. Only later, on a host
-where the owner has already signed in to **both** personal accounts:
+auto-run, no scheduled job and no production integration. A single VS Code task
+`AI Agent Engine: 5. Combined GPT + Claude acceptance (LIVE)` invokes the
+existing combined `run-live` command **only when the owner manually selects
+it**. Tasks 1–4 remain for diagnostics but are no longer sequential prerequisites.
+The owner does not need to retry those iPhone tasks now. The one-click task
+still depends on the remote VS Code/Codespaces task picker working; this code
+cannot repair mobile browser/task-palette synchronization.
+
+Only later, on a host where the owner has already signed in to **both** personal accounts:
 
 ```bash
 python3 -m ai_agent_engine.acceptance check
@@ -187,6 +194,12 @@ python3 -m ai_agent_engine.acceptance run-live
   working directory, no saved session, a single turn, no built-in/MCP tools
   and no plugin/hook customization. Each run consumes **subscription quota**.
   If GPT fails, Claude is not invoked. No retries or paid-API fallback.
+  **Billing caveat:** `claude auth status` establishes the login method, but
+  does **not** prove that Claude Extra Usage is disabled. If the owner has
+  enabled chargeable extra usage, a personal subscription model call might
+  still incur additional charges. Check or disable Extra Usage in Claude
+  billing settings before opting into the live test. This cannot be
+  verified by offline CI.
 - API/proxy-related `ANTHROPIC_*` and `CLAUDE_CODE_*` authentication-routing
   environment overrides are rejected. The CLI stdout/stderr on errors is
   never dumped to logs; only a bounded, successful, expected reply counts.
