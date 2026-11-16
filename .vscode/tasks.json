@@ -60,6 +60,26 @@
         "clear": true,
         "focus": true
       }
+    },
+    {
+      "label": "AI Agent Engine: 4. GPT writes and checks a safe test file",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "-m",
+        "ai_agent_engine.plan_agent",
+        "probe"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      }
     }
   ]
 }
