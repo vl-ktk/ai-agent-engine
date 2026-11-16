@@ -52,7 +52,7 @@ Credentials are saved outside this repository in the OS user's app-data director
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
 - GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
-- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. **It is configuration only; we have not launched a Codespace.** GitHub Codespaces consumes personal account compute/storage quota and may cost money if over limit with enabled billing. Get owner's consent before starting a metered environment.
+- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. An owner-approved free-quota Codespace was **created and tested on 2026-11-16**: Python 3.12.11, 21/21 offline tests PASS. A password-protected noVNC desktop was also installed in that instance, reachable through one GitHub **Private** forwarded port; the real user login/desktop inspection and OpenAI OAuth remain pending. The GUI system packages were installed interactively and are not yet reproducible after container rebuild. GitHub Codespaces consumes personal account compute/storage quota, so stop the instance when idle. Details: [HANDOFF.md](./HANDOFF.md).
 - These automated tests verify logic but cannot complete interactive OAuth, confirm user scopes or prove that a live GPT model answers.
 
 ## Project roadmap and architecture
@@ -66,7 +66,7 @@ repositories remain separate; integrations require explicit owner authorization.
 
 ## Planned integrations (NOT implemented)
 
-- Complete and verify real Sign in with ChatGPT authorization on the owner's PC; later refresh/revocation and self-hosted VM transfer.
+- Complete and verify real Sign in with ChatGPT authorization in an owner-operated browser on the same Codespace/VM as the loopback callback (without the home PC); later refresh/revocation and self-hosted VM migration.
 - Claude Code installed and authorized by the actual user through Anthropic's
   official sign-in flow, after confirming the intended use is permitted.
 - MCP, durable queue, permissions, persistent memory and safe service sandbox.
