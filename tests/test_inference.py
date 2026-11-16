@@ -136,6 +136,39 @@ class ProbeTests(unittest.TestCase):
         self.assertIn("401", str(caught.exception))
         self.assertNotIn("super-secret-token", str(caught.exception))
 
+    def test_one_click_probe_chooses_first_visible_model(self):
+        transport = FakeTransport(MODEL_ROWS, MODEL_ROWS, COMPLETE_STREAM)
+        model, reply = inference.probe_first_model(self.store, opener=transport)
+        self.assertEqual(model, "gpt-test-1")
+        self.assertEqual(reply, "Hello, world!")
+        self.assertEqual(len(transport.requests), 3)
+        self.assertEqual(transport.requests[-1][0].get_method(), "POST")
+        self.assertEqual(json.loads(transport.requests[-1][0].data)["model"],
+                         "gpt-test-1")
+
+    def test_one_click_probe_rejects_empty_catalog(self):
+        invisible = catalog(
+            {"slug": "no", "visibility": "hidden"},
+        )
+        transport = FakeTransport(invisible)
+        with self.assertRaisesRegex(inference.InferenceError, "No visible models"):
+            inference.probe_first_model(self.store, opener=transport)
+        self.assertEqual(len(transport.requests), 1)
+
+    def test_one_click_cli_is_routed_without_manual_arguments(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+
+        output = StringIO()
+        with patch.object(inference, "probe_first_model",
+                          return_value=("gpt-test-1", "Hello, world!")) as probe:
+            with redirect_stdout(output):
+                self.assertEqual(inference.main(["probe"]), 0)
+        probe.assert_called_once_with()
+        self.assertIn("ChatGPT model: gpt-test-1", output.getvalue())
+        self.assertIn("Completed GPT reply: Hello, world!", output.getvalue())
+
     def test_blank_prompts_do_not_call_provider(self):
         with self.assertRaises(inference.InferenceError):
             inference.request_answer("gpt-test-1", " ", self.store,
