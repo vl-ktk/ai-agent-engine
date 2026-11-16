@@ -35,13 +35,13 @@
 
 - Owner is away from home and their Windows PC is powered off. Do not require that machine for development.
 - Existing 11 global roadmap phases remain unchanged. Work under phase 1.5 adds subitems 1.5.A (reproducible cloud environment), 1.5.B (GitHub Actions CI), 1.5.C (real SIWC sign-in without home PC).
-- This commit adds `.github/workflows/ci.yml` and `.devcontainer/devcontainer.json`; the actual CI run must be inspected before marking 1.5.B verified.
+- Cloud CI first live run **PASS 2026-11-16**: [run #1](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43905219025), commit `6587ce9`, 3/3 jobs (Python 3.11, 3.12, 3.13), each dependency install/compile/unit tests/offline demo PASS. Roadmap 1.5.B remains [ ] until owner accepts; 1.5.A has config only, Codespaces not launched.
 - GitHub-hosted standard runners for the public repository are free; Codespaces has its own limited free quota and has **not** been started here. No paid VM has been procured.
 - SIWC still requires loopback `127.0.0.1/auth/callback` in the browser's host. A phone browser pointed at cloud CLI cannot reach its loopback server. A cloud VM with a browser on that same VM may work but has not been tested or rented; do not claim real login success.
 
 ## Next work
 
-1. Inspect GitHub Actions results and validate the clean cloud environment; do not start a potentially metered Codespace without owner approval. Do not copy OAuth tokens, authentication URLs or credential files into chat.
+1. Cloud CI is now verified PASS; optional clean Codespaces preview still needs owner permission if quota/billing may apply. Do not launch potentially metered Codespaces without owner approval. Do not copy OAuth tokens, authentication URLs or credential files into chat.
 2. Arrange an owner-operated browser and OAuth callback on the same host without requiring the powered-off home Windows. Confirm real OIDC identity validation and `chatgpt.tokens.use.direct` + `resource.invoke`. Keep 1.5 [ ] until this has happened.
 3. Only after permission, test one actual GPT model request and official Claude Code `claude -p` under 1.6, assess limits and terms. No usage-billed API key without separate owner consent.
 4. Stage 1.7 will harden secure session refresh/revocation and VM migration; stage 4 begins only after owner decision on costs.

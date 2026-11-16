@@ -49,7 +49,7 @@ Credentials are saved outside this repository in the OS user's app-data director
 
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
-- GitHub Actions `[CI (offline)](.github/workflows/ci.yml)` checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
+- GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
 - Optional `[Codespaces dev container](.devcontainer/devcontainer.json)` supplies a remote Python 3.12 development environment. **It is configuration only; we have not launched a Codespace.** GitHub Codespaces consumes personal account compute/storage quota and may cost money if over limit with enabled billing. Get owner's consent before starting a metered environment.
 - These automated tests verify logic but cannot complete interactive OAuth, confirm user scopes or prove that a live GPT model answers.
 
