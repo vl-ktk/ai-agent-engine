@@ -174,10 +174,14 @@ class ProbeTests(unittest.TestCase):
         tasks = json.loads((root / ".vscode" / "tasks.json").read_text())
         self.assertEqual(tasks["version"], "2.0.0")
         by_label = {task["label"]: task for task in tasks["tasks"]}
-        self.assertEqual(len(by_label), 3)
+        self.assertEqual(len(by_label), 4)
         self.assertEqual(
             by_label["AI Agent Engine: 3. Send one GPT test request"]["args"],
             ["-m", "ai_agent_engine.inference", "probe"],
+        )
+        self.assertEqual(
+            by_label["AI Agent Engine: 4. GPT writes and checks a safe test file"]["args"],
+            ["-m", "ai_agent_engine.plan_agent", "probe"],
         )
         for task in by_label.values():
             self.assertEqual(task["type"], "process")
