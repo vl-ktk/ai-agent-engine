@@ -2,7 +2,7 @@
 
 **Updated:** 2026-11-17
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `326562bd02fa90354d8deed94bd082268cda2405` (PR #7 VM import staging, **offline CI PASS; real credential transfer, VM and native Windows/live OAuth NOT verified**). Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
+**Last merged development code version:** `9431d8783c26e57da6733422b7dabf57c6c1f98a` (PR #8 native Windows CI and interprocess tests; **offline CI PASS on real GitHub Windows runner**; the owner's own Windows device and live OAuth remain unverified). Earlier code: PR #7 protected VM import staging. Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
 **Rollback before cross-platform lock PR #6:** `a9f69c397a541497a92e517a29126d549631c905` (main HEAD immediately before merge).
 **Rollback before combined acceptance PR #5:** `7e425a6e9b6da0e92de8b9566210583e82e2e619` (main HEAD immediately before merge).
@@ -12,6 +12,13 @@
 **Rollback baseline before earlier inference merge:** `b942411c5d140a88df01f3393ae39969ec313b05`.
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
+
+## Phase 1.7 — native Windows credential lock verification (PR #8; OFFLINE PASS)
+
+- Code: [PR #8](https://github.com/vl-ktk/ai-agent-engine/pull/8), merge `9431d8783c26e57da6733422b7dabf57c6c1f98a`; **rollback to pre-merge main `2c2c9a007a03ca9076a4dde3deda749f312c3b01`**. Source changes: `.github/workflows/ci.yml` and `tests/test_session_refresh.py`.
+- [CI run 43973456667](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43973456667): **4/4 PASS** — Python 3.11/3.12/3.13 on Linux and Python 3.12 on **native Windows GitHub-hosted runner**. 101/101 offline tests per job; compilation and offline demo PASS. Both real OS processes competed for the same `.refresh.lock`; second process was correctly denied while the lock was held, and granted access after release. Separate child process also verified host ID persistence.
+- This establishes Windows compatibility **in the GitHub runner environment only**. No actual owner's Windows 10 desktop, VM, persisted real OAuth tokens, live refresh/revocation, SSH transfer or paid resource was used. Repo is public, and GitHub documents standard hosted Windows runners as free for public repositories.
+- Global stage **1** and substage **1.7** remain **OPEN**, awaiting grouped owner-approved live acceptance. Do not ask the owner to repeatedly operate Codespaces tasks on iPhone; continue only justified offline preparation. All 11 original global stages remain intact.
 
 ## Phase 1.7 — protected VM session staging (PR #7; OFFLINE PASS)
 
