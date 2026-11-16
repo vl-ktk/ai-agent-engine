@@ -162,7 +162,7 @@ class AgentToolsTests(unittest.TestCase):
         quota_stream = (
             b'data: {"type":"response.failed","response":{"error":'
             b'{"code":"subscription_sharing_usage_limit_exceeded",'
-            b'"message":"private account details"}}}\\n\\n'
+            b'"message":"private account details"}}}\n\n'
         )
         transport = FakeTransport(catalog(), quota_stream)
         slug, result, passed, error = plan_agent.run_one_click(
@@ -176,7 +176,7 @@ class AgentToolsTests(unittest.TestCase):
         self.assertEqual(len(transport.requests), 2)
 
     def test_inconsistent_completed_event_status_is_not_accepted(self):
-        bad = b'data: {"type":"response.completed","response":{"status":"failed","output":[]}}\\n\\n'
+        bad = b'data: {"type":"response.completed","response":{"status":"failed","output":[]}}\n\n'
         transport = FakeTransport(catalog(), bad)
         _, result, passed, error = plan_agent.run_one_click(
             self.store, opener=transport,
