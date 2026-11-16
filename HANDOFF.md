@@ -2,8 +2,9 @@
 
 **Updated:** 2026-11-17
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `270e06c6def0aa0098db998cf7808412c3cda85a` (PR #3 explicit owner-operated ChatGPT sign-out and OIDC refresh-token revocation, retaining registration; offline CI PASS, **live revoke NOT performed**). The previous PR #2 native GPT test-file tools and Linux token refresh also remain unverified in live tests.
+**Last merged development code version:** `b3e6bbea49bd5b4c5b491dde78c5d6dabcbbaaf1` (PR #4 safe ChatGPT-plan error classification in inference and tool adapter; offline CI PASS, **live quota/error conditions NOT verified**). PR #3 logout and PR #2 native GPT test-file tools/Linux refresh remain in source; their live tests are still pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
+**Rollback before GPT error-handling PR #4:** `93fca68992aac8b5d7e371a90864557f677b0052` (main HEAD before merge).
 **Rollback before sign-out PR #3:** `9aa574dbdc18f0454386c2011c2a077dcc72e15d` (source main immediately before merge).
 **Rollback to code before native GPT tool test:** `daaea985ddeab093b7acf7f9704eff5ee317a50c`.
 **Rollback baseline before earlier inference merge:** `b942411c5d140a88df01f3393ae39969ec313b05`.
@@ -19,6 +20,8 @@
 - Existing nonblocking browser fix: `ai_agent_engine/siwc.py` launches Firefox on a daemon thread while the loopback server waits for the callback. Before live authentication, 22/22 offline unit tests, compileall and offline demo passed. No production deployment.
 
 ## Current limitations and next step — 1.6
+
+**New completion 2026-11-17: PR #4** [GPT plan failure classification](https://github.com/vl-ktk/ai-agent-engine/pull/4) merged as `b3e6bbea49bd5b4c5b491dde78c5d6dabcbbaaf1`. Parses at most 16 KiB of failure body, never shows raw provider diagnostics; preserves safe HTTP status, error code and parameter, body shape and sanitized request ID. Distinguishes quota/429, eligibility/403, invalid route/input, authentication/401 and temporary 503; applies to both text and native-tool streaming. No automatic repeated requests or paid API fallback. [CI run 43968801711](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43968801711): 3/3 PASS, **64/64 offline tests** each on Python 3.11/3.12/3.13; compilation and offline demo PASS. **The owner's live session was not used**; real quota errors, refresh and GPT native tool calls remain unverified. No production deployment.
 
 **Completed since this decision: PR #3** [sign-out implementation](https://github.com/vl-ktk/ai-agent-engine/pull/3) merged into `main` as `270e06c6def0aa0098db998cf7808412c3cda85a`. Added explicit **manual-only** `python -m ai_agent_engine.auth logout`: fetch official OIDC discovery, restrict revocation to OpenAI HTTPS origin, POST refresh-token revocation, retry transient failures with short backoff, remove local session even when remote revocation is unconfirmed, preserve host ID and issued client ID, display a warning to disconnect from ChatGPT Settings on remote failure. [GitHub Actions run 43967444308](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43967444308) was 3/3 PASS, 53/53 offline tests each on Python 3.11, 3.12, 3.13, compile and offline demo PASS. **This is an offline PASS only:** no revocation or refresh was invoked on the owner's real saved session; no API bill or new resource.
 
