@@ -2,7 +2,7 @@
 
 **Updated:** 2026-11-17
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `04d2fdf93b377fb7fdd1f6db469709ee24bef52d` (PR #6 Windows/POSIX refresh lock, **offline CI PASS; native Windows/live OAuth NOT verified**). Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
+**Last merged development code version:** `326562bd02fa90354d8deed94bd082268cda2405` (PR #7 VM import staging, **offline CI PASS; real credential transfer, VM and native Windows/live OAuth NOT verified**). Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
 **Rollback before cross-platform lock PR #6:** `a9f69c397a541497a92e517a29126d549631c905` (main HEAD immediately before merge).
 **Rollback before combined acceptance PR #5:** `7e425a6e9b6da0e92de8b9566210583e82e2e619` (main HEAD immediately before merge).
@@ -12,6 +12,14 @@
 **Rollback baseline before earlier inference merge:** `b942411c5d140a88df01f3393ae39969ec313b05`.
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
+
+## Phase 1.7 — protected VM session staging (PR #7; OFFLINE PASS)
+
+- Code merge: [PR #7](https://github.com/vl-ktk/ai-agent-engine/pull/7), merged main `326562bd02fa90354d8deed94bd082268cda2405`. **Rollback to immediately pre-merge main:** `25ad399c97600505f1ac506aebd176ea602f46a4`.
+- [GitHub Actions run 43972363668](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43972363668): **3/3 PASS**, 99/99 offline tests on each Python 3.11, 3.12, 3.13; compilation and offline demo PASS. Earlier baseline: 84 tests each.
+- Added `ai_agent_engine/vm_credentials.py`, `tests/test_vm_credentials.py` and README owner-only instructions. Setup produces one stable destination VM host ID, read-only dry-run checks protected incoming JSON, and separately gated `import-stdin --apply --confirm-vm-host` refuses overwrite, invalid source registration, host collision and nonmatching VM ID. Transport is only a caller-supplied protected stdin pipe; same OS lock as refresh/logout; destination host ID is preserved. Tests use **synthetic credentials**.
+- **Not executed:** real import command; remote SSH or VM creation; accessing/moving owner's current Codespace `session.json`; GPT calls; OAuth refresh/revoke; native Windows tests; paid activity. The current saved owner sign-in remains untouched. No evidence that a real copied refresh token would still be accepted.
+- Stage **1.7 remains OPEN**, and the 11-stage global roadmap is unchanged. Future actual import requires separate approval of phase 4 VM and one owner-controlled secure transfer. Until then, proceed with independent offline stage 1.6/1.7 refinements only, and later group live acceptance into one owner-assisted session. No further iPhone Tasks or passwords requested.
 
 ## Verified milestone — real ChatGPT OAuth successful
 
