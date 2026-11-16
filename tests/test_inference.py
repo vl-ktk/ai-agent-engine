@@ -166,10 +166,10 @@ class ProbeTests(unittest.TestCase):
     def test_failed_stream_code_keeps_diagnostic_without_partial_success(self):
         from ai_agent_engine.api_errors import PlanRequestError
         stream = (
-            b'data: {"type":"response.output_text.delta","delta":"partial"}\\n\\n'
+            b'data: {"type":"response.output_text.delta","delta":"partial"}\n\n'
             b'data: {"type":"response.failed","response":{"error":'
             b'{"code":"subscription_sharing_usage_limit_exceeded",'
-            b'"message":"hidden provider details"}}}\\n\\n'
+            b'"message":"hidden provider details"}}}\n\n'
         )
         with self.assertRaises(PlanRequestError) as caught:
             inference.request_answer("gpt-test-1", "hello", self.store,
