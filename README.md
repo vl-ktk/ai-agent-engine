@@ -25,6 +25,15 @@ python -m unittest discover -s tests -v
 
 The demo uses a disposable temporary directory and does not touch working projects.
 
+## Project roadmap and architecture
+
+- [Implementation roadmap — 11 phases and detailed checkpoints](./IMPLEMENTATION_ROADMAP.md).
+- [Architecture decisions — orchestrators, roles, permissions, memory and owner control](./ARCHITECTURE_DECISIONS.md).
+- [Current status and handoff](./HANDOFF.md).
+
+This repository is the source of truth for AI Agent Engine. Other projects and
+repositories remain separate; integrations require explicit owner authorization.
+
 ## Planned integrations (NOT implemented)
 
 - Sign in with ChatGPT for an eligible user-owned OSS/self-hosted instance.
