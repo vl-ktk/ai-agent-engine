@@ -2,8 +2,9 @@
 
 **Updated:** 2026-11-17
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `b3e6bbea49bd5b4c5b491dde78c5d6dabcbbaaf1` (PR #4 safe ChatGPT-plan error classification in inference and tool adapter; offline CI PASS, **live quota/error conditions NOT verified**). PR #3 logout and PR #2 native GPT test-file tools/Linux refresh remain in source; their live tests are still pending.
+**Last merged development code version:** `087ea11ba7a49a863a9ab6f4233cc46a3fa6238a` (PR #5 combined personal Claude+GPT acceptance; **offline CI PASS, live Claude and native GPT test NOT performed**). Earlier PR #4 GPT error handling, PR #3 manual logout and PR #2 native GPT test-file tools/Linux refresh remain in source; their live tests are still pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
+**Rollback before combined acceptance PR #5:** `7e425a6e9b6da0e92de8b9566210583e82e2e619` (main HEAD immediately before merge).
 **Rollback before GPT error-handling PR #4:** `93fca68992aac8b5d7e371a90864557f677b0052` (main HEAD before merge).
 **Rollback before sign-out PR #3:** `9aa574dbdc18f0454386c2011c2a077dcc72e15d` (source main immediately before merge).
 **Rollback to code before native GPT tool test:** `daaea985ddeab093b7acf7f9704eff5ee317a50c`.
@@ -19,19 +20,32 @@
 - Local secrets, access and refresh tokens were **not** printed, moved to GitHub or sent in the chat. They are in the Codespace user's protected app-data directory outside this public repository. Credentials are not replicated to the current agent runtime.
 - Existing nonblocking browser fix: `ai_agent_engine/siwc.py` launches Firefox on a daemon thread while the loopback server waits for the callback. Before live authentication, 22/22 offline unit tests, compileall and offline demo passed. No production deployment.
 
-## Current in-progress change — combined personal acceptance
+## Verified offline-only change — combined personal acceptance
 
-Branch `phase-1-6-combined-owner-acceptance` adds an **opt-in** single-script
-pilot for the remaining GPT native function and official Claude Code login
-checks. No login, CLI install, billing, model call or VM deployment was
-performed by the developer. `check` only inspects local GPT permission and
-the official Claude CLI auth-status response; `run-live` remains strictly
-owner-triggered. New checks reject Claude API/Console and 3rd-party auth,
-environment overrides, CLI errors or unexpected results, and disable Claude
-tool/MCP access for the one-response test. Review and offline GitHub CI are
-still required; **do not mark 1.6 completed**. Anthropic product/hosted-agent
-usage may require commercial terms and API billing; this personal pilot grants
-no blanket product approval.
+**2026-11-17: PR #5** [combined owner acceptance](https://github.com/vl-ktk/ai-agent-engine/pull/5)
+merged to `main` as code commit `087ea11ba7a49a863a9ab6f4233cc46a3fa6238a`.
+Rollback to previous `main`: `7e425a6e9b6da0e92de8b9566210583e82e2e619`.
+[CI run 43970399415](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43970399415)
+is **3/3 PASS**, 78/78 synthetic offline unit tests each on Python
+3.11, 3.12 and 3.13, compilation and offline demo PASS.
+
+Source: `ai_agent_engine/acceptance.py`, `tests/test_acceptance.py`,
+`README.md` and this handoff/roadmap. `check` uses the local saved GPT
+grant and official `claude auth status`, accepts only `claude.ai` subscription
+auth and rejects environment/API overrides. The explicit owner-only
+`run-live` preflights both accounts before GPT's disposable native function
+test and one official Claude `-p` reply; Claude runs with no tools/MCP,
+plugins/hooks or persisted session. No retry or paid billing fallback.
+**No real Claude Code login, model invocation, actual API-cost/source check,
+GPT tool call, refresh, revocation or VM deployment was performed in PR #5.**
+Do not run a phone VS Code Task now. Schedule one owner-operated combined
+acceptance only when prerequisites are ready.
+
+**Legal scope:** This is a personal evaluation harness, not authorization
+to route other users' Claude subscription traffic through a product. Anthropic
+states embedded/hosted agent infrastructure may require commercial terms
+and product integrations should use API-key authentication; review before
+any deployment or automation. Keep stage 1.6 **OPEN**.
 
 ## Current limitations and next step — 1.6
 
