@@ -2,24 +2,29 @@
 
 **Updated:** 2026-11-16
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Rollback baseline:** `715f651f0a9ca1403bdc6da320e3767e95a8260b` (before the browser-launch fix).
-**Scope:** Only AI Agent Engine. KTK Social, ATHL and the separate local-AI project are unrelated.
+**Last verified code version:** `7863cd2ee229e2daf16644dd8d9645da8c27a33a` (OAuth browser-launch fix plus regression test and prior handoff).
+**Documentation version before this note:** `833ebadf48f4ba050c4fdd7caa01d87a72a8eec6`.
+**Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
+**Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
 
-## Current state
+## Verified milestone — real ChatGPT OAuth successful
 
-- Phase 1 of [IMPLEMENTATION_ROADMAP.md](./IMPLEMENTATION_ROADMAP.md) remains **incomplete**: a real ChatGPT login and a real authorized model request have **not** succeeded. This is not production.
-- Existing Codespace: `laughing-disco-544rxwqgjxgcw74`. Python 3.12.11, user-approved Firefox ESR and private password-protected noVNC desktop on `127.0.0.1:6080` (GitHub-forwarded **Private**). GUI packages were installed in the current ephemeral Codespace only. No paid API calls.
-- SIWC Python CLI: `python3 -m ai_agent_engine.auth login`, `status`, and `login --manual-browser`. Local OAuth callback binds only to `127.0.0.1`. Session secrets live in the user's Codespace config directory, **never** in GitHub, logs or this note.
-- On the owner's iPhone, OAuth login reached the official `Connect AI Agent Engine to ChatGPT` consent page. They verified identity by ChatGPT push and pressed Connect, but the page remained loading; Firefox also displayed a **security-key/WebAuthn dialog**. No callback completed and `auth status` said `Not signed in on this computer`.
-- Root cause confirmed for **one independent blocking bug**: the previous Python process (at diagnosis PID 50551) was in `do_wait`, waiting for its child `firefox-esr`, while the loopback callback socket was listening. Calling `webbrowser.open()` synchronously meant the Python callback wait never began until Firefox exited.
-- Fix: `ai_agent_engine/siwc.py` now launches the OS browser on a daemon thread; the loopback callback loop and timeout proceed immediately. Browser-launch errors tell the operator to use `--manual-browser`. Offline regression test in `tests/test_siwc.py` simulates a `webbrowser.open` that waits for the browser to close.
-- **Verified on the Codespace branch `fix/oauth-browser-nonblocking`:** `python3 -m unittest discover -s tests` **22/22 PASS** (0.483 s); `python3 -m compileall -q ai_agent_engine` PASS; `python3 -m ai_agent_engine` offline demo PASS (`status=done`, 3 steps); `git status --short` clean. This does **not** prove the separate browser WebAuthn/consent spinner is fixed.
+- **2026-11-16: phase 1.5 real-user sign-in PASS.** The owner used the remote Firefox desktop in existing GitHub Codespace `laughing-disco-544rxwqgjxgcw74`, approved their ChatGPT push/consent, and reached the local `127.0.0.1` OAuth callback. No home PC was needed.
+- Real `python3 -m ai_agent_engine.auth login` terminal result: `Identity verified` for the owner's iCloud account; `ChatGPT plan permission: GRANTED`.
+- Immediately repeated `python3 -m ai_agent_engine.auth status`: displayed saved identity, `GRANTED`, and an access-token expiry approximately one hour from issuance. The account identifier is intentionally omitted from this handoff to minimize personal data.
+- Local secrets, access and refresh tokens were **not** printed, moved to GitHub or sent in the chat. They are in the Codespace user's protected app-data directory outside this public repository. Credentials are not replicated to the current agent runtime.
+- Existing nonblocking browser fix: `ai_agent_engine/siwc.py` launches Firefox on a daemon thread while the loopback server waits for the callback. Before live authentication, 22/22 offline unit tests, compileall and offline demo passed. No production deployment.
 
-## Next exact step
+## Current limitations and next step — 1.6
 
-1. Ensure Codespace is on new `main` commit (`git switch main`, `git pull --ff-only`) after the fix is published.
-2. Check whether the **old** OAuth login process is still stuck; if so stop **that exact verified PID** before retrying. Do not kill unrelated processes. A fresh `python3 -m ai_agent_engine.auth login` must be run in the Codespace while Firefox is running on its private desktop (not iPhone Safari's own host).
-3. Owner completes OpenAI consent in desktop Firefox. If a security-key dialog appears again, handle it separately; don't assume the Python fix eliminates it. Recheck `python3 -m ai_agent_engine.auth status` and callback result without displaying tokens.
-4. Only after real sign-in succeeds, proceed to the next phase-1 goal and confirm quota/terms before any live inference; no pay-as-you-go spending without separate owner authorization.
+- **No live GPT inference yet.** Present client supports only `login` and `status`. No model catalog, Responses streaming adapter, or model/agent call is implemented.
+- Official OpenAI plan-usage guide: https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference — for the same approved OAuth account, use `GET https://api.openai.com/v1/models` to discover its available slugs; for inference use `POST https://api.openai.com/v1/responses` with `store:false`, `stream:true`, and only count `response.completed` as success. Handle `response.failed`, incomplete/interrupted streams and usage limits. Do not call undocumented ChatGPT backend endpoints or use a pay-as-you-go API key.
+- A minimal live test should run **inside the existing Codespace** with its local credentials; never copy them to GitHub Actions, other connectors, messages or this public source. Access tokens expire around one hour; token refresh remains a separate unfinished 1.7 task.
+- 1.6 also includes a later owner-operated official Claude Code `claude -p` test under the user's subscription, with no `ANTHROPIC_API_KEY` and no chargeable API calls, plus a permitted-integration review. Do not report it as tested.
+- 1.7: safe access-token refresh/revocation and transfer to owner-approved VM; official guidance: https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions .
+- **Current blocker:** In this subsequent turn, terminal/executor is unavailable; browser extension reports no originating browser context. GitHub source is reachable through the connected GitHub API, but the private Codespace token and shell are not. The first GPT request cannot be truthfully executed or verified until an authorized remote terminal is accessible.
+- **No spending or new resources authorized.** The existing Codespace consumes the owner's free quota when running. Do not start paid API, paid VM or production service without explicit approval.
 
-**Deployment:** Source code on GitHub only; no production server. **Rollback:** revert the auth/thread + regression commits with a new GitHub revert commit based on baseline above, without overwriting unrelated commits.
+## Release and validation rules
+
+Only documentation changed in the present turn, reflecting the independently observed live OAuth outcome. Do not mark 1.6 complete until a real model response finishes. For code changes, read current `main`, implement in a branch or working copy, run tests and CI, recheck main immediately before committing/publishing, then document the exact code version and rollback ID here. Keep code/CLI and credentials separate; never surface OAuth URLs or tokens.
