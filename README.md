@@ -38,7 +38,9 @@ py -m ai_agent_engine.auth login
 py -m ai_agent_engine.auth status
 ```
 
-On Linux/macOS replace `py` with `python3`. During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. A remote GUI browser running on the same virtual machine as the callback may be evaluated separately, but is **not yet tested or authorized for paid hosting**.
+On Linux/macOS replace `py` with `python3`. For an **interactive remote desktop**, use `python3 -m ai_agent_engine.auth login --manual-browser` in the VM terminal and open the displayed link in a browser running **inside that same remote desktop**. The URL is sensitive and must never enter chat, issue comments, workflow logs or public terminals. This does **not** enable signing in through Safari directly on a different phone. This manual mode is tested only with a simulated callback, not with OpenAI's live authorization.
+
+During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. A remote GUI browser running on the same virtual machine as the callback may be evaluated separately, but is **not yet tested or authorized for paid hosting**.
 
 Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities; it does not yet refresh or revoke tokens (phase 1.7). On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
 
@@ -50,7 +52,7 @@ Credentials are saved outside this repository in the OS user's app-data director
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
 - GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
-- Optional `[Codespaces dev container](.devcontainer/devcontainer.json)` supplies a remote Python 3.12 development environment. **It is configuration only; we have not launched a Codespace.** GitHub Codespaces consumes personal account compute/storage quota and may cost money if over limit with enabled billing. Get owner's consent before starting a metered environment.
+- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. **It is configuration only; we have not launched a Codespace.** GitHub Codespaces consumes personal account compute/storage quota and may cost money if over limit with enabled billing. Get owner's consent before starting a metered environment.
 - These automated tests verify logic but cannot complete interactive OAuth, confirm user scopes or prove that a live GPT model answers.
 
 ## Project roadmap and architecture

@@ -26,7 +26,7 @@
 
 ## Not implemented
 
-- Real GPT/Claude model calls, a **completed live ChatGPT OAuth session**, remote VPS, MCP, durable task queue, production isolation/permissions, CI or deployment.
+- Real GPT/Claude model calls, a **completed live ChatGPT OAuth session**, remote VPS, MCP, durable task queue, production isolation/permissions or deployment. GitHub Actions offline CI **is implemented and verified**; it is not production deployment.
 - Token refresh/revocation and multi-account UI; this one-account login pilot uses a user-local credential file (on Windows protected by user-profile ACL, not a production vault).
 - `SandboxFiles` is adequate for controlled demo only; hostile workloads require real OS/container confinement and race-safe file operations.
 - No billing, API subscription usage, VPS purchase, model inference or production change has been authorized or carried out by this repository transfer.
@@ -37,7 +37,7 @@
 - Existing 11 global roadmap phases remain unchanged. Work under phase 1.5 adds subitems 1.5.A (reproducible cloud environment), 1.5.B (GitHub Actions CI), 1.5.C (real SIWC sign-in without home PC).
 - Cloud CI first live run **PASS 2026-11-16**: [run #1](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43905219025), commit `6587ce9`, 3/3 jobs (Python 3.11, 3.12, 3.13), each dependency install/compile/unit tests/offline demo PASS. Roadmap 1.5.B remains [ ] until owner accepts; 1.5.A has config only, Codespaces not launched.
 - GitHub-hosted standard runners for the public repository are free; Codespaces has its own limited free quota and has **not** been started here. No paid VM has been procured.
-- SIWC still requires loopback `127.0.0.1/auth/callback` in the browser's host. A phone browser pointed at cloud CLI cannot reach its loopback server. A cloud VM with a browser on that same VM may work but has not been tested or rented; do not claim real login success.
+- SIWC CLI now supports `login --manual-browser` for a remote GUI browser **on the same VM host** (simulated end-to-end test only); no cloud VM/browser has been started, and no real OAuth credentials exist. It still requires loopback `127.0.0.1/auth/callback` in the browser's host. A phone browser pointed at cloud CLI cannot reach its loopback server. A cloud VM with a browser on that same VM may work but has not been tested or rented; do not claim real login success.
 
 ## Next work
 

@@ -97,6 +97,18 @@ class AuthorizationTests(unittest.TestCase):
                 self.assertEqual(stat.S_IMODE(store.root.stat().st_mode), 0o700)
 
 
+    def test_cli_manual_browser_flag_is_forwarded(self):
+        from ai_agent_engine import auth
+        output = StringIO()
+        with patch("ai_agent_engine.auth.CredentialStore"), \
+             patch("ai_agent_engine.auth.login",
+                   return_value={"email": "example@test.invalid", "sharing_enabled": True}) as login_mock, \
+             redirect_stdout(output):
+            exit_code = auth.main(["login", "--manual-browser"])
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(login_mock.call_args.kwargs["open_browser"])
+
+
 @unittest.skipUnless(importlib.util.find_spec("jwt"), "Optional PyJWT dependency not installed")
 class TokenValidationTests(unittest.TestCase):
     @classmethod
@@ -204,6 +216,66 @@ class TokenValidationTests(unittest.TestCase):
             self.assertEqual(store.host_id(), captured["host_id"])
             self.assertEqual(store.client_id(), "oaiapp_test")
             self.assertIsNone(store._read("pending-registration.json"))
+
+
+    def test_manual_browser_mode_keeps_callback_on_same_host(self):
+        """Offline remote-desktop scenario: never open an unrelated system browser."""
+        with TemporaryDirectory() as directory:
+            store = siwc.CredentialStore(Path(directory) / "private-data")
+            captured: dict[str, str] = {}
+            callback_threads: list[threading.Thread] = []
+            original_auth_url = siwc.authorization_url
+            original_verify = siwc.validate_id_token
+
+            def fake_auth_url(**kwargs):
+                url = original_auth_url(**kwargs)
+                query = parse_qs(urlsplit(url).query)
+                captured["nonce"] = query["nonce"][0]
+                captured["redirect_uri"] = query["redirect_uri"][0]
+                self.assertEqual(urlsplit(captured["redirect_uri"]).hostname, "127.0.0.1")
+
+                def send_callback():
+                    from urllib.request import urlopen
+                    callback_url = (captured["redirect_uri"] + "?state="
+                                    + query["state"][0] + "&code=manual-test-code"
+                                    + "&client_id=oaiapp_test")
+                    with urlopen(callback_url, timeout=3) as response:
+                        self.assertEqual(response.status, 200)
+                thread = threading.Thread(target=send_callback)
+                thread.start()
+                callback_threads.append(thread)
+                return url
+
+            def fake_exchange(*, client_id, code, verifier, redirect_uri):
+                self.assertEqual(code, "manual-test-code")
+                self.assertEqual(client_id, "oaiapp_test")
+                self.assertEqual(redirect_uri, captured["redirect_uri"])
+                return {
+                    "id_token": self._token(nonce=captured["nonce"]),
+                    "access_token": "not-real-access", "refresh_token": "not-real-refresh",
+                    "scope": "openid offline_access resource.invoke chatgpt.tokens.use.direct",
+                    "expires_in": 3600,
+                }
+
+            output = StringIO()
+            with patch("ai_agent_engine.siwc.webbrowser.open",
+                       side_effect=AssertionError("Must not open local browser")), \
+                 patch("ai_agent_engine.siwc.authorization_url",
+                       side_effect=fake_auth_url), \
+                 patch("ai_agent_engine.siwc._exchange_code",
+                       side_effect=fake_exchange), \
+                 patch("ai_agent_engine.siwc.validate_id_token",
+                       side_effect=lambda token, **kw: original_verify(
+                           token, **{**kw, "signing_key": self.public_key})), \
+                 redirect_stdout(output):
+                result = siwc.login(store, timeout=3, open_browser=False)
+            for thread in callback_threads:
+                thread.join(timeout=3)
+                self.assertFalse(thread.is_alive())
+            self.assertTrue(result["sharing_enabled"])
+            self.assertIn("Manual-browser mode", output.getvalue())
+            self.assertIn("Do NOT open it in Safari", output.getvalue())
+            self.assertIsNotNone(store.load_session())
 
 
 if __name__ == "__main__":

@@ -13,11 +13,13 @@ from .siwc import AuthError, CredentialStore, login
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Local ChatGPT sign-in (no API key)")
     parser.add_argument("command", choices=("login", "status"))
+    parser.add_argument("--manual-browser", action="store_true",
+                        help="print the sign-in URL for a browser on this same host")
     options = parser.parse_args(argv)
     try:
         store = CredentialStore()
         if options.command == "login":
-            info = login(store)
+            info = login(store, open_browser=not options.manual_browser)
             print("Identity verified. Account:", info["email"] or "(no email claim)")
             print("ChatGPT plan permission:", "GRANTED" if info["sharing_enabled"] else "NOT GRANTED")
             if not info["sharing_enabled"]:

@@ -327,8 +327,9 @@ def validated_session(token_response: Mapping[str, Any], *, client_id: str,
     }
 
 
-def login(store: CredentialStore | None = None, *, timeout: float = 300) -> dict[str, Any]:
-    """Interactive local-only login. Must run on the user's browser-equipped PC."""
+def login(store: CredentialStore | None = None, *, timeout: float = 300,
+          open_browser: bool = True) -> dict[str, Any]:
+    """Interactive SIWC login; browser and loopback callback must share one host."""
     try:
         import jwt  # noqa: F401; fail before opening the browser if extras are missing.
         from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: F401
@@ -347,9 +348,15 @@ def login(store: CredentialStore | None = None, *, timeout: float = 300) -> dict
             code_challenge=challenge, host_id=host_id,
             issued_client_id=issued_client_id,
         )
-        print("Opening the browser for Continue with ChatGPT…")
-        if not webbrowser.open(url, new=1):
-            print("Open this URL in a browser on THIS computer (never send it to anyone):")
+        if open_browser:
+            print("Opening the browser for Continue with ChatGPT…")
+            if not webbrowser.open(url, new=1):
+                print("Open this URL in a browser on THIS host (never send it to anyone):")
+                print(url)
+        else:
+            print("Manual-browser mode: open the following URL ONLY in a browser")
+            print("running on THIS same host (e.g. its remote desktop).")
+            print("Do NOT open it in Safari on your phone or send it through chat.")
             print(url)
         result = callback.wait_for_result(timeout=timeout)
         if "error" in result:
