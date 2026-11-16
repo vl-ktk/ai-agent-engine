@@ -159,6 +159,22 @@ class CredentialStore:
             pending.unlink()
 
 
+    def clear_session(self) -> None:
+        """Discard local tokens while retaining this host and issued client ID."""
+        existing = self.load_session()
+        if existing is None:
+            return
+        client_id = existing.get("client_id")
+        if isinstance(client_id, str) and client_id and client_id != "dynamic_agent_client":
+            # The issued registration survives logout so re-login is not a
+            # new OAuth client; no access, refresh or ID tokens are retained.
+            self._write("pending-registration.json", {"client_id": client_id})
+        destination = self.root / "session.json"
+        if destination.is_symlink():
+            raise AuthError("Credential file must not be a symlink")
+        destination.unlink(missing_ok=True)
+
+
 def authorization_url(*, redirect_uri: str, state: str, nonce: str,
                       code_challenge: str, host_id: str,
                       issued_client_id: str | None = None) -> str:
