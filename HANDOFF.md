@@ -19,6 +19,20 @@
 - Local secrets, access and refresh tokens were **not** printed, moved to GitHub or sent in the chat. They are in the Codespace user's protected app-data directory outside this public repository. Credentials are not replicated to the current agent runtime.
 - Existing nonblocking browser fix: `ai_agent_engine/siwc.py` launches Firefox on a daemon thread while the loopback server waits for the callback. Before live authentication, 22/22 offline unit tests, compileall and offline demo passed. No production deployment.
 
+## Current in-progress change — combined personal acceptance
+
+Branch `phase-1-6-combined-owner-acceptance` adds an **opt-in** single-script
+pilot for the remaining GPT native function and official Claude Code login
+checks. No login, CLI install, billing, model call or VM deployment was
+performed by the developer. `check` only inspects local GPT permission and
+the official Claude CLI auth-status response; `run-live` remains strictly
+owner-triggered. New checks reject Claude API/Console and 3rd-party auth,
+environment overrides, CLI errors or unexpected results, and disable Claude
+tool/MCP access for the one-response test. Review and offline GitHub CI are
+still required; **do not mark 1.6 completed**. Anthropic product/hosted-agent
+usage may require commercial terms and API billing; this personal pilot grants
+no blanket product approval.
+
 ## Current limitations and next step — 1.6
 
 **New completion 2026-11-17: PR #4** [GPT plan failure classification](https://github.com/vl-ktk/ai-agent-engine/pull/4) merged as `b3e6bbea49bd5b4c5b491dde78c5d6dabcbbaaf1`. Parses at most 16 KiB of failure body, never shows raw provider diagnostics; preserves safe HTTP status, error code and parameter, body shape and sanitized request ID. Distinguishes quota/429, eligibility/403, invalid route/input, authentication/401 and temporary 503; applies to both text and native-tool streaming. No automatic repeated requests or paid API fallback. [CI run 43968801711](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43968801711): 3/3 PASS, **64/64 offline tests** each on Python 3.11/3.12/3.13; compilation and offline demo PASS. **The owner's live session was not used**; real quota errors, refresh and GPT native tool calls remain unverified. No production deployment.
