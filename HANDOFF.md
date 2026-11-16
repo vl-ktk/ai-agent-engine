@@ -2,7 +2,7 @@
 
 **Updated:** 2026-11-17
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `9431d8783c26e57da6733422b7dabf57c6c1f98a` (PR #8 native Windows CI and interprocess tests; **offline CI PASS on real GitHub Windows runner**; the owner's own Windows device and live OAuth remain unverified). Earlier code: PR #7 protected VM import staging. Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
+**Last merged development code version:** `4813d5ad5ece6f741e6c737de86c81e9d967fd06` (PR #9 single owner-only combined GPT+Claude VS Code task; **offline CI PASS, live Claude/GPT tools unverified**). Previously: PR #8 native Windows lock CI PASS. Earlier code: PR #7 protected VM import staging. Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
 **Rollback before cross-platform lock PR #6:** `a9f69c397a541497a92e517a29126d549631c905` (main HEAD immediately before merge).
 **Rollback before combined acceptance PR #5:** `7e425a6e9b6da0e92de8b9566210583e82e2e619` (main HEAD immediately before merge).
@@ -12,6 +12,15 @@
 **Rollback baseline before earlier inference merge:** `b942411c5d140a88df01f3393ae39969ec313b05`.
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
+
+## Phase 1.6 — one owner-only combined LIVE task (PR #9; OFFLINE PASS)
+
+- Code: [PR #9](https://github.com/vl-ktk/ai-agent-engine/pull/9), main merge `4813d5ad5ece6f741e6c737de86c81e9d967fd06`; **rollback to immediately pre-merge main `4da6c9495be4b01a7a30dac2382cfb3eba7594d6`**.
+- [CI 43974594112](https://github.com/vl-ktk/ai-agent-engine/actions/runs/43974594112): **4/4 PASS, 102/102 offline tests** on Linux Python 3.11/3.12/3.13 and native Windows Python 3.12; compilation/demo PASS. The first PR run 43974475846 failed because an older test assumed exactly four tasks; amended that test and reran CI successfully.
+- `.vscode/tasks.json`: owner-only task **5. Combined GPT + Claude acceptance (LIVE)** runs already implemented `python3 -m ai_agent_engine.acceptance run-live`. Its CLI preflights both local logins, then attempts the existing isolated GPT tool-cycle and one official Claude Code CLI reply. Old tasks 1–4 are preserved for debugging. Added tests against automatic execution and documented that a working VS Code mobile task picker is still a separate prerequisite.
+- **No live tests were run**: not even `acceptance check` on the owner's Codespace. A real Claude Code installation/sign-in, current subscription quota, GPT tool-cycle, OAuth refresh/revoke and VM transfer remain UNVERIFIED. The owner need not touch Codespaces now.
+- **Billing caveat**: Claude `auth status` reveals whether sign-in is `claude.ai` but cannot prove paid *Extra Usage* is disabled; owner should verify billing settings before any explicit live run. No charge was incurred in this PR. This test is not permission to route third-party services through Claude Pro; Anthropic's published terms restrict that.
+- Keep **1.6 [ ]**, **1.7 [ ]**, global stage **1 [ ]** and all 11 roadmap stages unchanged. Later arrange ONE combined owner-assisted live check on a host with both personal logins, not repeated phone VS Code tasks.
 
 ## Phase 1.7 — native Windows credential lock verification (PR #8; OFFLINE PASS)
 
