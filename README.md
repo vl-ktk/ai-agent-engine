@@ -84,6 +84,22 @@ prerequisite. Live verification of refresh and revocation, cross-platform handli
 **The live request must be performed by the owner in the existing Codespace;
 CI cannot validate it and does not possess credentials.**
 
+## Safe GPT plan errors (phase 1.6 — offline tested)
+
+The CLI and bounded sandbox model distinguish documented ChatGPT-plan errors:
+quota exhausted (429), permission/policy rejection (401/403), unsupported
+request (400), and temporary usage/routing unavailability (503). A failed
+stream is never a completed answer or verified tool result. Error diagnostics
+retain the HTTP status, safe structured code/parameter, body **shape** and
+sanitized request ID when available; arbitrary error detail and tokens are
+not shown. No automatic retry of limited or unsupported model requests and
+no billing fallback are attempted. See the
+[official error and recovery guide](https://developers.openai.com/siwc/token-sharing-open-source/errors-and-recovery).
+
+This behavior is verified by synthetic offline tests only; the owner has not
+triggered real quota, permission or tool failures. The full 1.6 checkpoint
+remains open until a combined owner-approved live acceptance.
+
 ## Development without the home PC (phase 1.5 preparation)
 
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
