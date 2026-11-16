@@ -179,10 +179,29 @@ def request_answer(model: str, prompt: str, store: CredentialStore | None = None
         raise InferenceError("OpenAI response stream was interrupted") from None
 
 
+
+def probe_first_model(store: CredentialStore | None = None, *,
+                      opener: Callable[..., Any] = urlopen) -> tuple[str, str]:
+    """Run one minimal plan-usage request with the first visible account model.
+
+    Designed for one-click VS Code Tasks when a mobile owner cannot paste shell
+    commands. No API key, token export, or automatic retry.
+    """
+    session_store = store or CredentialStore()
+    models = list_models(session_store, opener=opener)
+    if not models:
+        raise InferenceError("No visible models in this ChatGPT account's catalog")
+    slug = models[0][0]
+    reply = request_answer(slug, "Say exactly: Hello, world!",
+                           session_store, opener=opener)
+    return slug, reply
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="ChatGPT Plus model probe (no API key)")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("models")
+    sub.add_parser("probe", help="one-click catalog and short real GPT reply")
     ask = sub.add_parser("ask")
     ask.add_argument("--model", required=True)
     ask.add_argument("--prompt", default="Say exactly: Hello, world!")
@@ -194,6 +213,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise InferenceError("No visible models in this ChatGPT account's catalog")
             for slug, label in models:
                 print(f"{slug}: {label}")
+        elif args.command == "probe":
+            model, reply = probe_first_model()
+            print("ChatGPT model:", model)
+            print("Completed GPT reply:", reply)
         else:
             print(request_answer(args.model, args.prompt))
         return 0
