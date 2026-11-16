@@ -3,7 +3,8 @@
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
-> One-click GPT model probe is available for a manual live test; a completed real model answer is **not yet verified**.
+> A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.
+> The native-function sandbox tool cycle is prepared for a separate manual live test; it is **not yet live-verified**.
 > No Claude inference, server deployment or production access exists.
 
 ## What works in the prototype
@@ -44,11 +45,11 @@ During `login`, approve the app and requested ChatGPT plan usage in your browser
 
 Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities; it does not yet refresh or revoke tokens (phase 1.7). On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
 
-**Limits:** The real account granted ChatGPT plan permission in the initial live login. A completed model answer and subscription usage remain unverified (phase 1.6). Signing in does not itself start a paid OpenAI API call.
+**Limits:** The owner verified one completed streamed GPT answer using the ChatGPT plan allowance. Full native tool calling and Claude remain unverified (phase 1.6). Signing in itself does not start a paid OpenAI API call.
 
 
 
-## One-click GPT check in Codespaces (phase 1.6, pending live verification)
+## One-click GPT checks in Codespaces (phase 1.6)
 
 This repository includes voluntary VS Code Tasks so the owner can run the GPT
 checks by tapping menus on an iPhone without typing or pasting shell commands:
@@ -61,11 +62,20 @@ checks by tapping menus on an iPhone without typing or pasting shell commands:
    of the ChatGPT account's plan allowance and print the response. This selects
    the first account-visible model, sends one short stateless streamed Responses
    request, and only declares success for a completed response event.
+5. Select **AI Agent Engine: 4. GPT writes and checks a safe test file**
+   to try the next milestone. This runs at most four ChatGPT model turns,
+   exposes only two namespaced functions (`write_new_file` and `read_file`),
+   verifies both calls against a real file in an automatically deleted
+   temporary directory, and refuses to claim PASS without matching contents.
+   The click may refresh the saved SIWC token if expired; OAuth refresh is
+   protected by a local Linux process lock and never printed. This is the
+   limited Linux Codespaces pilot, not the complete cross-platform phase 1.7.
 
 The tasks do not run on workspace open. They keep OAuth credentials in the
 Codespace user's protected storage; no secrets are passed as task arguments
-or uploaded to GitHub. If the access token has expired, the diagnostic reports
-that condition; automatic token refresh remains a separate task (phase 1.7).
+or uploaded to GitHub. Tasks 1–3 keep their original expiry-only behavior. The new explicit
+sandbox test (task 4) attempts a safe, single-session token refresh as a
+prerequisite. Full session lifecycle and revocation remain phase 1.7.
 **The live request must be performed by the owner in the existing Codespace;
 CI cannot validate it and does not possess credentials.**
 
@@ -74,7 +84,7 @@ CI cannot validate it and does not possess credentials.**
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
 - GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
-- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. An owner-approved free-quota Codespace was **created and tested on 2026-11-16**: Python 3.12.11, 21/21 offline tests PASS. A password-protected noVNC desktop was also installed in that instance, reachable through one GitHub **Private** forwarded port; the real ChatGPT OAuth login and consent have since **passed** in this same-host desktop, while GPT inference is still pending. The GUI system packages were installed interactively and are not yet reproducible after container rebuild. GitHub Codespaces consumes personal account compute/storage quota, so stop the instance when idle. Details: [HANDOFF.md](./HANDOFF.md).
+- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. An owner-approved free-quota Codespace was **created and tested on 2026-11-16**: Python 3.12.11, 21/21 offline tests PASS. A password-protected noVNC desktop was also installed in that instance, reachable through one GitHub **Private** forwarded port; the real ChatGPT OAuth login and consent have since **passed** in this same-host desktop, and a live GPT model response passed. Native tool calls are still unverified. The GUI system packages were installed interactively and are not yet reproducible after container rebuild. GitHub Codespaces consumes personal account compute/storage quota, so stop the instance when idle. Details: [HANDOFF.md](./HANDOFF.md).
 - These automated tests verify logic but cannot complete interactive OAuth, confirm user scopes or prove that a live GPT model answers.
 
 ## Project roadmap and architecture
@@ -88,7 +98,8 @@ repositories remain separate; integrations require explicit owner authorization.
 
 ## Planned integrations (NOT implemented)
 
-- Verify a real GPT model response using the already-granted ChatGPT subscription; later implement refresh/revocation and self-hosted VM migration.
+- Live-verify native GPT tool actions in the isolated test directory; finish
+  full refresh/revocation and self-hosted VM migration separately.
 - Claude Code installed and authorized by the actual user through Anthropic's
   official sign-in flow, after confirming the intended use is permitted.
 - MCP, durable queue, permissions, persistent memory and safe service sandbox.
