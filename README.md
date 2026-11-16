@@ -100,6 +100,43 @@ This behavior is verified by synthetic offline tests only; the owner has not
 triggered real quota, permission or tool failures. The full 1.6 checkpoint
 remains open until a combined owner-approved live acceptance.
 
+## Combined GPT + Claude Code acceptance (phase 1.6; not yet live tested)
+
+One owner-operated pilot replaces repeated phone-based VS Code Tasks. It has no
+auto-run, no scheduled job and no production integration. Only later, on a host
+where the owner has already signed in to **both** personal accounts:
+
+```bash
+python3 -m ai_agent_engine.acceptance check
+python3 -m ai_agent_engine.acceptance run-live
+```
+
+- `check` is read-only and makes **zero model requests**. It checks the local
+  ChatGPT plan grant and the official `claude auth status` JSON; only a
+  `claude.ai` authentication method is accepted. It does not refresh tokens.
+  Any missing CLI, sign-in or alternate API/third-party authentication blocks.
+- `run-live` is **explicitly opt-in** and first checks both logins. It then
+  runs the existing GPT disposable-file native-tool test and exactly one
+  official Claude Code `-p` text reply. The Claude run uses a temporary
+  working directory, no saved session, a single turn, no built-in/MCP tools
+  and no plugin/hook customization. Each run consumes **subscription quota**.
+  If GPT fails, Claude is not invoked. No retries or paid-API fallback.
+- API/proxy-related `ANTHROPIC_*` and `CLAUDE_CODE_*` authentication-routing
+  environment overrides are rejected. The CLI stdout/stderr on errors is
+  never dumped to logs; only a bounded, successful, expected reply counts.
+  **Do not run this via public CI or with an API key.**
+- The actual binary, Claude subscription login, subscription allowance,
+  runtime compatibility and GPT native function-calls are **not yet tested
+  in a live session**. No tokens or secrets are moved between hosts.
+  Keep the owner-offered live session until the other prerequisites are ready.
+- This is **a personal evaluation harness, not a deployed Claude backend**.
+  Anthropic's [legal guidance](https://code.claude.com/docs/en/legal-and-compliance)
+  distinguishes ordinary individual sign-in to unmodified Claude Code from
+  embedding Claude in a product/service; commercial terms and API-key
+  authentication may apply to the latter. Do not infer permission for
+  unattended third-party subscription routing from this CLI test.
+  Command flags: [official CLI reference](https://code.claude.com/docs/en/cli-reference).
+
 ## Development without the home PC (phase 1.5 preparation)
 
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
