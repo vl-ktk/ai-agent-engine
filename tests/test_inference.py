@@ -142,7 +142,7 @@ class ProbeTests(unittest.TestCase):
             requests.append(request)
             if request.full_url.endswith("/models"):
                 return BytesIO(MODEL_ROWS)
-            return None if False else self._quota_rejection(request)
+            return self._quota_rejection(request)
         from ai_agent_engine.api_errors import PlanRequestError
         before = self.store.load_session()
         with self.assertRaises(PlanRequestError) as caught:
