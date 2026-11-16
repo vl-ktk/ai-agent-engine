@@ -16,6 +16,7 @@ from pathlib import Path
 import secrets
 import stat
 import tempfile
+import threading
 import time
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
@@ -350,9 +351,21 @@ def login(store: CredentialStore | None = None, *, timeout: float = 300,
         )
         if open_browser:
             print("Opening the browser for Continue with ChatGPT…")
-            if not webbrowser.open(url, new=1):
-                print("Open this URL in a browser on THIS host (never send it to anyone):")
-                print(url)
+
+            def launch_browser() -> None:
+                # Some Linux BROWSER commands wait until Firefox exits. Never hold
+                # up the loopback server (or its timeout) on browser process exit.
+                try:
+                    opened = webbrowser.open(url, new=1)
+                except Exception:
+                    opened = False
+                if not opened:
+                    print("Could not open the browser automatically. Retry with")
+                    print("--manual-browser and open the URL on THIS same host.")
+
+            threading.Thread(
+                target=launch_browser, name="siwc-browser-launch", daemon=True,
+            ).start()
         else:
             print("Manual-browser mode: open the following URL ONLY in a browser")
             print("running on THIS same host (e.g. its remote desktop).")
