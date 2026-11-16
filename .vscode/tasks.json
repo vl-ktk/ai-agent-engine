@@ -1,0 +1,65 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AI Agent Engine: 1. Check ChatGPT sign-in",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "-m",
+        "ai_agent_engine.auth",
+        "status"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      }
+    },
+    {
+      "label": "AI Agent Engine: 2. List available GPT models",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "-m",
+        "ai_agent_engine.inference",
+        "models"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      }
+    },
+    {
+      "label": "AI Agent Engine: 3. Send one GPT test request",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "-m",
+        "ai_agent_engine.inference",
+        "probe"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true,
+        "focus": true
+      }
+    }
+  ]
+}

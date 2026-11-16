@@ -2,9 +2,9 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
-> **Status: offline agent demo + locally testable Sign in with ChatGPT client.**
-> OAuth integration is implemented but **no real account sign-in has been verified**.
-> No GPT/Claude inference, server deployment or production access exists.
+> **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
+> One-click GPT model probe is available for a manual live test; a completed real model answer is **not yet verified**.
+> No Claude inference, server deployment or production access exists.
 
 ## What works in the prototype
 
@@ -38,21 +38,43 @@ py -m ai_agent_engine.auth login
 py -m ai_agent_engine.auth status
 ```
 
-On Linux/macOS replace `py` with `python3`. For an **interactive remote desktop**, use `python3 -m ai_agent_engine.auth login --manual-browser` in the VM terminal and open the displayed link in a browser running **inside that same remote desktop**. The URL is sensitive and must never enter chat, issue comments, workflow logs or public terminals. This does **not** enable signing in through Safari directly on a different phone. This manual mode is tested only with a simulated callback, not with OpenAI's live authorization.
+On Linux/macOS replace `py` with `python3`. For an **interactive remote desktop**, use `python3 -m ai_agent_engine.auth login --manual-browser` in the VM terminal and open the displayed link in a browser running **inside that same remote desktop**. The URL is sensitive and must never enter chat, issue comments, workflow logs or public terminals. This does **not** enable signing in through Safari directly on a different phone. This same-host remote desktop flow successfully completed live OpenAI OAuth consent on 2026-11-16.
 
-During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. A remote GUI browser running on the same virtual machine as the callback may be evaluated separately, but is **not yet tested or authorized for paid hosting**.
+During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. The owner completed a live same-host remote Firefox/OAuth callback on the GitHub Codespace. This does **not** authorize paid hosting.
 
 Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities; it does not yet refresh or revoke tokens (phase 1.7). On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
 
-**Limits:** Successful local code/tests do not prove that OpenAI will grant the required scope to your account. OAuth remains unverified until you actually complete `login`; model calls and subscription quota checks belong to phase 1.6. Signing in does not itself start a paid OpenAI API call.
+**Limits:** The real account granted ChatGPT plan permission in the initial live login. A completed model answer and subscription usage remain unverified (phase 1.6). Signing in does not itself start a paid OpenAI API call.
 
+
+
+## One-click GPT check in Codespaces (phase 1.6, pending live verification)
+
+This repository includes voluntary VS Code Tasks so the owner can run the GPT
+checks by tapping menus on an iPhone without typing or pasting shell commands:
+
+1. Open the existing owner-authorized GitHub Codespace in VS Code for the web.
+2. Once the branch with these files is available locally, select
+   **Terminal → Run Task → AI Agent Engine: 1. Check ChatGPT sign-in**.
+3. Optionally select **AI Agent Engine: 2. List available GPT models**.
+4. Select **AI Agent Engine: 3. Send one GPT test request** to use a small amount
+   of the ChatGPT account's plan allowance and print the response. This selects
+   the first account-visible model, sends one short stateless streamed Responses
+   request, and only declares success for a completed response event.
+
+The tasks do not run on workspace open. They keep OAuth credentials in the
+Codespace user's protected storage; no secrets are passed as task arguments
+or uploaded to GitHub. If the access token has expired, the diagnostic reports
+that condition; automatic token refresh remains a separate task (phase 1.7).
+**The live request must be performed by the owner in the existing Codespace;
+CI cannot validate it and does not possess credentials.**
 
 ## Development without the home PC (phase 1.5 preparation)
 
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
 - GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
-- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. An owner-approved free-quota Codespace was **created and tested on 2026-11-16**: Python 3.12.11, 21/21 offline tests PASS. A password-protected noVNC desktop was also installed in that instance, reachable through one GitHub **Private** forwarded port; the real user login/desktop inspection and OpenAI OAuth remain pending. The GUI system packages were installed interactively and are not yet reproducible after container rebuild. GitHub Codespaces consumes personal account compute/storage quota, so stop the instance when idle. Details: [HANDOFF.md](./HANDOFF.md).
+- Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. An owner-approved free-quota Codespace was **created and tested on 2026-11-16**: Python 3.12.11, 21/21 offline tests PASS. A password-protected noVNC desktop was also installed in that instance, reachable through one GitHub **Private** forwarded port; the real ChatGPT OAuth login and consent have since **passed** in this same-host desktop, while GPT inference is still pending. The GUI system packages were installed interactively and are not yet reproducible after container rebuild. GitHub Codespaces consumes personal account compute/storage quota, so stop the instance when idle. Details: [HANDOFF.md](./HANDOFF.md).
 - These automated tests verify logic but cannot complete interactive OAuth, confirm user scopes or prove that a live GPT model answers.
 
 ## Project roadmap and architecture
@@ -66,7 +88,7 @@ repositories remain separate; integrations require explicit owner authorization.
 
 ## Planned integrations (NOT implemented)
 
-- Complete and verify real Sign in with ChatGPT authorization in an owner-operated browser on the same Codespace/VM as the loopback callback (without the home PC); later refresh/revocation and self-hosted VM migration.
+- Verify a real GPT model response using the already-granted ChatGPT subscription; later implement refresh/revocation and self-hosted VM migration.
 - Claude Code installed and authorized by the actual user through Anthropic's
   official sign-in flow, after confirming the intended use is permitted.
 - MCP, durable queue, permissions, persistent memory and safe service sandbox.
