@@ -164,6 +164,19 @@ class StagedAcceptanceTests(unittest.TestCase):
         self.assertFalse(data["passed"])
         self.assertIn("1 passed, 1 failed, 0 skipped", out.getvalue())
 
+    def test_unwritable_report_path_keeps_live_result(self):
+        report = acceptance.Report()
+        with redirect_stdout(io.StringIO()):
+            report.add("gpt.auth", "GPT: ChatGPT sign-in", "PASS")
+        missing = Path(self.scratch.name) / "no-such-dir" / "report.json"
+        out, err = io.StringIO(), io.StringIO()
+        with patch.object(acceptance, "run_live", return_value=report), \
+                redirect_stdout(out), redirect_stderr(err):
+            code = acceptance.main(["run-live", "--report-json", str(missing)])
+        self.assertEqual(code, 0)
+        self.assertIn("Result: PASS", out.getvalue())
+        self.assertIn("not saved (FileNotFoundError)", err.getvalue())
+
     def test_unexpected_exception_is_contained(self):
         with patch.object(acceptance, "check_claude", side_effect=RuntimeError("PRIVATE")), \
                 patch.object(acceptance, "run_gpt_stages"), redirect_stdout(io.StringIO()) as out:

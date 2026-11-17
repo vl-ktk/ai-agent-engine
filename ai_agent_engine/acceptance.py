@@ -422,12 +422,18 @@ def main(argv: list[str] | None = None) -> int:
             return 1
     print("Combined LIVE acceptance: one pass, no automatic retries", flush=True)
     report = run_live()
-    if args.report_json:
-        with open(args.report_json, "w", encoding="utf-8") as handle:
-            json.dump(report.as_dict(), handle, indent=2)
     counts = {k: sum(s.status == k for s in report.stages) for k in (PASS, FAIL, SKIPPED)}
     print(f"Result: {'PASS' if report.passed else 'FAIL'} "
-          f"({counts[PASS]} passed, {counts[FAIL]} failed, {counts[SKIPPED]} skipped)")
+          f"({counts[PASS]} passed, {counts[FAIL]} failed, {counts[SKIPPED]} skipped)",
+          flush=True)
+    if args.report_json:
+        # A report-file problem must never hide or change the live result.
+        try:
+            with open(args.report_json, "w", encoding="utf-8") as handle:
+                json.dump(report.as_dict(), handle, indent=2)
+        except OSError as exc:
+            print("Warning: stage report file not saved (" + type(exc).__name__ + ")",
+                  file=sys.stderr)
     return 0 if report.passed else 1
 
 

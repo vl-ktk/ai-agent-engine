@@ -4,8 +4,9 @@ Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.
-> The native-function sandbox tool cycle is prepared for a separate manual live test; it is **not yet live-verified**.
-> No Claude inference, server deployment or production access exists.
+> **2026-11-17: one combined live acceptance passed all 12 stages** — GPT `gpt-6.1-sol` reply plus native
+> write/read sandbox tool calls verified on disk, and one official Claude Code `claude -p` reply under the
+> owner's personal Claude Pro sign-in (no API key). No server deployment or production access exists.
 
 ## What works in the prototype
 
@@ -166,7 +167,7 @@ This behavior is verified by synthetic offline tests only; the owner has not
 triggered real quota, permission or tool failures. The full 1.6 checkpoint
 remains open until a combined owner-approved live acceptance.
 
-## Combined GPT + Claude Code acceptance (phase 1.6; not yet live tested)
+## Combined GPT + Claude Code acceptance (phase 1.6; live PASS 2026-11-17)
 
 One owner-operated pilot replaces repeated phone-based VS Code Tasks. It has no
 auto-run, no scheduled job and no production integration. A single VS Code task
@@ -188,26 +189,32 @@ python3 -m ai_agent_engine.acceptance run-live
   ChatGPT plan grant and the official `claude auth status` JSON; only a
   `claude.ai` authentication method is accepted. It does not refresh tokens.
   Any missing CLI, sign-in or alternate API/third-party authentication blocks.
-- `run-live` is **explicitly opt-in** and first checks both logins. It then
-  runs the existing GPT disposable-file native-tool test and exactly one
-  official Claude Code `-p` text reply. The Claude run uses a temporary
-  working directory, no saved session, a single turn, no built-in/MCP tools
-  and no plugin/hook customization. Each run consumes **subscription quota**.
-  If GPT fails, Claude is not invoked. No retries or paid-API fallback.
+- `run-live` is **explicitly opt-in** and runs one pass of 12 stages, each
+  printed as `PASS`, `FAIL` or `SKIPPED` with a redacted reason:
+  GPT sign-in → model available → real text reply → `write_new_file` call →
+  file verified on disk → `read_file` call → read content verified → agent
+  loop completed; Claude sign-in → personal Pro/Max subscription (first-party,
+  no `ANTHROPIC_*`) → one real `claude -p` request → completed reply.
+  GPT and Claude are independent: a GPT failure does not block Claude, and a
+  failed step marks its dependants `SKIPPED`. Model usage is bounded: at most
+  1 GPT text request + 4 GPT tool-cycle requests and 1 Claude request.
+  No retries, no paid-API fallback. Exit code 0 only when every stage passes.
+  `--report-json PATH` additionally saves the redacted stage list.
+- The Claude probe does **not** use `--bare`: per the official CLI help,
+  `--bare` never reads OAuth and accepts only `ANTHROPIC_API_KEY`, so it cannot
+  run on a Claude Pro sign-in. It uses `--tools ""`, `--strict-mcp-config`,
+  `--permission-mode plan`, `--no-session-persistence` and a temporary
+  directory. Inherited `CLAUDE_CODE_*` session variables are not passed on.
   **Billing caveat:** `claude auth status` establishes the login method, but
-  does **not** prove that Claude Extra Usage is disabled. If the owner has
-  enabled chargeable extra usage, a personal subscription model call might
-  still incur additional charges. Check or disable Extra Usage in Claude
-  billing settings before opting into the live test. This cannot be
-  verified by offline CI.
+  does **not** prove that Claude Extra Usage is disabled. Check Claude billing
+  settings before opting into the live test.
 - API/proxy-related `ANTHROPIC_*` and `CLAUDE_CODE_*` authentication-routing
   environment overrides are rejected. The CLI stdout/stderr on errors is
   never dumped to logs; only a bounded, successful, expected reply counts.
   **Do not run this via public CI or with an API key.**
-- The actual binary, Claude subscription login, subscription allowance,
-  runtime compatibility and GPT native function-calls are **not yet tested
-  in a live session**. No tokens or secrets are moved between hosts.
-  Keep the owner-offered live session until the other prerequisites are ready.
+- **Live result 2026-11-17** (Codespace, Claude Code 2.1.326, Python 3.12):
+  all 12 stages PASS; GPT tool cycle used 3 model requests. Quota exhaustion,
+  token refresh after expiry and revocation remain untested live.
 - This is **a personal evaluation harness, not a deployed Claude backend**.
   Anthropic's [legal guidance](https://code.claude.com/docs/en/legal-and-compliance)
   distinguishes ordinary individual sign-in to unmodified Claude Code from
