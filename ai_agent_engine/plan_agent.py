@@ -18,7 +18,10 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from .api_errors import stream_plan_error
-from .core import Action, Agent, AgentResult, Message, ModelTurn, Tool
+from .core import (
+    Action, AgentResult, AgentRole, AgentSession, Message, ModelTurn,
+    SessionContext, Tool,
+)
 from .inference import (
     API_ORIGIN, MAX_STREAM_BYTES, InferenceError, _fresh_access_token,
     _authorized_request, _open, list_models,
@@ -226,6 +229,7 @@ class OpenAIPlanModel:
         self._queue: list[tuple[str, dict[str, str], str]] = []
         self._pending: tuple[str, str] | None = None
         self._seen_history = 0
+        self._system_context = ""
 
     def complete(self, history: tuple[Message, ...], allowed_tools: tuple[str, ...]) -> ModelTurn:
         try:
@@ -259,10 +263,17 @@ class OpenAIPlanModel:
     def _complete(self, history: tuple[Message, ...], allowed_tools: tuple[str, ...]) -> ModelTurn:
         tool_spec = _tool_names(allowed_tools)
         if self._seen_history == 0:
-            if len(history) != 1 or history[0].role != "user":
+            if len(history) == 1 and history[0].role == "user":
+                prompt = history[0].content
+            elif (len(history) == 2 and history[0].role == "system" and
+                  history[1].role == "user"):
+                # The shared role runtime supplies this trusted, task-scoped context.
+                self._system_context = history[0].content
+                prompt = history[1].content
+            else:
                 raise InferenceError("Invalid initial agent history")
-            self._input = [{"role": "user", "content": history[0].content}]
-            self._seen_history = 1
+            self._input = [{"role": "user", "content": prompt}]
+            self._seen_history = len(history)
         else:
             self._accept_tool_result(history)
             if self._queue:
@@ -278,7 +289,8 @@ class OpenAIPlanModel:
                 "tools for file work; no shell, external access or real projects. "
                 "Never claim you used a tool unless it actually returned a result. "
                 "Call one tool at a time and wait for its result."
-            ),
+            ) + ("\nTrusted task context:\n" + self._system_context
+                 if self._system_context else ""),
             "tools": tool_spec,
             "store": False,
             "stream": True,
@@ -365,9 +377,12 @@ def run_tool_cycle(slug: str, store: CredentialStore, *,
         root = Path(scratch)
         files = SandboxFiles(root)
         model = OpenAIPlanModel(slug, store, opener=opener)
-        agent = Agent(model=model, tools=_recording_tools(files, report),
-                      max_steps=MAX_AGENT_STEPS)
-        result = agent.run(TASK_PROMPT)
+        session = AgentSession(
+            context=SessionContext("ai-agent-engine", "owner-sandbox", AgentRole.EXECUTOR),
+            model=model, tools=_recording_tools(files, report),
+            max_steps=MAX_AGENT_STEPS,
+        )
+        result = session.run(TASK_PROMPT)
         target = root / FILE_NAME
         report.status = result.status
         report.error = model.last_error

@@ -31,6 +31,30 @@ python -m unittest discover -s tests -v
 
 The demo uses a disposable temporary directory and does not touch working projects.
 
+## Unified agent roles and task sessions (phase 3.3; offline-tested)
+
+The same provider-neutral `Agent` model/tool loop is now available through
+`AgentSession` for both `AgentRole.EXECUTOR` and `AgentRole.SUPERVISOR`. A session
+binds one validated `project_id`, one `agent_id`, trusted role instructions,
+an explicitly supplied set of tools, and a step limit. Separate sessions do
+not inherit chat history; each session accepts exactly one task. The role is
+*descriptive*, never an automatic permission or tool grant.
+
+`StopToken.request_stop()` cooperatively cancels a pending session before its
+next model call or tool action, returning `cancelled` with a content-free audit
+event. It **cannot preempt an already running provider HTTP request or local
+tool call**; process-level cancellation and persistent queues belong to later
+stages. The existing `Agent.run(prompt)` contract still works unchanged.
+
+The owner-only GPT sandbox tool-cycle now uses this same `AgentSession` path
+through its existing `OpenAIPlanModel` protocol adapter. This route was
+retested **offline with a fake transport only**; the earlier owner's live
+12/12 check predates this change. This is **not** a general permission to
+operate a supervisor with GPT/Claude on a server. Full provider adapters,
+long-lived orchestration, project access policies and memory belong to later
+roadmap stages. No new API usage, credentials, permissions or deployment are
+introduced by phase 3.3.
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.

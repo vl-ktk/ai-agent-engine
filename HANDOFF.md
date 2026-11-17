@@ -1,5 +1,13 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 3.3 — unified task sessions (work in progress; 2026-11-17)
+
+- **Source/rollback baseline:** `vl-ktk/ai-agent-engine` `main` at `6a6152d6b904f4371e4a68efff60a80828e16be6` before phase 3.3. Working branch `feat/phase-3-3-unified-runtime-20261117`.
+- **Changed:** `core.py` adds role-scoped single-task sessions, trusted session context and a cooperative stop token; `plan_agent.py` runs the existing GPT owner sandbox test through the shared session interface while keeping the native tool allowlist unchanged. `__init__.py` exports the new types. New offline role/cancel tests added; README and roadmap clarify limitations.
+- **Status:** baseline was 125/125 PASS; new local suite 134/134 PASS. CI, final merge SHA and owner acceptance still pending at this checkpoint; do not mark 3.3 completed before them. Stage 3.4 and later untouched. No new model calls or production activity.
+- **Remaining:** compile, demo, diff inspection, open branch PR, run CI, recheck current main before merge, record exact rollback commit and verified checks. Return owner a brief verified report; do not continue to 3.4 without a new request.
+
+
 **Updated:** 2026-11-17 (PR #14 architecture reconciliation merged; phase 1 and technical Stage 2 gates remain open)
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
 **Latest docs merge:** [PR #13](https://github.com/vl-ktk/ai-agent-engine/pull/13) merged as `e1f765e38cabebfd8c155bc5e57172aaa603bfcb` (2026-11-17). **Rollback for PR #13:** `aa8b6f343a17038d05ba9e1de9d9900bf4dea9e9` (previous `main`). Offline CI [run 44041544686](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44041544686) 4/4 PASS; local 125/125 tests, compile, demo and diff check PASS. No runtime code was changed in PR #13.
