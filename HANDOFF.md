@@ -6,7 +6,7 @@
 - **Owner decision:** 3.3 accepted on 2026-11-17, marked `[x]` in the single roadmap; development commissioned **only for 3.4**, no changes to 3.5 or later.
 - **Changed:** `core.py` adds `ToolRegistry` with explicit grants, strict `Tool` schemas, arg/result bounds and per-step content-free actor/time audit; `tools.py` hardens path handling, limited reads and POSIX no-follow directory-descriptor opens; `plan_agent.py` retains original GPT test schemas. New offline security tests, documentation and roadmap updated.
 - **Checks:** before 3.4: 134/134 offline PASS. After 3.4: 148/148 offline PASS; `compileall`, demo and `git diff --check` PASS on local Linux. Live models, cloud runtime, production and other projects untouched.
-- **Status:** implementation ready for independent GitHub PR/CI and owner acceptance; PR, CI and final merge IDs to be recorded after completion. Exact Stage 3.4 checkbox remains unchecked until owner accepts. Stage 3.5 not started.
+- **Status:** [PR #16](https://github.com/vl-ktk/ai-agent-engine/pull/16) MERGED as `957a66d1027c2f3c845de226a2a78a1a86a6acc1` (branch commit `593ae6134dc74ff8a23fdcc15ab72d6550c15c1a`). [GitHub Actions run 44063455579](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44063455579): 4/4 PASS on Linux Python 3.11–3.13 and Windows Python 3.12. **Technical PASS; owner acceptance pending.** The 3.4 roadmap checkbox remains `[ ]`; Stage 3.5 not started.
 - **Known boundary:** Windows sandbox cannot claim race resistance against a malicious same-OS-user process; no OS process isolation or persisted audit. These are later infrastructure/system-orchestrator requirements.
 
 ## Stage 3.3 — unified task sessions (PR #15 MERGED; 2026-11-17)
