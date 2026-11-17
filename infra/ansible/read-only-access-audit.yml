@@ -1,0 +1,53 @@
+---
+# Stage 4.2 / 2.3 + 6.1: read-only account, OS and listening-port snapshot.
+# No become, sudo, package changes, SSH reconfiguration or firewall changes.
+- name: Inventory non-root access and TCP listeners safely
+  hosts: ai_agent_engine_vps
+  gather_facts: true
+  become: false
+  tasks:
+    - name: Confirm expected Debian host and isolated deploy account
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+          - ansible_facts['user_id'] == 'ae-deploy'
+        fail_msg: "Refused: unexpected OS or SSH identity."
+        quiet: true
+
+    - name: Read deploy group membership
+      ansible.builtin.command:
+        argv: [id, -nG]
+      register: deploy_groups
+      changed_when: false
+
+    - name: Read effective numeric user ID
+      ansible.builtin.command:
+        argv: [id, -u]
+      register: deploy_uid
+      changed_when: false
+
+    - name: Verify automation has not logged in as root
+      ansible.builtin.assert:
+        that:
+          - deploy_uid.stdout | int != 0
+          - "'root' not in deploy_groups.stdout.split()"
+          - "'sudo' not in deploy_groups.stdout.split()"
+        fail_msg: "Deploy identity has an unexpected privileged primary/group membership."
+        quiet: true
+
+    - name: Read currently listening TCP sockets without process details
+      ansible.builtin.command:
+        argv: [ss, -lntH]
+      register: tcp_listeners
+      changed_when: false
+
+    - name: Summarize non-secret host, account and port snapshot
+      ansible.builtin.debug:
+        msg:
+          hostname: "{{ ansible_facts['hostname'] }}"
+          operating_system: "{{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          account: "{{ ansible_facts['user_id'] }}"
+          group_names: "{{ deploy_groups.stdout.split() }}"
+          tcp_listeners: "{{ tcp_listeners.stdout_lines }}"
+          limitation: "Read-only user-level audit; cannot prove firewall rules, sudoers overrides or SCP fallback."
