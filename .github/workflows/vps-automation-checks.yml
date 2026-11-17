@@ -46,3 +46,5 @@ jobs:
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/verify.yml
       - name: Validate Debian 13 baseline syntax without connecting
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/debian13-user-baseline.yml
+      - name: Validate read-only access audit syntax without connecting
+        run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/read-only-access-audit.yml
