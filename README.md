@@ -376,7 +376,7 @@ Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
 ## Project roadmap and architecture
 
-- [Implementation roadmap — 11 phases and detailed checkpoints](./IMPLEMENTATION_ROADMAP.md).
+- [Single implementation roadmap — 11 phases and their direct substeps](./IMPLEMENTATION_ROADMAP.md). Historical technical checklists are evidence only, not additional active task numbering.
 - [Architecture decisions — orchestrators, roles, permissions, memory and owner control](./ARCHITECTURE_DECISIONS.md).
 - [Current status and handoff](./HANDOFF.md).
 
