@@ -1,0 +1,42 @@
+# Stage 4.2 / 6.3: NOT A RUNNABLE UNIT until a real daemon exists.
+# Replace @ENGINE_EXEC_START@ only after controller runtime entrypoint is implemented.
+# Install only by separate owner approval; never auto-enable from CI.
+[Unit]
+Description=AI Agent Engine controller (single-owner)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=exec
+User=ae-runtime
+Group=ae-runtime
+WorkingDirectory=/opt/ai-agent-engine/current
+ExecStart=@ENGINE_EXEC_START@
+Restart=on-failure
+RestartSec=5
+UMask=0077
+StateDirectory=ai-agent-engine
+StateDirectoryMode=0700
+RuntimeDirectory=ai-agent-engine
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=300
+
+[Install]
+WantedBy=multi-user.target

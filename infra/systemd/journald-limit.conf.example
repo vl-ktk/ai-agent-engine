@@ -1,0 +1,5 @@
+# Optional global VPS journal cap. NOT installed or activated.
+# Requires separate owner permission because it affects logs of ALL services.
+[Journal]
+SystemMaxUse=256M
+RuntimeMaxUse=128M
