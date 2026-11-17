@@ -1,0 +1,12 @@
+# Stage 4.2 / 6.3: NOT installed or enabled on VPS.
+[Unit]
+Description=Periodic AI Agent Engine controller heartbeat validation
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=1min
+Unit=ae-controller-health.service
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
