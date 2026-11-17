@@ -17,6 +17,10 @@ for autonomous production deployment. The agent rejects non-string/blank or
 oversized final responses and rejects prompts above 65,536 characters before
 invoking a model; both behaviors are covered by offline regression tests.
 
+**Stage 4.1:** [controller VPS selection review](./STAGE4_VPS_SELECTION.md)
+is a recommendation awaiting owner approval and Stage 1 VM gates. No server
+has been purchased, configured, or deployed.
+
 ## What works in the prototype
 
 - Generic model interface and bounded model/tool interaction loop.
