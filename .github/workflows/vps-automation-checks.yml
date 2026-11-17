@@ -7,13 +7,13 @@ on:
       - '.github/workflows/vps-automation-checks.yml'
       - 'infra/ansible/**'
       - 'infra/bootstrap/**'
-      - 'infra/bootstrap/**'
       - 'STAGE4_2_AUTOMATION_PLAN.md'
   push:
     branches: [main]
     paths:
       - '.github/workflows/vps-automation-checks.yml'
       - 'infra/ansible/**'
+      - 'infra/bootstrap/**'
       - 'STAGE4_2_AUTOMATION_PLAN.md'
   workflow_dispatch:
 
