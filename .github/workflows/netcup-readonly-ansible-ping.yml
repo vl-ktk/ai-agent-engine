@@ -23,7 +23,7 @@ concurrency:
 
 jobs:
   ansible-ping:
-    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'VERIFY' }
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'VERIFY' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
