@@ -1,6 +1,6 @@
 # HANDOFF — AI Agent Engine
 
-**Updated:** 2026-11-17 (PR #12 merged; SIWC auto-refresh preflight in main; phase 1.7 live checks still pending)
+**Updated:** 2026-11-17 (PR #12 merged; phase 1.8 GO/NO-GO documentation prepared; phase 1 live blockers remain)
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
 **Current merged runtime revision:** `ea8989001111a045e026adf9063a27c733d03d67` (PR #12, owner-initiated GPT refresh preflight; CI 4/4 PASS). **Rollback before PR #12:** `0c43a3e63da0f5ae6d338ea3fb8fff254d67210d` (PR #11, docs only). Earlier PR #10 staged GPT+Claude owner-authorized LIVE 12/12 PASS; separate live refresh/revocation, quota and VM checks remain pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
@@ -12,6 +12,15 @@
 **Rollback baseline before earlier inference merge:** `b942411c5d140a88df01f3393ae39969ec313b05`.
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
+
+## Phase 1.8 — итоговый GO/NO-GO (2026-11-17; документация)
+
+- Источник: [PHASE1_GO_NOGO.md](./PHASE1_GO_NOGO.md); первичные документы OpenAI, Anthropic и Hetzner сверены 2026-11-17. Зафиксированы именно подтверждённые LIVE 12/12, реальный GPT OAuth, PR #12 refresh с офлайн CI 4/4 и границы того, чего эти проверки не доказывают.
+- **GO** для этапа 2: проектирование архитектуры и дальнейшая офлайн-разработка без дополнительных сервисов и затрат. Для GPT и Claude Code есть только ограниченный личный пилот.
+- **HOLD** для VPS/автономного исполнения до согласования расходов, живого refresh/VM и проверки безопасности; **HOLD** для постоянно работающего Claude Pro до ясности правил Anthropic. **NO-GO** для сторонних пользователей на единой личной подписке и для списаний без отдельного разрешения.
+- Для сравнения бюджета: Hetzner CX33 — €8,49/мес. без НДС и IPv4, Primary IPv4 — €0,50/мес. по текущей официальной документации; сам CX33 на странице продукта показан временно недоступным. Никакой сервер не заказан.
+- Пункт 1.8 подготовлен к приёмке владельца, но не помечается закрытым без неё по правилу дорожной карты. Глобальный этап 1, 1.6 и 1.7 сохраняют открытые вопросы. **Новых LIVE/платных действий, изменений токенов или production не было**.
+- Следующее допустимое действие после приёмки: этап 2, подпункт 2.1 (границы компонентов); сам аудит не разрешает деплой или покупку VM.
 
 ## Phase 1.7 — automatic refresh on owner-initiated GPT requests ([PR #12](https://github.com/vl-ktk/ai-agent-engine/pull/12); MERGED)
 
