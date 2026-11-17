@@ -31,11 +31,13 @@ Host: `v2202611460959561466`, Debian 13.7; one existing Netcup VPS. No extra VPS
 - `systemctl daemon-reload` and `systemctl enable --now ae-host-check.timer` emitted a nonfatal `systemd-ssh-generator: Failed to query local AF_VSOCK CID: Cannot assign requested address` warning on this VPS. Unit validation, the actual one-shot and timer succeeded. Do not mistake this warning for an engine failure.
 - **Scope:** local host-service checks and journal evidence, **not** external alerts, controller health, queue throughput or application heartbeats. Those depend on a real daemon and later monitoring work.
 
-### Controller service — PREPARED, NOT RUNNING
+### Controller service — SOURCE/CI IMPLEMENTED, NOT INSTALLED/RUNNING ON VPS
 
-- `infra/systemd/ae-controller.service.template` is a **source template only**. It has `@ENGINE_EXEC_START@` and is **not installed/enabled** on the VPS.
-- `python -m ai_agent_engine` still executes a temporary-directory offline demonstration and exits; **there is no verified long-running controller entrypoint**. Starting a fake or demo systemd daemon would be incorrect. The eventual controller requires a real executable, tested application health check and an owner-approved release.
-- Therefore the **host infrastructure portion of 6.3 is LIVE PASS, but the complete item remains OPEN** solely for the real controller/app-level checks. Do not claim AI Agent Engine is live.
+- Source implementation: `ai_agent_engine/controller.py` exposes a **real, persistent, long-running unprivileged loop** (`python -m ai_agent_engine.controller serve --state-dir /var/lib/ai-agent-engine`), not the temporary `python -m ai_agent_engine` offline demo. Its SQLite WAL queue, singleton lease, heartbeat, restart recovery, retry cap, idempotent bounded submissions, non-mutating status/health and signal shutdown have offline tests in `tests/test_controller.py`.
+- This stage's **only permitted task** is `core_self_test` with local `ScriptedModel` and disposable `SandboxFiles`; no GPT/Claude live provider routing, network, paid API, arbitrary shell, user-facing automation or unattended production agent is claimed.
+- `infra/systemd/ae-controller.service.template` now has a concrete `ExecStart` pinned to the future installed wheel virtualenv at `/opt/ai-agent-engine/current/venv/bin/python`; `ae-controller-health.service` and `ae-controller-health.timer` poll the application heartbeat when eventually installed. **None** of these three units is installed, enabled, started, or verified against the real VPS; `current/venv` deployment is not yet present/verified.
+- Offline manual smoke test with a non-root account and a pre-existing private state directory: `python -m ai_agent_engine.controller serve --state-dir PATH`, then `python -m ai_agent_engine.controller enqueue --state-dir PATH --kind core_self_test`, `status`, `health --max-age 10` and graceful SIGTERM. This is **not** a claim of a VPS run.
+- **6.3 remains OPEN**: owner-approved pinned release installation and systemd activation; verify persistent data owner/modes, queue after restart, heartbeat timeout, service/timer status, journal limits, failure/restart behavior, and safe rollback on the real VPS. No deployment, network/SSH/firewall/secret changes were made in this source change.
 
 ## Changes and rollback boundary
 
