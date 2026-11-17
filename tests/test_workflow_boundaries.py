@@ -45,5 +45,28 @@ class WorkflowBoundaryTests(unittest.TestCase):
         self.assertTrue(inspect_workflow("netcup-one-time-bootstrap.yml", source))
 
 
+    def test_release_preparation_rejects_automatic_triggers(self):
+        source = (
+            "on:\n  push:\n  workflow_dispatch:\n"
+            "permissions:\n  contents: read\n"
+            "jobs:\n  prepare-release:\n"
+            "    if: ${{ github.ref == 'refs/heads/main' && "
+            "github.actor == 'vl-ktk' && inputs.confirmation == 'PREPARE_RELEASE' }}\n"
+            "    steps:\n      - run: echo unsafe\n"
+        )
+        self.assertTrue(inspect_workflow("release-preparation.yml", source))
+
+    def test_release_preparation_rejects_unreviewed_owner_condition(self):
+        source = (
+            "on:\n  workflow_dispatch:\n"
+            "permissions:\n  contents: read\n"
+            "jobs:\n  prepare-release:\n"
+            "    if: ${{ github.ref == 'refs/heads/main' }}\n"
+            "    steps:\n      - run: echo unsafe\n"
+        )
+        findings = inspect_workflow("release-preparation.yml", source)
+        self.assertTrue(any("owner gate" in issue for issue in findings))
+
+
 if __name__ == "__main__":
     unittest.main()
