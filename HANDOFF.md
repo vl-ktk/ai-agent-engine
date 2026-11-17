@@ -1,3 +1,11 @@
+# 2026-11-17 — Stage 4.2 / 6.2 external IPv4 closed-port and SSH Match PASS; IPv6 route unavailable
+
+- **Netcup OOB root console (read-only):** `/etc/ssh/sshd_config*` содержит ноль активных блоков `Match`; `sshd -T -C` для `root` и `ae-deploy` с условным peer `::1` показал rootlogin=no, passwordauthentication=no, kbdinteractiveauthentication=no, pubkeyauthentication=yes. **SSH effective policy PASS**, не реальный IPv6 SSH-сеанс.
+- **External GitHub Actions runner:** [probe #44140170876](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44140170876) проверил только адреса нашего Netcup VPS и порты TCP22/TCP8022 без credentials. IPv4 TCP22 новый SSH-баннер PASS, IPv4 TCP8022 timeout (deny PASS). **IPv6 INCONCLUSIVE:** у GitHub runner нет IPv6 route (`[Errno 101] Network is unreachable`), поэтому до сервера он не дошёл.
+- **Что осталось:** в 6.2 только решение о внешнем IPv6-тесте через доступную IPv6-сеть или явный отказ от требования, если IPv6 SSH не используется. Не объявлять реальную IPv6-доступность проверенной и не закрывать этап без решения владельца.
+- **Никаких правок VPS** (firewall, SSH, root-пароль, secrets, пакеты/сервисы), новых серверов и расходов. Новая GitHub проверка `.github/workflows/netcup-external-network-probe.yml` изолирована и не использует secrets.
+- **Rollback источника:** предыдущий main `5c73f164181001b7ad6f921ddd6b3f7eebe0fe64`. При сбое Netcup firewall по-прежнему unassign custom policy в SCP → Apply → Save → контроль SSH.
+
 # 2026-11-17 — Stage 4.2 / 6.2 DNS + NTP UDP LIVE PASS, firewall unchanged
 
 - **Источник:** `vl-ktk/ai-agent-engine`, `main`; результаты внесены в `STAGE4_2_AUTOMATION_PLAN.md` и `infra/firewall/NETCUP_SCP_ROLLOUT.md`.
