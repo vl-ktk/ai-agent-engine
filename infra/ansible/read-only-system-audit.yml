@@ -1,0 +1,136 @@
+---
+# Stage 4.2 / 6.1: unprivileged inventory only. Never use sudo/become.
+# Do not read SSH keys, user files or journal entries; report only sanitized facts.
+- name: Read-only system services, SSH, UDP and journal metadata
+  hosts: ai_agent_engine_vps
+  gather_facts: true
+  become: false
+  tasks:
+    - name: Refuse unexpected host identity
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+          - ansible_facts['user_id'] == 'ae-deploy'
+        quiet: true
+        fail_msg: "Refused: unexpected OS or non-root account."
+
+    - name: Read effective user ID without sudo
+      ansible.builtin.command:
+        argv: [id, -u]
+      register: effective_uid
+      changed_when: false
+
+    - name: Refuse any root session
+      ansible.builtin.assert:
+        that:
+          - effective_uid.stdout | int != 0
+        quiet: true
+
+    - name: Read listening TCP sockets without process command lines
+      ansible.builtin.command:
+        argv: [ss, -lntH]
+      register: tcp_listeners
+      changed_when: false
+
+    - name: Read listening UDP sockets without process command lines
+      ansible.builtin.command:
+        argv: [ss, -lunH]
+      register: udp_listeners
+      changed_when: false
+
+    - name: List running systemd services without changing them
+      ansible.builtin.command:
+        argv: [systemctl, list-units, --type=service, --state=running, --no-legend, --plain, --no-pager]
+      register: running_services
+      changed_when: false
+      failed_when: false
+
+    - name: List failed systemd services without changing them
+      ansible.builtin.command:
+        argv: [systemctl, list-units, --type=service, --state=failed, --no-legend, --plain, --no-pager]
+      register: failed_services
+      changed_when: false
+      failed_when: false
+
+    - name: Check SSH daemon service state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, ssh.service]
+      register: ssh_service
+      changed_when: false
+      failed_when: false
+
+    - name: Check systemd journal service state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, systemd-journald.service]
+      register: journal_service
+      changed_when: false
+      failed_when: false
+
+    - name: Test whether OpenSSH exposes effective policy to unprivileged account
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T, -C, "user=ae-deploy,host=localhost,addr=127.0.0.1"]
+      register: ssh_policy
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Check availability of passwordless sudo without using elevated rights
+      ansible.builtin.command:
+        argv: [sudo, -n, -l]
+      register: sudo_probe
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Inspect whether guest nftables rules are visible without privileges
+      ansible.builtin.command:
+        argv: [nft, list, ruleset]
+      register: nft_probe
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Inspect SSH configuration file metadata only
+      ansible.builtin.stat:
+        path: /etc/ssh/sshd_config
+      register: ssh_config
+
+    - name: Inspect persistent journal directory metadata only
+      ansible.builtin.stat:
+        path: /var/log/journal
+      register: journal_persistent
+
+    - name: Inspect runtime journal directory metadata only
+      ansible.builtin.stat:
+        path: /run/log/journal
+      register: journal_runtime
+
+    - name: Probe journal metadata access without reading entries
+      ansible.builtin.command:
+        argv: [journalctl, --disk-usage, --no-pager]
+      register: journal_probe
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Report sanitized, non-secret security inventory
+      ansible.builtin.debug:
+        msg:
+          os: "{{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          user: "{{ ansible_facts['user_id'] }}"
+          tcp_listeners: "{{ tcp_listeners.stdout_lines }}"
+          udp_listeners: "{{ udp_listeners.stdout_lines }}"
+          ssh_service_active: "{{ ssh_service.rc == 0 }}"
+          ssh_config_file_present: "{{ ssh_config.stat.exists }}"
+          ssh_effective_policy_available: "{{ ssh_policy.rc == 0 }}"
+          ssh_effective_policy_safe_flags: "{{ ssh_policy.stdout_lines | default([]) | select('match', '^(permitrootlogin|passwordauthentication|pubkeyauthentication) ') | list if ssh_policy.rc == 0 else [] }}"
+          running_service_units: "{{ running_services.stdout_lines | map('regex_search', '^[^ ]+') | list if running_services.rc == 0 else [] }}"
+          failed_service_units: "{{ failed_services.stdout_lines | map('regex_search', '^[^ ]+') | list if failed_services.rc == 0 else [] }}"
+          systemd_journal_active: "{{ journal_service.rc == 0 }}"
+          journal_metadata_accessible: "{{ journal_probe.rc == 0 }}"
+          journal_persistent_dir_present: "{{ journal_persistent.stat.exists }}"
+          journal_runtime_dir_present: "{{ journal_runtime.stat.exists }}"
+          passwordless_sudo_list_available: "{{ sudo_probe.rc == 0 }}"
+          guest_nft_rules_visible_to_unprivileged_user: "{{ nft_probe.rc == 0 }}"
+          limits: "No log entries, SSH keys, secrets or process arguments read. Denied probes do not prove absence of sudo or guest firewall. Provider firewall verified separately in SCP."
