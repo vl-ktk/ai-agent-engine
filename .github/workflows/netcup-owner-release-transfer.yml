@@ -1,0 +1,131 @@
+name: Netcup owner-approved prepared release transfer (no activation)
+
+# Transfer the immutable artifact from an owner-selected successful preparation
+# run to the unprivileged deploy user's home. Does not invoke sudo, change
+# services/current, install packages, or write application runtime directories.
+on:
+  workflow_dispatch:
+    inputs:
+      prepared_run_id:
+        description: "Successful owner-pinned release-preparation run ID"
+        required: true
+        type: string
+      selected_source_sha:
+        description: "Exact 40-character source commit SHA inside manifest"
+        required: true
+        type: string
+      expected_wheel_sha256:
+        description: "Independent SHA-256 of prepared wheel"
+        required: true
+        type: string
+      expected_main_sha:
+        description: "Current main HEAD to reject concurrent edits"
+        required: true
+        type: string
+      server_ipv4:
+        description: "Netcup VPS IPv4"
+        required: true
+        type: string
+      confirmation:
+        description: "Type TRANSFER_PREPARED_RELEASE (transfer only)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ai-agent-engine-owner-release-transfer
+  cancel-in-progress: false
+
+jobs:
+  transfer:
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'TRANSFER_PREPARED_RELEASE' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout workflow source, without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require unchanged source and validated inputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+          EXPECTED_WHEEL: ${{ inputs.expected_wheel_sha256 }}
+          PREPARED_RUN: ${{ inputs.prepared_run_id }}
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_WHEEL" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$PREPARED_RUN" =~ ^[0-9]{8,14}$ ]]
+          [[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$current_main" = "$EXPECTED_MAIN"
+          test "$GITHUB_SHA" = "$EXPECTED_MAIN"
+          echo 'PASS: exact main and input digests validated'
+      - name: Download immutable prepared wheel and manifest from selected run
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-agent-engine-prepared-${{ inputs.selected_source_sha }}
+          run-id: ${{ inputs.prepared_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/prepared-bundle
+      - name: Verify source, wheel and manifest BEFORE transfer
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_WHEEL: ${{ inputs.expected_wheel_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          python3 infra/deploy/promotion.py verify \
+            --bundle "$RUNNER_TEMP/prepared-bundle" \
+            --source-sha "$SOURCE_SHA" \
+            --expected-wheel-sha256 "$EXPECTED_WHEEL"
+      - name: Verify pinned SSH host identity and staging credentials
+        shell: bash
+        env:
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$DEPLOY_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$RUNNER_TEMP/ae-deploy-key"
+          chmod 0600 "$RUNNER_TEMP/ae-deploy-key"
+          ssh-keygen -y -f "$RUNNER_TEMP/ae-deploy-key" >/dev/null
+          ssh-keyscan -T 10 -p 22 -t ed25519 "$SERVER_IP" 2>/dev/null > "$RUNNER_TEMP/host-key-pinned"
+          test -s "$RUNNER_TEMP/host-key-pinned"
+          actual_fp="$(ssh-keygen -lf "$RUNNER_TEMP/host-key-pinned" | awk 'NR==1 {print $2}')"
+          test "$actual_fp" = 'SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg'
+      - name: Check main again and copy to unprivileged incoming directory
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_WHEEL: ${{ inputs.expected_wheel_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$current_main" = "$EXPECTED_MAIN"
+          ssh_options=( -i "$RUNNER_TEMP/ae-deploy-key" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" )
+          destination="/home/ae-deploy/ae-incoming/$SOURCE_SHA"
+          ssh "${ssh_options[@]}" "ae-deploy@$SERVER_IP" "install -d -m 0700 '$destination'"
+          scp "${ssh_options[@]}" "$RUNNER_TEMP/prepared-bundle/"*.whl "$RUNNER_TEMP/prepared-bundle/release-manifest.json" "ae-deploy@$SERVER_IP:$destination/"
+          ssh "${ssh_options[@]}" "ae-deploy@$SERVER_IP" "python3 - '$destination' '$SOURCE_SHA' '$EXPECTED_WHEEL'" <<'PY'
+          import hashlib, json, pathlib, sys
+          root, sha, independent = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+          manifest = json.loads((root / 'release-manifest.json').read_text())
+          assert manifest['source_commit'] == sha and manifest['wheel_sha256'] == independent
+          wheel = root / manifest['wheel_file']
+          assert hashlib.sha256(wheel.read_bytes()).hexdigest() == independent
+          print('PASS: prepared wheel and manifest transferred and independently verified at target')
+          PY
