@@ -8,7 +8,7 @@
 **Проверки для 1.1–1.5:** [PR #26](https://github.com/vl-ktk/ai-agent-engine/pull/26) смержен squash в `main` `a6a8a1c3d9442bb364ef55317a029c2fa30db22f`. [Ansible offline CI #44093814944](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44093814944) — PASS 1/1 (inventory, playbook syntax, без SSH); [основной CI #44093814678](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44093814678) — PASS 4/4. Предыдущий `main` для rollback: `60bdb12b7732a61f0920b5cd54acb93bd424379a`. Работа на Netcup VPS не проводилась. **Пункт 1 принят владельцем 2026-11-17** («Да»).
 
 
-**Реальное SSH-подключение 2026-11-17:** [GitHub Actions #44110311382](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44110311382) — SUCCESS, выполнены `Create non-root deploy user with public key` и `Verify non-root SSH access`. Это **не** доказывает Ansible `ping`, настройку firewall, пакетов, backup или production.
+**Живые проверки 2026-11-17:** [GitHub Actions #44110311382](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44110311382) — создание `ae-deploy` и реальный SSH SUCCESS; [read-only Ansible #44112659558](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44112659558) — SUCCESS (`ok=1 changed=0 unreachable=0 failed=0`). Ни пакеты, ни firewall, ни backup, ни production этим не настроены.
 
 ## Подробный план — 10 пунктов
 
@@ -27,13 +27,13 @@
   - [x] 3.1. Записать приватный deploy-ключ в GitHub Actions repository secret (не в файлы репозитория, workflow, логи или чат). **PASS:** `AE_DEPLOY_PRIVATE_KEY` создан и использован для успешного реального SSH.
   - [ ] 3.2. Указать адрес VPS, пользователя и заранее подтверждённый SSH host key; установить только необходимые права workflow.
   - [ ] 3.3. Добавить условия ручного допуска к потенциально опасным операциям с учётом реальных ограничений тарифа GitHub.
-- [ ] **4. Доказать реальное подключение GitHub → VPS.**
-  - [ ] 4.1. Запустить отдельный ручной workflow, выполнить безвредный Ansible `ping`. **Частично:** отдельный разовый ручной workflow `#44110311382` проверил реальное SSH-подключение; именно Ansible `ping` ещё НЕ запускался.
+- [ ] **4. Доказать реальное подключение GitHub → VPS.** Реальный Ansible `ping` завершён; остаётся live OS/права-аудит и проверка всего состава сведений.
+  - [x] 4.1. Запустить отдельный ручной workflow, выполнить безвредный Ansible `ping`. **PASS:** [run #44112659558](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44112659558), `ok=1 changed=0 unreachable=0 failed=0`; SSH key-only, no root.
   - [ ] 4.2. Проверить имя/OS/доступ и отсутствие секретов в логах; зафиксировать успешный run ID.
-  - [ ] 4.3. Ошибки доступа решать без изменения production-сервисов.
+  - [x] 4.3. Ошибки доступа решать без изменения production-сервисов. **PASS:** workflow syntax fix [PR #31](https://github.com/vl-ktk/ai-agent-engine/pull/31) (first bad YAML rejected with 0 jobs), then clean run; no prod/OS modification.
 - [ ] **5. Создать воспроизводимую Ansible-конфигурацию Debian 13.**
-  - [ ] 5.1. Зафиксировать базовые пакеты и Python runtime с совместимыми версиями.
-  - [ ] 5.2. Добавить idempotent playbooks для подготовительного состояния; повторный прогон не должен портить систему.
+  - [x] 5.1. Зафиксировать базовые пакеты и Python runtime с совместимыми версиями. **Документировано:** [DEBIAN13_BASE.md](./infra/ansible/DEBIAN13_BASE.md), Debian 13 Python 3.13; базовые apt-пакеты **не установлены**, административный доступ не расширялся.
+  - [ ] 5.2. Добавить idempotent playbooks для подготовительного состояния; повторный прогон не должен портить систему. **Подготовлено:** `infra/ansible/debian13-user-baseline.yml` (non-root каталоги); проверка idempotency на VPS ещё впереди.
   - [ ] 5.3. Сначала прогон `--check --diff`, затем управляемое применение и повторная проверка.
 - [ ] **6. Подготовить безопасность и системные процессы.**
   - [ ] 6.1. Инвентаризировать порты, SSH, сетевую политику, сервисы и системные журналы.
