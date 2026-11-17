@@ -8,7 +8,7 @@ import time
 import unittest
 
 from ai_agent_engine import (
-    Action, AgentRole, Message, ModelRouter, ModelTurn, ProviderSpec,
+    Action, AgentRole, Message, ModelRouter, ModelSetupError, ModelTurn, ProviderSpec,
     SandboxFiles, ScriptedModel, SessionContext, TextOnlyModel, Tool, ToolRegistry,
 )
 from ai_agent_engine.plan_agent import OpenAIPlanModel
@@ -142,6 +142,16 @@ class ProviderRegistryTests(unittest.TestCase):
         router = ModelRouter((ProviderSpec("broken", ("bad",), lambda name: object()),))
         with self.assertRaises(TypeError):
             router.build_model("broken", "bad")
+
+    def test_provider_factory_exception_does_not_expose_token(self):
+        def failed(model_id):
+            raise RuntimeError("secret-private-access-token-in-sdk-error")
+
+        router = ModelRouter((ProviderSpec("broken", ("bad",), failed),))
+        with self.assertRaises(ModelSetupError) as raised:
+            router.new_session(provider="broken", model_id="bad", context=context())
+        self.assertNotIn("secret-private-access-token", str(raised.exception))
+        self.assertIsNone(raised.exception.__cause__)
 
     def test_router_is_lazy_and_keeps_one_session_single_use(self):
         built = []

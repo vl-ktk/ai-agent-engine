@@ -12,6 +12,9 @@ secrets/
 credentials/
 demo-output/
 .pytest_cache/
+build/
+dist/
+*.egg-info/
 
 # SIWC credential records must never be committed if copied accidentally.
 host.json

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import math
 import sys
 import time
 
@@ -40,11 +41,19 @@ def main(argv: list[str] | None = None) -> int:
                 print("Saved ChatGPT identity:", session.get("email") or "(no email claim)")
                 print("ChatGPT plan permission:", "GRANTED" if session.get("sharing_enabled") else "NOT GRANTED")
                 expiration = session.get("expires_at", 0)
-                if isinstance(expiration, (int, float)):
-                    stamp = datetime.fromtimestamp(expiration, tz=timezone.utc).isoformat()
-                    print("Access token expires:", stamp)
-                    if expiration < time.time():
-                        print("Access token expired. The next model request will attempt a safe refresh.")
+                if (type(expiration) in (int, float)
+                        and 0 <= expiration <= 253402300799
+                        and math.isfinite(expiration)):
+                    try:
+                        stamp = datetime.fromtimestamp(expiration, tz=timezone.utc).isoformat()
+                    except (OverflowError, OSError, ValueError):
+                        print("Saved access-token expiry is invalid; check sign-in safely.")
+                    else:
+                        print("Access token expires:", stamp)
+                        if expiration < time.time():
+                            print("Access token expired. The next model request will attempt a safe refresh.")
+                else:
+                    print("Saved access-token expiry is invalid; check sign-in safely.")
         return 0
     except AuthError as exc:
         print("Login unavailable:", exc, file=sys.stderr)

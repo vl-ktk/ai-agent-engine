@@ -37,7 +37,14 @@ jobs:
         run: python -m pip install -r requirements-siwc.txt
       - name: Compile application and tests
         run: python -m compileall -q ai_agent_engine tests
+      - name: Scan tracked public files for secrets
+        run: python scripts/check_public_source.py
       - name: Run offline unit tests
         run: python -m unittest discover -s tests -v
       - name: Run offline demo
+        run: python -m ai_agent_engine
+      - name: Install core package from checked-out source
+        run: python -m pip install --no-deps .
+      - name: Verify installed package outside the repository
+        working-directory: ${{ runner.temp }}
         run: python -m ai_agent_engine

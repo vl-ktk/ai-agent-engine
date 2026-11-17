@@ -22,6 +22,10 @@ class ModelFactory(Protocol):
     def __call__(self, model_id: str) -> Model: ...
 
 
+class ModelSetupError(RuntimeError):
+    """Redacted provider initialization failure (no credentials in diagnostics)."""
+
+
 @dataclass(frozen=True)
 class ProviderSpec:
     """Owner-configured provider with explicit available IDs and capabilities."""
@@ -80,7 +84,11 @@ class ModelRouter:
     def build_model(self, provider: str, model_id: str, *, requires_tools: bool = False) -> Model:
         """Instantiate only a validated explicit selection; no silent fallback."""
         item = self._selected(provider, model_id, requires_tools=requires_tools)
-        model = item.factory(model_id)
+        try:
+            model = item.factory(model_id)
+        except Exception:
+            # Provider SDK/CLI exceptions can contain tokens, URLs or prompts.
+            raise ModelSetupError("Selected model adapter could not be initialized") from None
         if not callable(getattr(model, "complete", None)):
             raise TypeError("provider factory returned an invalid model adapter")
         return model
