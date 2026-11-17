@@ -55,6 +55,41 @@ long-lived orchestration, project access policies and memory belong to later
 roadmap stages. No new API usage, credentials, permissions or deployment are
 introduced by phase 3.3.
 
+## Safe tool registration and audit (phase 3.4; offline-tested)
+
+`ToolRegistry` registers trusted functions once, then exposes **only** names
+granted to the current `Agent` or `AgentSession`. A descriptive `AgentRole`
+never adds privileges. Unknown functions and untrusted function names are
+blocked without echoing attacker-supplied identifiers in the audit.
+
+Each `Tool` declares exact `required_args` and `optional_args`, plus bounded
+`max_argument_bytes` and `max_output_chars`. By default no arguments are
+accepted. Only UTF-8 string arguments matching the declared schema are sent
+to executors, as a defensive copy. Malformed inputs are blocked **before**
+the executor runs; tool exceptions are redacted; oversized tool results never
+enter the next model turn. A session has at most 20 model/tool steps, with
+a configurable lower limit. Audit entries include the step, a safe outcome
+(`tool_ok`, `invalid_tool_arguments`, `tool_error`, etc.), a registered tool
+name when applicable, trusted project/agent IDs and UTC timestamp — **not**
+argument values, file contents, token material or exception messages.
+
+`SandboxFiles` grants only `read_file` and new-file-only `write_new_file`
+within a caller-supplied pre-existing directory. Relative paths, existing
+subdirectories and bounded UTF-8 files are permitted; traversal, Windows-style
+absolute paths, symlinks, overwrites and excessive read/write payloads are
+rejected. On POSIX it uses directory-descriptor-relative opens with
+`O_NOFOLLOW` for individual path components. On Windows it uses canonical
+path/symlink preflights in a directory trusted to the current account.
+**This is not an OS process sandbox**: it does not isolate hostile processes
+running as the same OS user or defend Windows path checks from concurrent
+changes by such a process. Real per-project OS permissions, durable audit,
+production policy and execution isolation belong to later phases.
+
+The owner GPT sandbox test preserves its existing function schemas and still
+uses only a disposable temporary directory; its new shared argument checks
+were exercised offline with a synthetic transport. No paid provider request,
+credential handling, server deployment or real project access is part of 3.4.
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.
