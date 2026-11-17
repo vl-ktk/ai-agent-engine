@@ -191,31 +191,45 @@ class ControllerStore:
             if updated.rowcount != 1:
                 raise ControllerError("Controller lease was lost")
 
-    def claim(self, conn: sqlite3.Connection) -> tuple[str, str] | None:
+    def require_lease(self, conn: sqlite3.Connection, owner: str, now: float) -> None:
+        row = conn.execute(
+            "SELECT owner,lease_until FROM singleton WHERE id=1"
+        ).fetchone()
+        if row is None or row["owner"] != owner or row["lease_until"] <= now:
+            raise ControllerError("Controller lease was lost")
+
+    def claim(self, conn: sqlite3.Connection, owner: str) -> tuple[str, str] | None:
         now = time.time()
         with transaction(conn):
+            self.require_lease(conn, owner, now)
             row = conn.execute(
                 "SELECT id,kind FROM jobs WHERE state='pending' "
                 "ORDER BY created,id LIMIT 1"
             ).fetchone()
             if row is None:
                 return None
-            conn.execute(
+            updated = conn.execute(
                 "UPDATE jobs SET state='running',attempts=attempts+1,updated=? "
                 "WHERE id=? AND state='pending'", (now, row["id"])
             )
+            if updated.rowcount != 1:
+                raise ControllerError("Queued job could not be claimed")
             return (row["id"], row["kind"])
 
-    def finish(self, conn: sqlite3.Connection, job_id: str, succeeded: bool) -> None:
+    def finish(self, conn: sqlite3.Connection, owner: str,
+               job_id: str, succeeded: bool) -> None:
         now = time.time()
         with transaction(conn):
-            conn.execute(
+            self.require_lease(conn, owner, now)
+            updated = conn.execute(
                 "UPDATE jobs SET state=?,result_code=?,updated=? "
                 "WHERE id=? AND state='running'",
                 ("done" if succeeded else "failed",
                  "core_self_test_pass" if succeeded else "core_self_test_failure",
                  now, job_id)
             )
+            if updated.rowcount != 1:
+                raise ControllerError("Running job could not be finalized")
 
     def release(self, conn: sqlite3.Connection, owner: str) -> None:
         with transaction(conn):
@@ -260,14 +274,14 @@ def serve(store: ControllerStore, *, poll: float, once: bool = False) -> None:
         print("controller_started", flush=True)
         while not stop.is_set():
             store.heartbeat(conn, owner)
-            claimed = store.claim(conn)
+            claimed = store.claim(conn, owner)
             if claimed is not None:
                 job_id, kind = claimed
                 try:
                     success = kind == "core_self_test" and run_core_self_test()
                 except Exception:
                     success = False
-                store.finish(conn, job_id, success)
+                store.finish(conn, owner, job_id, success)
                 print("job_completed" if success else "job_failed", flush=True)
             if once:
                 break
