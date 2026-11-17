@@ -1,5 +1,13 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 4.1 — netcup selected, purchase NOT authorized (2026-11-17)
+
+- **Current owner decision:** **netcup VPS Lite 2 G12.5s** selected for AI Agent Engine controller VM (4 x86 vCore, 8 GB RAM, 160 GB SSD; auto-assigned European location DE/AT/NL). This supersedes OVHcloud VPS-2 first-choice ranking; OVH and Hetzner remain alternatives. Source: [STAGE4_VPS_SELECTION.md](./STAGE4_VPS_SELECTION.md).
+- **Public UI verification:** product added successfully to netcup cart with IPv4+IPv6, €7.98/month at generic **Other 0% VAT**, setup €0, minimum/billing periods **3 months** (arithmetic €23.94 for 3 months at that displayed rate). Germany selection displays €9.50/month incl. 19% VAT (€28.50/3 months). Ukraine is NOT individually listed under VAT settings; **real customer invoice/taxes are not verified**. Cart placement does not guarantee regional allocation; netcup warns of provisioning delays. No login, account creation, personal details or payment.
+- **Technical caution:** SSD is not explicitly listed as NVMe; manual snapshots available but daily automated off-site backup not shown. Price excludes any separately arranged backup. Lite bandwidth capped by product terms.
+- **Gates:** **4.1 remains [ ]** until separate authorization of the full first **three-month prepaid amount**, total budget incl. independent backup, final Ukrainian price, provider provisioning and Stage 1.6–1.7 policy GO/NO-GO. **No VPS ordered; no money spent; no credentials moved; Stage 4.2 untouched.**
+- **Git source baseline:** `main` was `9a7f3371ccb0b6eee2cdb9dabab364152556d5b7` before this documentation change; this SHA is the rollback baseline for the present docs-only PR. CI and merge results must be recorded after verification.
+
 ## Stage 4.1 — owner-approved shortlist update (2026-11-17)
 
 - **Decision:** owner accepted **OVHcloud VPS-2 primary, Hetzner CX33 backup**, only for controller VM. This supersedes the previous CX33-first recommendation; detailed comparison and official sources are in [STAGE4_VPS_SELECTION.md](./STAGE4_VPS_SELECTION.md).
