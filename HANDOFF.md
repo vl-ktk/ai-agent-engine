@@ -1,3 +1,13 @@
+# 2026-11-17 — Stage 4.2 / 6.4 source/workflow authority guard PASS
+
+- **Scope:** sole human owner Vlad, existing Netcup VPS. Reviewed all 8 GitHub Actions workflow sources from main `591947cf2b056880019b2c0847f7bc2856373dba` (rollback source SHA). No live VPS/SSH/firewall/secrets/permissions/production modifications.
+- **Finding:** all 8 workflows explicitly request read-only `GITHUB_TOKEN` (`permissions: contents: read`). Five workflows that use SSH/old root credentials run only via manual dispatch on main by owner actor `vl-ktk` plus a typed confirmation; one non-root baseline is owner-triggered and can change only deploy-home staging directories.
+- **Fix:** historical `netcup-one-time-bootstrap.yml` root/password SSH job explicitly hard-disabled (`if: false &&...`); root/password SSH already blocked by live VPS policy from 6.2. No secret was inspected, rotated or deleted.
+- **Guard:** `scripts/check_workflow_boundaries.py` added to CI; `tests/test_workflow_boundaries.py` covers current allowed set and regression failures. [PR #49](https://github.com/vl-ktk/ai-agent-engine/pull/49). **PR CI at commit 41ba253c:** [offline CI #44151570634](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44151570634) SUCCESS; [VPS config #44151570804](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44151570804) SUCCESS. New handoff-only commit must also pass CI before merge.
+- **Limit:** GitHub integration could not read classic branch protection (403) or account Actions/environment settings; rulesets list `[]`. No claim of administrator-level enforcement; owner may separately authorize admin settings review. Source-level 6.4 complete; do not change privileges, secrets or production without explicit owner consent.
+- **Current application:** controller not running; 6.3 app-level health depends on future real long-running executable. Next approved plan after 6.4: 7.1 CI enhancements, then 7.2/7.3. Separate GPU/KTK/ATHL/iPad projects not touched.
+- **Rollback:** GitHub revert PR #49, prior main `591947cf2b056880019b2c0847f7bc2856373dba`. No live server rollback required. Details: `infra/security/STAGE64.md`.
+
 # 2026-11-17 — Stage 4.2 / 6.3 LIVE: journal caps + host systemd monitoring
 
 - **One human owner:** Vlad; `ae-runtime` (UID/GID 988) and `ae-deploy` are separate Linux service identities, not additional people.
