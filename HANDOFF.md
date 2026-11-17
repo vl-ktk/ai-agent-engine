@@ -1,6 +1,6 @@
 # HANDOFF — AI Agent Engine
 
-**Updated:** 2026-11-17 (PR #13 GO/NO-GO merged; phase 1 and live blockers remain open)
+**Updated:** 2026-11-17 (PR #14 architecture reconciliation merged; phase 1 and technical Stage 2 gates remain open)
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
 **Latest docs merge:** [PR #13](https://github.com/vl-ktk/ai-agent-engine/pull/13) merged as `e1f765e38cabebfd8c155bc5e57172aaa603bfcb` (2026-11-17). **Rollback for PR #13:** `aa8b6f343a17038d05ba9e1de9d9900bf4dea9e9` (previous `main`). Offline CI [run 44041544686](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44041544686) 4/4 PASS; local 125/125 tests, compile, demo and diff check PASS. No runtime code was changed in PR #13.
 **Current merged runtime revision:** `ea8989001111a045e026adf9063a27c733d03d67` (PR #12, owner-initiated GPT refresh preflight; CI 4/4 PASS). **Rollback before PR #12:** `0c43a3e63da0f5ae6d338ea3fb8fff254d67210d` (PR #11, docs only). Earlier PR #10 staged GPT+Claude owner-authorized LIVE 12/12 PASS; separate live refresh/revocation, quota and VM checks remain pending.
@@ -20,7 +20,7 @@
 - **What is documented:** `STAGE2_ARCHITECTURE_SPEC.md` maps discussion topics 2.1–2.9 to the original 2.1–2.7 roadmap and records approved global leaders/project teams, scoped AI task reassignment, standing project-scoped release grants, safe rollback, cross-project sanitized knowledge, budget policy, critical alerts, reports, and individual future city avatars. `ARCHITECTURE_DECISIONS.md` and `IMPLEMENTATION_ROADMAP.md` are aligned.
 - **Status:** conceptual 2.1/2.4/2.5 decisions accepted; exact engineering details 2.2/2.3/2.6/2.7 proposed, **not owner-approved**, so Stage 2 stays OPEN. Stage 3.1/3.2 remain completed; Stage 3.3–3.7 remain OPEN. Global Stage 1 and real refresh/revoke, VM, Claude unattended policy remain pending.
 - **Next owner handoff:** select unresolved original Stage 2 technical contracts (source manifests and concurrency; database fields and state transitions; CPU controller vs optional GPU; exchange/acceptance/rollback). Only then mark corresponding Stage 2 lines complete. Independent Stage 3 offline work may be commissioned separately. No paid environment, credentials, external projects, model calls or deployment were changed in this documentation task.
-- **Checks:** verified original seven Stage 2 checklist items and unchanged original eleven global roadmap stages; verified relative document links and new agreed-vs-proposed labels. GitHub CI / PR number / merge SHA to be recorded after verification; do not claim PASS in advance.
+- **Merged record:** [PR #14](https://github.com/vl-ktk/ai-agent-engine/pull/14) merged to `main` as `dd33341b6babb9202a75f6c50ce42b096ebd5d42`; immediate pre-merge `main` / rollback baseline: `6d0a8781cd0c1a23e64286d2517ceedc5d9a1957`. Code unchanged. [GitHub Actions run 44059970409](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44059970409): **4/4 PASS** (Linux 3.11/3.12/3.13 and native Windows 3.12; offline tests, compile, demo). Verified seven original Stage 2 checklist items, eleven global stages and spec link. No live model or deployment run.
 
 
 ## Phase 1.8 — итоговый GO/NO-GO (2026-11-17; PR #13 MERGED)
