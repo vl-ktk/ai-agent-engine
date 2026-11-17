@@ -1,6 +1,6 @@
 # HANDOFF — AI Agent Engine
 
-**Updated:** 2026-11-17 (PR #11 merged; 1.7 refresh on model requests prepared in separate branch)
+**Updated:** 2026-11-17 (PR #11 merged; PR #12 phase 1.7 refresh waiting for owner merge approval)
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
 **Current merged revision:** `0c43a3e63da0f5ae6d338ea3fb8fff254d67210d` (PR #11, documentation only; CI 4/4 PASS); **rollback before PR #11:** `282055c410e4379a868b88936b6969063cbd2182`. Last merged runtime code is still `282055c` (PR #10, staged GPT + Claude owner-authorized LIVE 12/12 PASS; CI 4/4 PASS), with rollback to `03bb0c3a8be6d486563ac2417186255dc51d6162`. Earlier PRs #9–#2 remain in source. Further owner-linked refresh/revocation, quota and VM checks remain pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
@@ -13,13 +13,13 @@
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
 
-## Phase 1.7 — automatic refresh on owner-initiated GPT requests (branch work; NOT MERGED)
+## Phase 1.7 — automatic refresh on owner-initiated GPT requests ([PR #12](https://github.com/vl-ktk/ai-agent-engine/pull/12); NOT MERGED)
 
-- Branch `fix/phase-1-7-auto-refresh-inference` from `main` `0c43a3e`. No new machine, credentials, OAuth session, network model requests or paid resource used.
+- Branch `fix/phase-1-7-auto-refresh-inference` from `main` `0c43a3e` (rollback baseline if merged); PR #12. No new machine, credentials, OAuth session, network model requests or paid resource used.
 - Found a concrete inconsistency: Tasks 4/5 already refreshed near expiry, while `inference models/probe/ask` checked the saved bearer and could instead tell the owner to sign in again. `auth status` incorrectly promised the next model request would attempt refresh.
 - Changes: shared `_fresh_access_token` preflights the existing cross-process-safe `refresh_if_needed` for model catalog, response text and every native-tool model turn; redacts failure through the existing `InferenceError` path and refuses model calls after refresh rejection. Both refresh and model transport remain injectable for offline tests. No new background polling or retries.
-- Synthetic tests cover refresh before catalog, one rotation for multi-request text probe, a mid-cycle native-tool token rotation, fail-closed HTTP 401 preserving local session and an unreadable credential file. Initial local regression baseline: 120/120 PASS; amended local suite: 125/125 PASS. **GitHub CI and live refresh are not yet complete.**
-- Next: publish a PR and validate Linux/Windows GitHub Actions without touching the owner's Codespace session. Keep 1.7 OPEN until a separate owner-authorized live credential refresh or lifecycle check is done; defer actual VM transfer to the approved VM phase.
+- Synthetic tests cover refresh before catalog, one rotation for multi-request text probe, a mid-cycle native-tool token rotation, fail-closed HTTP 401 preserving local session and an unreadable credential file. Initial local regression baseline: 120/120 PASS; amended local suite: 125/125 PASS. **GitHub CI run 44039899411: 4/4 PASS** on Linux Python 3.11–3.13 and native Windows Python 3.12. **A real refresh remains unverified.**
+- Next: owner approval to merge PR #12, then one separate owner-authorized live credential refresh or lifecycle check when practical. Keep 1.7 OPEN; defer actual VM transfer to the approved VM phase.
 
 ## Phase 1.6(в) — official Claude Code integration review (2026-11-17; documentation-only)
 
