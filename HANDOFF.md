@@ -1,3 +1,15 @@
+# 2026-11-17 — Stage 4.2 / 6.3 LIVE: journal caps + host systemd monitoring
+
+- **One human owner:** Vlad; `ae-runtime` (UID/GID 988) and `ae-deploy` are separate Linux service identities, not additional people.
+- **Source of truth:** `vl-ktk/ai-agent-engine` main. Pre-update source SHA `7f2569b620eaf9adf038628acaee13f19738c22f`; change branch `stage42-63-journald-host-monitor-20261117`. No application release deployed, no changes to the running engine (there is no daemon).
+- **Live Netcup VPS** `v2202611460959561466` (Debian 13.7): `/etc/systemd/journald.conf.d/90-ai-agent-engine-limit.conf` installed, root:root 0644; effective `SystemMaxUse=256M`, `RuntimeMaxUse=128M` confirmed by `systemd-analyze cat-config`. `systemctl restart systemd-journald` worked, SSH remains active, log usage still 24 MiB; no vacuum/deletion. Values are system-wide.
+- **Live monitoring:** new `/etc/systemd/system/ae-host-check.service` and `.timer` tracked in `infra/systemd/`. The one-shot as `ae-runtime` verifies three existing host services (SSH, journald, timesyncd), not the application. `systemd-analyze verify` for each file exited 0. Real `systemctl start ae-host-check.service` succeeded (`Result=success`, `ExecMainStatus=0`, `User=ae-runtime`). Timer `enabled`, `active`, next run visible (then ~15-minute intervals); `systemctl --failed` = 0. SSH and journald remained active.
+- **Minor warning:** `systemd-ssh-generator` reported inability to query local AF_VSOCK CID during reload/enable; unit activation and checks succeeded; no action taken on generator.
+- **Not done / blocker:** `ai_agent_engine.__main__` is a terminating offline demo. The `ae-controller.service.template` is **not installed**: no real controller daemon to run. App health/queue checks and external alarms not possible yet. **6.3 remains OPEN** with host infrastructure completed, do not claim AI Agent Engine is already online.
+- **Scope protection:** no firewall, SSH configuration, passwords, sudo privileges, secrets, data deletions, OS reboot, extra VPS or GPU project changes. No production application publish.
+- **Rollback:** before merge main `7f2569b620eaf9adf038628acaee13f19738c22f`; code rollback by reverting change commit. Live timer/journald rollback requires explicit owner approval. Full details: `infra/systemd/STAGE63.md`.
+- **Next:** implement and test an actual long-running controller in its owner-approved stage, then install the guarded controller systemd unit, test restart/heartbeat and close 6.3. Do not enable the placeholder.
+
 # 2026-11-17 — Stage 4.2 / 6.3 LIVE PARTIAL PASS: runtime identity and directories
 
 - **Owner authorization:** explicitly approved creating one technical `ae-runtime` account without login and private directories on the existing Netcup VPS. Vlad remains the only product user. This supersedes the older 6.3 offline-only note below.

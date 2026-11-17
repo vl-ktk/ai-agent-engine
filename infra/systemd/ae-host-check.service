@@ -1,0 +1,12 @@
+[Unit]
+Description=AI Agent Engine host health check
+[Service]
+Type=oneshot
+User=ae-runtime
+Group=ae-runtime
+ExecStart=/usr/bin/systemctl is-active --quiet ssh.service
+ExecStart=/usr/bin/systemctl is-active --quiet systemd-journald.service
+ExecStart=/usr/bin/systemctl is-active --quiet systemd-timesyncd.service
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
