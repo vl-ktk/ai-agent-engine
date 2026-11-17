@@ -41,7 +41,7 @@ jobs:
         run: python scripts/check_public_source.py
       - name: Enforce reviewed workflow security boundaries
         run: python scripts/check_workflow_boundaries.py
-      - name: Run offline unit tests
+      - name: Run offline unit and synthetic integration tests
         run: python -m unittest discover -s tests -v
       - name: Run offline demo
         run: python -m ai_agent_engine
@@ -50,3 +50,23 @@ jobs:
       - name: Verify installed package outside the repository
         working-directory: ${{ runner.temp }}
         run: python -m ai_agent_engine
+  package-build:
+    name: Build and exercise isolated wheel
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build wheel with the pinned pyproject build backend
+        run: python -m pip wheel --no-deps --wheel-dir "${{ runner.temp }}/wheels" .
+      - name: Install only the locally built wheel
+        run: python -m pip install --no-deps --no-index --find-links "${{ runner.temp }}/wheels" ai-agent-engine
+      - name: Exercise installed wheel outside the checkout
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m pip show ai-agent-engine
+          python -m ai_agent_engine
