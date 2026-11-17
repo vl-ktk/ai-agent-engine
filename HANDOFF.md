@@ -1,8 +1,8 @@
 # HANDOFF — AI Agent Engine
 
-**Updated:** 2026-11-17 (PR #10 live acceptance 12/12 PASS, awaiting merge approval)
+**Updated:** 2026-11-17 (PR #10 merged; 1.6(в) legal/technical review documented in separate PR)
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
-**Last merged development code version:** `4813d5ad5ece6f741e6c737de86c81e9d967fd06` (PR #9 single owner-only combined GPT+Claude VS Code task; **offline CI PASS, live Claude/GPT tools unverified**). Previously: PR #8 native Windows lock CI PASS. Earlier code: PR #7 protected VM import staging. Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Owner-linked live checks are pending.
+**Last merged development code version:** `282055c410e4379a868b88936b6969063cbd2182` (PR #10, staged GPT + Claude owner-authorized LIVE 12/12 PASS; CI 4/4 PASS). Rollback to pre-merge `03bb0c3a8be6d486563ac2417186255dc51d6162`. Previous: PR #9 unified VS Code task. Previously: PR #8 native Windows lock CI PASS. Earlier code: PR #7 protected VM import staging. Earlier code: PR #6 cross-platform refresh lock. Earlier PR #5 combined GPT+Claude acceptance, PR #4 GPT errors, PR #3 manual logout and PR #2 native GPT tool test remain in source. Further owner-linked refresh/revocation, quota and VM checks remain pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
 **Rollback before cross-platform lock PR #6:** `a9f69c397a541497a92e517a29126d549631c905` (main HEAD immediately before merge).
 **Rollback before combined acceptance PR #5:** `7e425a6e9b6da0e92de8b9566210583e82e2e619` (main HEAD immediately before merge).
@@ -13,9 +13,15 @@
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
 
-## Phase 1.6 — staged combined acceptance, LIVE 12/12 PASS (PR #10; NOT MERGED)
+## Phase 1.6(в) — official Claude Code integration review (2026-11-17; documentation-only)
 
-- Branch `fix/staged-live-acceptance`, [PR #10](https://github.com/vl-ktk/ai-agent-engine/pull/10). Live run executed code `bf2adf9`; follow-up `d6b2da7` only changes report-file error handling. **Awaiting owner approval to merge; rollback = current main `03bb0c3`.**
+- [Review: Claude integration boundaries](./CLAUDE_INTEGRATION_REVIEW.md): personal official CLI/IDE pilot — GO, unattended Claude Pro as future hosted orchestration backend — HOLD pending Anthropic policy confirmation and owner decision; routing other users via subscription OAuth — NO-GO. OpenAI SIWC VM is a separate integration.
+- The 12/12 LIVE result verifies one short text response and GPT sandbox tools, **not** provider permission for continuous automation, quotas, paid Extra Usage configuration, expiry recovery or remote VM reliability. No additional provider request, credentials, production or cost was used in this review.
+- Keep 1.6 and global stage 1 OPEN; subsequent 1.7 live credential lifecycle and 1.8 GO/NO-GO still need decisions. No unilateral change to the approved architecture.
+
+## Phase 1.6 — staged combined acceptance, LIVE 12/12 PASS (PR #10; MERGED)
+
+- Branch `fix/staged-live-acceptance`, [PR #10](https://github.com/vl-ktk/ai-agent-engine/pull/10). Live run executed code `bf2adf9`; follow-up `d6b2da7` only changes report-file error handling. **Merged to main as `282055c` on 2026-11-17; rollback = pre-merge main `03bb0c3`.**
 - **Root cause of the owner's `GPT sandbox tools were not verified`:** established only that `model.last_error` was `None` (message had no suffix) → no HTTP/quota/stream/unauthorized-tool/argument error; sign-in, refresh and model list succeeded. The exact failing branch inside the agent loop/file check is **unknowable** because old `run_live` discarded agent status and audit. Unconfirmed candidates: no tool call, trailing period from the ambiguous prompt, tool rejection (e.g. `./path`), or a non-`InferenceError` exception swallowed by `Agent`. All are now reported per stage.
 - **Confirmed defect fixed:** Claude probe used `--bare`; official CLI help states `--bare` never reads OAuth and only accepts `ANTHROPIC_API_KEY`, so it could not work on Claude Pro.
 - New `acceptance run-live`: 12 stages PASS/FAIL/SKIPPED with redacted reasons; GPT and Claude independent; ≤1 GPT text + ≤4 tool-cycle + 1 Claude request; no retries; exit 0 only when all pass; `--report-json PATH`. Claude requires `authMethod=claude.ai`, first-party, `subscriptionType` pro/max; inherited `CLAUDE_CODE_*` env stripped.
