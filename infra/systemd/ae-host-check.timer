@@ -1,0 +1,9 @@
+[Unit]
+Description=Periodic AI Agent Engine host health check
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=15min
+AccuracySec=1min
+Unit=ae-host-check.service
+[Install]
+WantedBy=timers.target
