@@ -1,11 +1,11 @@
 # HANDOFF — AI Agent Engine
 
-## Stage 3.3 — unified task sessions (work in progress; 2026-11-17)
+## Stage 3.3 — unified task sessions (PR #15 MERGED; 2026-11-17)
 
 - **Source/rollback baseline:** `vl-ktk/ai-agent-engine` `main` at `6a6152d6b904f4371e4a68efff60a80828e16be6` before phase 3.3. Working branch `feat/phase-3-3-unified-runtime-20261117`.
 - **Changed:** `core.py` adds role-scoped single-task sessions, trusted session context and a cooperative stop token; `plan_agent.py` runs the existing GPT owner sandbox test through the shared session interface while keeping the native tool allowlist unchanged. `__init__.py` exports the new types. New offline role/cancel tests added; README and roadmap clarify limitations.
-- **Status:** baseline was 125/125 PASS; new local suite 134/134 PASS. CI, final merge SHA and owner acceptance still pending at this checkpoint; do not mark 3.3 completed before them. Stage 3.4 and later untouched. No new model calls or production activity.
-- **Remaining:** compile, demo, diff inspection, open branch PR, run CI, recheck current main before merge, record exact rollback commit and verified checks. Return owner a brief verified report; do not continue to 3.4 without a new request.
+- **Status:** [PR #15](https://github.com/vl-ktk/ai-agent-engine/pull/15) MERGED as `503b12302055a532ca9b1b581f8be1797febdd7d`; rollback to immediately previous `main` `6a6152d6b904f4371e4a68efff60a80828e16be6`. Baseline 125/125; current 134/134 local offline tests PASS. [GitHub Actions run 44061912134](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44061912134) 4/4 PASS (Linux Python 3.11–3.13, Windows Python 3.12), compilation, tests and demo PASS. **Technical PASS; formal owner acceptance pending.** Stage 3.4 and later untouched. No new model calls or production activity.
+- **Remaining:** owner acceptance for marking roadmap 3.3 [x]; next request may start 3.4. Verified pre-merge `main` matched `6a6152d6b904f4371e4a68efff60a80828e16be6`; PR had no conflicts. Review of real GPT/Claude live behavior is a separate owner-approved acceptance, not implied by this offline PASS.
 
 
 **Updated:** 2026-11-17 (PR #14 architecture reconciliation merged; phase 1 and technical Stage 2 gates remain open)
