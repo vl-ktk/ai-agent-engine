@@ -1,5 +1,14 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 4.2 — GitHub Actions + Ansible + SSH: этап 1, подготовка конфигурации (2026-11-17)
+
+- **Владелец принял 4.1:** оплаченный Netcup VPS работает, реальная выделенная конфигурация подтверждена; глобальный пункт 4.1 отмечается [x], хотя SSH, защита, эксплуатационные тесты и резервные копии ещё впереди.
+- **Согласованная стратегия:** GitHub Actions для CI, Ansible для воспроизводимой настройки, отдельная SSH-идентичность для deploy. При дальнейшем развитии возможен собственный агент; не устанавливать постоянный root-runner.
+- **Отдельный порядок 10 работ:** [STAGE4_2_AUTOMATION_PLAN.md](./STAGE4_2_AUTOMATION_PLAN.md). Сейчас **только пункт 1**: репозиторный Ansible-каркас, пример inventory с TEST-NET IP и полностью offline workflow проверки синтаксиса; никаких Secrets и реальных VPS-адресов в git.
+- **Изменения на VPS:** **НЕТ**. Новые SSH-подключения/учётные записи/права/firewall/платные услуги не выполнялись. Existing SCP Screen остаётся запасным доступом. Продуктивный deploy, хранилище, реальные backups и живые Claude/GPT тесты пока не запускались.
+- **Для завершения пункта 1:** проверить PR/CI Ansible и существующий CI; смержить, записать commit SHA для rollback. Затем пункт 2 — разовое создание отдельного SSH-доступа через SCP при участии владельца. Не просить выводить/сохранять секреты в чат.
+- **Контроль версий:** до текущей документационной работы `main` был `60bdb12b7732a61f0920b5cd54acb93bd424379a`. Новая выкладка на Netcup не производилась.
+
 ## Stage 4.1 — Netcup invoice paid and VPS RUNNING (2026-11-17)
 
 - **Evidence from owner screenshots:** Netcup CCP invoice **€23.94**, dated 2026-11-17, shows **paid**. Netcup emailed SCP access details and a separate server-provisioning notice; SCP lists **one VPS**, status **RUNNING** (~14 min uptime when viewed). Purchase and allocation are confirmed. No repeat purchase or payment needed.

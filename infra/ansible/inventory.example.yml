@@ -1,0 +1,10 @@
+---
+# Documentation-only inventory: TEST-NET-1 address, not the real VPS.
+# Real host details are injected securely at deployment time.
+all:
+  children:
+    ai_agent_engine_vps:
+      hosts:
+        netcup_example:
+          ansible_host: "192.0.2.1"
+          ansible_user: "deploy"
