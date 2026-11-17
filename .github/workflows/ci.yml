@@ -65,6 +65,25 @@ jobs:
         run: python -m pip wheel --no-deps --wheel-dir "${{ runner.temp }}/wheels" .
       - name: Install only the locally built wheel
         run: python -m pip install --no-deps --no-index --find-links "${{ runner.temp }}/wheels" ai-agent-engine
+      - name: Rehearse immutable release preflight and manifest offline
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          checkout_head="$(git rev-parse HEAD)"
+          python -m scripts.release_preflight resolve \
+            --selected-ref "$checkout_head" \
+            --expected-main "$checkout_head" \
+            --workflow-head "$checkout_head" \
+            --observed-main "$checkout_head" \
+            --github-output "$RUNNER_TEMP/rehearsal-output"
+          python -m scripts.release_preflight scan --repo .
+          shopt -s nullglob
+          wheels=("$RUNNER_TEMP"/wheels/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python -m scripts.release_preflight manifest \
+            --release-dir "$RUNNER_TEMP/wheels" --wheel "${wheels[0]}" \
+            --commit "$checkout_head" --selected-ref "$checkout_head" \
+            --expected-main "$checkout_head"
       - name: Exercise installed wheel outside the checkout
         working-directory: ${{ runner.temp }}
         run: |
