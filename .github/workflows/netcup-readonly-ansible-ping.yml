@@ -41,11 +41,11 @@ jobs:
       - name: Validate SSH identity and run read-only Ansible ping
         shell: bash
         env:
-          SERVER_IP: ${{ inputs.server_ipv4 }
-          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
         run: |
           set -Eeuo pipefail
-          if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\\.){3}[0-9]{1,3}$ ]]; then
+          if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
             echo "Expected valid IPv4 syntax."; exit 1
           fi
           if [[ -z "$DEPLOY_PRIVATE_KEY" ]]; then
@@ -68,16 +68,16 @@ jobs:
             echo "SSH host fingerprint changed; refusing connection."; exit 1
           fi
 
-          printf '%s\\n' "$DEPLOY_PRIVATE_KEY" > "$keyfile"
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$keyfile"
           chmod 0600 "$keyfile"
           if ! ssh-keygen -y -f "$keyfile" >/dev/null 2>&1; then
             echo "Encrypted deploy SSH key is invalid."; exit 1
           fi
 
-          printf '[ai_agent_engine_vps]\\nnetcup ansible_host=%s ansible_user=ae-deploy\\n' "$SERVER_IP" > "$inventory"
+          printf '[ai_agent_engine_vps]\nnetcup ansible_host=%s ansible_user=ae-deploy\n' "$SERVER_IP" > "$inventory"
 
-          ANSIBLE_CONFIG=infra/ansible/ansible.cfg \\
-            "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" \\
-            -i "$inventory" infra/ansible/verify.yml \\
-            --private-key "$keyfile" \\
+          ANSIBLE_CONFIG=infra/ansible/ansible.cfg \
+            "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" \
+            -i "$inventory" infra/ansible/verify.yml \
+            --private-key "$keyfile" \
             --ssh-common-args "-o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts"
