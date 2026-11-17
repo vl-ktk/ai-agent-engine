@@ -90,6 +90,48 @@ uses only a disposable temporary directory; its new shared argument checks
 were exercised offline with a synthetic transport. No paid provider request,
 credential handling, server deployment or real project access is part of 3.4.
 
+## Provider-neutral model routing (phase 3.5; offline-tested)
+
+The `ModelRouter` selects one trusted `ProviderSpec` by its explicit provider
+name and allowlisted model ID. There is **no automatic provider preference,
+fallback, discovery, retry or paid API selection**. Factories are supplied by
+the owner and called lazily only after the route and tool capability are
+checked. A `ProviderSpec` declares `supports_tools`; a text-only provider is
+rejected **before** its factory is called if a session has granted tools.
+Every selected adapter implements the same `Model.complete(history, tools)`
+protocol and runs through the existing `AgentSession` and `ToolRegistry`.
+
+`TextOnlyModel` wraps any trusted, synchronous text-response function and
+allows no tool calls. It accepts only the one-task initial system/user history,
+rejects empty or oversized answers, and leaves model errors to the existing
+redacted audit. The adapter does not itself execute a CLI or read any tokens.
+For example, the following demonstrates two *offline* model routes, not an
+actual OpenAI or Anthropic connection:
+
+```python
+from ai_agent_engine import (
+    AgentRole, ModelRouter, ProviderSpec, SessionContext, TextOnlyModel,
+)
+
+router = ModelRouter((
+    ProviderSpec("example_a", ("text-a",), lambda model: TextOnlyModel(lambda history: "A")),
+    ProviderSpec("example_b", ("text-b",), lambda model: TextOnlyModel(lambda history: "B")),
+))
+session = router.new_session(
+    provider="example_b", model_id="text-b",
+    context=SessionContext("demo", "owner-task", AgentRole.EXECUTOR),
+)
+assert session.run("One safe task").answer == "B"
+```
+
+The existing `OpenAIPlanModel` is compatible with `ModelRouter`, including
+native sandbox tool calls, as verified using **fake HTTP responses**. The
+official Claude Code CLI currently has only its earlier, owner-triggered
+acceptance probe; it is **not** wired as a general task executor. Actual
+GPT/Claude runtime integration, credentials, session lifecycle, quota fallback,
+user authorization and provider-specific tool translation remain for stage 6
+and later explicit owner decisions. This phase sends **zero** live requests.
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.
