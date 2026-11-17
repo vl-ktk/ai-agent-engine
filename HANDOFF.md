@@ -1,7 +1,8 @@
 # HANDOFF — AI Agent Engine
 
-**Updated:** 2026-11-17 (PR #12 merged; phase 1.8 GO/NO-GO documentation prepared; phase 1 live blockers remain)
+**Updated:** 2026-11-17 (PR #13 GO/NO-GO merged; phase 1 and live blockers remain open)
 **Source of truth:** https://github.com/vl-ktk/ai-agent-engine, branch `main`.
+**Latest docs merge:** [PR #13](https://github.com/vl-ktk/ai-agent-engine/pull/13) merged as `e1f765e38cabebfd8c155bc5e57172aaa603bfcb` (2026-11-17). **Rollback for PR #13:** `aa8b6f343a17038d05ba9e1de9d9900bf4dea9e9` (previous `main`). Offline CI [run 44041544686](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44041544686) 4/4 PASS; local 125/125 tests, compile, demo and diff check PASS. No runtime code was changed in PR #13.
 **Current merged runtime revision:** `ea8989001111a045e026adf9063a27c733d03d67` (PR #12, owner-initiated GPT refresh preflight; CI 4/4 PASS). **Rollback before PR #12:** `0c43a3e63da0f5ae6d338ea3fb8fff254d67210d` (PR #11, docs only). Earlier PR #10 staged GPT+Claude owner-authorized LIVE 12/12 PASS; separate live refresh/revocation, quota and VM checks remain pending.
 **Earlier proven GPT response code:** `3e78ed4afbfca3e80bd763946f07f3b088ac2800` — owner live `gpt-6.1-sol` PASS 2026-11-16.
 **Rollback before cross-platform lock PR #6:** `a9f69c397a541497a92e517a29126d549631c905` (main HEAD immediately before merge).
@@ -13,7 +14,7 @@
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
 
-## Phase 1.8 — итоговый GO/NO-GO (2026-11-17; документация)
+## Phase 1.8 — итоговый GO/NO-GO (2026-11-17; PR #13 MERGED)
 
 - Источник: [PHASE1_GO_NOGO.md](./PHASE1_GO_NOGO.md); первичные документы OpenAI, Anthropic и Hetzner сверены 2026-11-17. Зафиксированы именно подтверждённые LIVE 12/12, реальный GPT OAuth, PR #12 refresh с офлайн CI 4/4 и границы того, чего эти проверки не доказывают.
 - **GO** для этапа 2: проектирование архитектуры и дальнейшая офлайн-разработка без дополнительных сервисов и затрат. Для GPT и Claude Code есть только ограниченный личный пилот.
