@@ -20,6 +20,7 @@ APPROVED_WORKFLOWS = {
     "netcup-readonly-ansible-ping.yml",
     "netcup-readonly-system-audit.yml",
     "vps-automation-checks.yml",
+    "release-preparation.yml",
 }
 RETIRED_BOOTSTRAP = "netcup-one-time-bootstrap.yml"
 PRIVILEGED_TRIGGERS = ("pull_request_target", "workflow_run", "repository_dispatch", "schedule")
@@ -64,6 +65,28 @@ def inspect_workflow(name: str, source: str) -> list[str]:
             ):
                 if required not in condition:
                     errors.append(f"manual secret job condition missing {required}")
+
+    if name == "release-preparation.yml":
+        if SECRET_REFERENCE.search(source):
+            errors.append("release preparation must not receive encrypted repository secrets")
+        if not re.search(r"(?m)^  workflow_dispatch\s*:", source):
+            errors.append("release preparation must be manually dispatched")
+        for trigger in NONMANUAL_TRIGGERS:
+            if re.search(rf"(?m)^  {trigger}\s*:", source):
+                errors.append(f"release preparation must not use {trigger}")
+        job_if = re.search(r"(?m)^    if:\s*(.+)$", source)
+        condition = job_if.group(1) if job_if else ""
+        for required in (
+            "github.ref == 'refs/heads/main'",
+            "github.actor == 'vl-ktk'",
+            "inputs.confirmation == 'PREPARE_RELEASE'",
+        ):
+            if required not in condition:
+                errors.append(f"release preparation missing owner gate {required}")
+        if "persist-credentials: false" not in source:
+            errors.append("release preparation must not persist GitHub token during build")
+        if "Recheck main HEAD immediately before artifact publication" not in source:
+            errors.append("release preparation missing pre-publication HEAD recheck")
 
     if name == RETIRED_BOOTSTRAP:
         if not re.search(r"(?m)^    if:\s*\$\{\{\s*false\s*&&", source):

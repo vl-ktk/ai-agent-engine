@@ -1,0 +1,123 @@
+name: Owner-pinned release preparation (no VPS deployment)
+
+# Produces a verified release wheel only. No SSH, root, services or deployment.
+# A real controller daemon and separate owner approval are prerequisites to activation.
+on:
+  workflow_dispatch:
+    inputs:
+      selected_ref:
+        description: "Exact 40-char commit SHA or refs/tags/<tag> reachable from main"
+        required: true
+        type: string
+      expected_main_sha:
+        description: "Current main HEAD (40-char SHA) confirmed by owner"
+        required: true
+        type: string
+      confirmation:
+        description: "Type PREPARE_RELEASE to build only; never deploy"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-agent-engine-owner-pinned-release-preparation
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'PREPARE_RELEASE' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main without persisting credentials
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up pinned Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Resolve selected commit and reject changed remote main
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SELECTED_REF: ${{ inputs.selected_ref }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -Eeuo pipefail
+          remote_head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          python -m scripts.release_preflight resolve \
+            --selected-ref "$SELECTED_REF" \
+            --expected-main "$EXPECTED_MAIN" \
+            --workflow-head "$GITHUB_SHA" \
+            --observed-main "$remote_head" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Materialize selected commit in a separate detached worktree
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.resolve.outputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          git worktree add --detach "$RUNNER_TEMP/release-tree" "$SOURCE_SHA"
+          test "$(git -C "$RUNNER_TEMP/release-tree" rev-parse HEAD)" = "$SOURCE_SHA"
+          python -m scripts.release_preflight scan --repo "$RUNNER_TEMP/release-tree"
+      - name: Build wheel from selected source only
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python -m pip wheel --no-deps \
+            --wheel-dir "$RUNNER_TEMP/release-out" "$RUNNER_TEMP/release-tree"
+      - name: Test only the built wheel in an isolated environment
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          wheels=("$RUNNER_TEMP"/release-out/*.whl)
+          if (( ${#wheels[@]} != 1 )); then
+            echo "Expected exactly one release wheel"; exit 1
+          fi
+          python -m venv "$RUNNER_TEMP/release-venv"
+          "$RUNNER_TEMP/release-venv/bin/python" -m pip install \
+            --no-index --no-deps "${wheels[0]}"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/release-venv/bin/python" -m ai_agent_engine
+      - name: Write version-locked release manifest
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.resolve.outputs.source_sha }}
+          SELECTED_REF: ${{ inputs.selected_ref }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          wheels=("$RUNNER_TEMP"/release-out/*.whl)
+          test "${#wheels[@]}" -eq 1
+          python -m scripts.release_preflight manifest \
+            --release-dir "$RUNNER_TEMP/release-out" \
+            --wheel "${wheels[0]}" \
+            --commit "$SOURCE_SHA" \
+            --selected-ref "$SELECTED_REF" \
+            --expected-main "$EXPECTED_MAIN"
+      - name: Recheck main HEAD immediately before artifact publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -Eeuo pipefail
+          remote_head="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "$remote_head" != "$EXPECTED_MAIN" ]]; then
+            echo "Remote main HEAD changed; refusing release artifact"; exit 1
+          fi
+          echo "PASS: exact source, package and main HEAD reverified"
+      - name: Save prepared artifact (not a VPS release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-agent-engine-prepared-${{ steps.resolve.outputs.source_sha }}
+          path: ${{ runner.temp }}/release-out/
+          if-no-files-found: error
+          retention-days: 7
