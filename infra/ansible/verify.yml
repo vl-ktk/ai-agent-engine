@@ -1,0 +1,7 @@
+---
+- name: Verify deploy connectivity without changing server state
+  hosts: ai_agent_engine_vps
+  gather_facts: false
+  tasks:
+    - name: Check Ansible connectivity
+      ansible.builtin.ping:
