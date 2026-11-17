@@ -1,3 +1,11 @@
+# 2026-11-17 — Stage 4.2 / 7.1 offline CI gates PASS
+
+- **Owner/scope:** VL is the single human user; source `vl-ktk/ai-agent-engine` main. Stage 7.1 only. PR [#50](https://github.com/vl-ktk/ai-agent-engine/pull/50) contains offline CI wheel build + locally installed artifact demo, existing Linux/Windows unit and mocked integration tests, tracked-source secret scanner, workflow-guard check, and localhost-only Ansible check-mode inventory. No access to VPS or production.
+- **PR verification:** [CI offline run #44153015887](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44153015887) **SUCCESS**: all 5 jobs (Linux Python 3.11/3.12/3.13; Windows 3.12; separately built wheel) succeeded. [VPS automation config offline run #44153015848](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44153015848) **SUCCESS**, four existing playbook syntax-checks and `verify.yml --check --diff` run using only `inventory.offline-ci.yml` localhost. Historical real Debian13 --check in stage 5.3 is separate and unchanged.
+- **Boundary:** CI has only `permissions: contents: read`; no SSH secrets, privileged actions, paid model requests or CD. Tracked-file signature scanning cannot guarantee all secrets absent. Ansible CI --check on localhost does NOT establish reachability or baseline configuration of the VPS. Source documentation [infra/ci/STAGE71.md](infra/ci/STAGE71.md).
+- **Next:** 7.2 controlled commit/tag CD (not started) and 7.3 strict test vs deploy rights boundary (not started). 6.3 remains open for a real long-running controller executable.
+- **Rollback source:** pre-7.1 main `5a548a8b25aaf0ad0672fb1ce0ead9459f3d4629`; revert PR #50 if required. No live server rollback. Confirm PR merged and record its main SHA before accepting 7.2.
+
 # 2026-11-17 — Stage 4.2 / 6.4 source/workflow authority guard PASS
 
 - **Scope:** sole human owner Vlad, existing Netcup VPS. Reviewed all 8 GitHub Actions workflow sources from main `591947cf2b056880019b2c0847f7bc2856373dba` (rollback source SHA). No live VPS/SSH/firewall/secrets/permissions/production modifications.
