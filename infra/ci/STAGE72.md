@@ -37,6 +37,14 @@ rechecks remote main HEAD and rejects concurrent branch changes. The
 prepared wheel and manifest are stored as a short-lived Actions artifact
 (seven days), **not** on Netcup, a package index or any production server.
 
+## Offline CI rehearsal
+
+The normal `package-build` job also exercises the release validator against
+its exact checked-out Git commit (simulated observed main = checkout HEAD),
+checks the tracked source, and emits a SHA-256 manifest for its actual built
+wheel. This validates the selection/packaging code but **cannot** substitute
+for a real GitHub API HEAD check or an owner-dispatched workflow run.
+
 ## Boundaries and blockers
 
 1. **No VPS or SSH:** no deployment secret is referenced; no root, sudo,
