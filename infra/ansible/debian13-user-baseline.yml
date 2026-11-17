@@ -1,0 +1,30 @@
+---
+# Stage 4.2 / 5: non-root, idempotent Debian 13 runtime layout only.
+# Do not install apt packages, grant sudo, configure services, or touch credentials.
+- name: Prepare isolated AI Agent Engine runtime directories
+  hosts: ai_agent_engine_vps
+  gather_facts: true
+  become: false
+  tasks:
+    - name: Require Debian 13, non-root deploy identity, and supported Python
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Debian'
+          - ansible_facts['distribution_major_version'] == '13'
+          - ansible_facts['user_id'] == 'ae-deploy'
+          - ansible_facts['python']['version']['major'] == 3
+          - ansible_facts['python']['version']['minor'] >= 11
+        fail_msg: "Unexpected OS, deploy user or Python runtime; baseline refused."
+        quiet: true
+
+    - name: Prepare private runtime directory in deploy home
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/ai-agent-engine-runtime"
+        state: directory
+        mode: "0700"
+
+    - name: Prepare private release staging directory
+      ansible.builtin.file:
+        path: "{{ ansible_facts['env']['HOME'] }}/ai-agent-engine-runtime/releases"
+        state: directory
+        mode: "0700"
