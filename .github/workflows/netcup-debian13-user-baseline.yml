@@ -1,0 +1,96 @@
+name: Netcup Debian 13 non-root baseline
+
+# Owner-only manual run; applies two private user-home directories after dry-run.
+# No sudo, apt, root, new permissions or service configuration.
+on:
+  workflow_dispatch:
+    inputs:
+      server_ipv4:
+        description: "Netcup VPS IPv4 (used only by this run)"
+        required: true
+        type: string
+      confirmation:
+        description: "Type BASELINE to prepare non-root runtime directories"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-agent-engine-netcup-user-baseline
+  cancel-in-progress: false
+
+jobs:
+  user-baseline:
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'BASELINE' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout approved source
+        uses: actions/checkout@v4
+
+      - name: Prepare compatible Ansible controller
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m venv "$RUNNER_TEMP/ansible-venv"
+          "$RUNNER_TEMP/ansible-venv/bin/python" -m pip install --disable-pip-version-check --quiet 'ansible-core==2.21.5'
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" --version | head -n 1
+
+      - name: Validate SSH and check/apply non-root Debian baseline
+        shell: bash
+        env:
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "Expected valid IPv4 syntax."; exit 1
+          fi
+          if [[ -z "$DEPLOY_PRIVATE_KEY" ]]; then
+            echo "Missing encrypted AE_DEPLOY_PRIVATE_KEY secret."; exit 1
+          fi
+
+          umask 077
+          keyfile="$RUNNER_TEMP/ae-deploy-private"
+          known_hosts="$RUNNER_TEMP/host-key-pinned"
+          inventory="$RUNNER_TEMP/ansible-hosts.ini"
+          trap 'rm -f "$keyfile" "$known_hosts" "$inventory"' EXIT
+
+          ssh-keyscan -T 10 -p 22 -t ed25519 "$SERVER_IP" 2>/dev/null > "$known_hosts"
+          if [[ ! -s "$known_hosts" ]]; then
+            echo "SSH port 22 was unreachable."; exit 1
+          fi
+          actual_fp="$(ssh-keygen -lf "$known_hosts" | awk 'NR==1 {print $2}')"
+          expected_fp="SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg"
+          if [[ "$actual_fp" != "$expected_fp" ]]; then
+            echo "SSH host fingerprint changed; refusing connection."; exit 1
+          fi
+
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$keyfile"
+          chmod 0600 "$keyfile"
+          if ! ssh-keygen -y -f "$keyfile" >/dev/null 2>&1; then
+            echo "Encrypted deploy SSH key is invalid."; exit 1
+          fi
+
+          printf '[ai_agent_engine_vps]\nnetcup ansible_host=%s ansible_user=ae-deploy\n' "$SERVER_IP" > "$inventory"
+
+          export ANSIBLE_CONFIG=infra/ansible/ansible.cfg
+          args=(
+            -i "$inventory"
+            infra/ansible/debian13-user-baseline.yml
+            --private-key "$keyfile"
+            --ssh-common-args "-o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts"
+          )
+
+          echo "Stage 1/3: dry-run with diff"
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" "${args[@]}" --check --diff
+          echo "Stage 2/3: apply non-root user-home directories"
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" "${args[@]}"
+          echo "Stage 3/3: verify second run makes zero changes"
+          post_check="$("$RUNNER_TEMP/ansible-venv/bin/ansible-playbook" "${args[@]}" --check --diff)"
+          printf '%s\n' "$post_check"
+          if ! grep -Eq 'netcup[[:space:]]*:[[:space:]]*ok=[0-9]+[[:space:]]+changed=0[[:space:]]+unreachable=0[[:space:]]+failed=0' <<< "$post_check"; then
+            echo "Non-root baseline is not idempotent."; exit 1
+          fi
