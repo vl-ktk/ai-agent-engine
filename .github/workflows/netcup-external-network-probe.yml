@@ -1,0 +1,72 @@
+name: Netcup external read-only network probe
+
+# A narrow connectivity test against this project's own Netcup VPS.
+# No SSH authentication, no secrets, no configuration changes, no port ranges.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/netcup-external-network-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.repository == 'vl-ktk/ai-agent-engine'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check external IPv4 and IPv6 connectivity to own VPS
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket
+          import sys
+
+          ipv4 = "62.83.131.128"
+          ipv6 = "2a03:4000:19:1ea0:747d:b7ff:fe5e:84c6"
+          denied_port = 8022  # known not to be listening; not allowed by SCP policy
+
+          def connect(address, port):
+              s = socket.create_connection((address, port), timeout=5)
+              s.settimeout(5)
+              return s
+
+          def check_ssh(address, label):
+              try:
+                  with connect(address, 22) as s:
+                      banner = s.recv(64)
+                  if not banner.startswith(b"SSH-"):
+                      print(f"{label}_SSH22_FAIL: TCP opened but SSH banner missing")
+                      return False
+                  print(f"{label}_SSH22_PASS: fresh TCP and SSH banner")
+                  return True
+              except OSError as e:
+                  print(f"{label}_SSH22_UNREACHABLE: {type(e).__name__}: {e}")
+                  return False
+
+          def check_denied(address, label):
+              try:
+                  with connect(address, denied_port):
+                      pass
+                  print(f"{label}_TCP8022_FAIL: unexpected open TCP connection")
+                  return False
+              except OSError as e:
+                  print(f"{label}_TCP8022_DENIED_PASS: {type(e).__name__}")
+                  return True
+
+          ipv4_ssh = check_ssh(ipv4, "IPV4")
+          ipv4_deny = check_denied(ipv4, "IPV4") if ipv4_ssh else False
+
+          ipv6_ssh = check_ssh(ipv6, "IPV6")
+          if ipv6_ssh:
+              ipv6_deny = check_denied(ipv6, "IPV6")
+          else:
+              ipv6_deny = None
+              print("IPV6_INCONCLUSIVE: runner/route/firewall not distinguishable")
+              print("::warning::External IPv6 SSH was not verified from this runner")
+
+          if not ipv4_ssh or not ipv4_deny or ipv6_deny is False:
+              sys.exit(1)
+          PY
