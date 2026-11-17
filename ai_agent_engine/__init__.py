@@ -2,12 +2,12 @@
 
 from .core import (
     Action, Agent, AgentResult, AgentRole, AgentSession, ModelTurn,
-    ScriptedModel, SessionContext, StopToken, Tool,
+    ScriptedModel, SessionContext, StopToken, Tool, ToolRegistry, AuditEvent,
 )
 from .tools import SandboxFiles, ToolError
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession",
     "ModelTurn", "ScriptedModel", "SessionContext", "StopToken",
-    "Tool", "SandboxFiles", "ToolError",
+    "Tool", "ToolRegistry", "AuditEvent", "SandboxFiles", "ToolError",
 ]

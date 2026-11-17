@@ -366,7 +366,10 @@ def _recording_tools(files: SandboxFiles, report: ToolCycleReport) -> tuple[Tool
         report.read_output_ok = output == FILE_CONTENT
         return output
 
-    return (Tool("write_new_file", write_new), Tool("read_file", read_file))
+    return (
+        Tool("write_new_file", write_new, required_args=write.required_args),
+        Tool("read_file", read_file, required_args=read.required_args),
+    )
 
 
 def run_tool_cycle(slug: str, store: CredentialStore, *,

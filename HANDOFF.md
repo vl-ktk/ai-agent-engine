@@ -1,11 +1,20 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 3.4 — tool registry, validation, sandbox and audit (2026-11-17)
+
+- **Source/rollback:** `vl-ktk/ai-agent-engine` `main`, initial HEAD `45c2c33c124a7250151bf3204d83675315511a8e`. Working source for 3.4: only that version; rollback by reverting 3.4 PR or returning to the initial HEAD.
+- **Owner decision:** 3.3 accepted on 2026-11-17, marked `[x]` in the single roadmap; development commissioned **only for 3.4**, no changes to 3.5 or later.
+- **Changed:** `core.py` adds `ToolRegistry` with explicit grants, strict `Tool` schemas, arg/result bounds and per-step content-free actor/time audit; `tools.py` hardens path handling, limited reads and POSIX no-follow directory-descriptor opens; `plan_agent.py` retains original GPT test schemas. New offline security tests, documentation and roadmap updated.
+- **Checks:** before 3.4: 134/134 offline PASS. After 3.4: 148/148 offline PASS; `compileall`, demo and `git diff --check` PASS on local Linux. Live models, cloud runtime, production and other projects untouched.
+- **Status:** implementation ready for independent GitHub PR/CI and owner acceptance; PR, CI and final merge IDs to be recorded after completion. Exact Stage 3.4 checkbox remains unchecked until owner accepts. Stage 3.5 not started.
+- **Known boundary:** Windows sandbox cannot claim race resistance against a malicious same-OS-user process; no OS process isolation or persisted audit. These are later infrastructure/system-orchestrator requirements.
+
 ## Stage 3.3 — unified task sessions (PR #15 MERGED; 2026-11-17)
 
 - **Source/rollback baseline:** `vl-ktk/ai-agent-engine` `main` at `6a6152d6b904f4371e4a68efff60a80828e16be6` before phase 3.3. Working branch `feat/phase-3-3-unified-runtime-20261117`.
 - **Changed:** `core.py` adds role-scoped single-task sessions, trusted session context and a cooperative stop token; `plan_agent.py` runs the existing GPT owner sandbox test through the shared session interface while keeping the native tool allowlist unchanged. `__init__.py` exports the new types. New offline role/cancel tests added; README and roadmap clarify limitations.
-- **Status:** [PR #15](https://github.com/vl-ktk/ai-agent-engine/pull/15) MERGED as `503b12302055a532ca9b1b581f8be1797febdd7d`; rollback to immediately previous `main` `6a6152d6b904f4371e4a68efff60a80828e16be6`. Baseline 125/125; current 134/134 local offline tests PASS. [GitHub Actions run 44061912134](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44061912134) 4/4 PASS (Linux Python 3.11–3.13, Windows Python 3.12), compilation, tests and demo PASS. **Technical PASS; formal owner acceptance pending.** Stage 3.4 and later untouched. No new model calls or production activity.
-- **Remaining:** owner acceptance for marking roadmap 3.3 [x]; next request may start 3.4. Verified pre-merge `main` matched `6a6152d6b904f4371e4a68efff60a80828e16be6`; PR had no conflicts. Review of real GPT/Claude live behavior is a separate owner-approved acceptance, not implied by this offline PASS.
+- **Status:** [PR #15](https://github.com/vl-ktk/ai-agent-engine/pull/15) MERGED as `503b12302055a532ca9b1b581f8be1797febdd7d`; rollback to immediately previous `main` `6a6152d6b904f4371e4a68efff60a80828e16be6`. Baseline 125/125; 134/134 local offline tests PASS. [GitHub Actions run 44061912134](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44061912134) 4/4 PASS (Linux Python 3.11–3.13, Windows Python 3.12), compilation, tests and demo PASS. **Owner accepted 3.3 on 2026-11-17 and approved starting 3.4.** No new model calls or production activity.
+- **Remaining:** real GPT/Claude live behavior is a separate owner-approved acceptance, not implied by the offline PASS. Verified pre-merge `main` matched `6a6152d6b904f4371e4a68efff60a80828e16be6`; PR had no conflicts.
 
 
 **Updated:** 2026-11-17 (PR #14 architecture reconciliation merged; phase 1 and technical Stage 2 gates remain open)

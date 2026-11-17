@@ -39,7 +39,7 @@ class AgentTests(unittest.TestCase):
     def test_tool_failure_does_not_leak_secret_in_audit(self):
         def failed(args):
             raise RuntimeError("super-secret-token")
-        tool = Tool("fail", failed)
+        tool = Tool("fail", failed, required_args=("token",))
         result = Agent(model=ScriptedModel((ModelTurn(action=Action("fail", {"token": "super-secret-token"})),)), tools=(tool,)).run("test")
         self.assertEqual(result.status, "failed")
         self.assertNotIn("super-secret-token", repr(result.audit))
