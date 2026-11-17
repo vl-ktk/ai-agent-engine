@@ -12,6 +12,9 @@ import re
 from threading import Event, Lock
 from typing import Callable, Mapping, Protocol
 
+MAX_PROMPT_CHARS = 65_536
+MAX_FINAL_TEXT_CHARS = 1_048_576
+
 
 @dataclass(frozen=True)
 class Action:
@@ -29,6 +32,12 @@ class ModelTurn:
     def __post_init__(self) -> None:
         if (self.final_text is None) == (self.action is None):
             raise ValueError("model turn must contain exactly one outcome")
+        if self.final_text is not None and (
+            not isinstance(self.final_text, str)
+            or not self.final_text.strip()
+            or len(self.final_text) > MAX_FINAL_TEXT_CHARS
+        ):
+            raise ValueError("invalid model final text")
 
 
 @dataclass(frozen=True)
@@ -209,8 +218,9 @@ class Agent:
 
     def run(self, prompt: str, *, context: SessionContext | None = None,
             stop: StopToken | None = None) -> AgentResult:
-        if not prompt.strip():
-            raise ValueError("prompt cannot be empty")
+        if (not isinstance(prompt, str) or not prompt.strip()
+                or len(prompt) > MAX_PROMPT_CHARS):
+            raise ValueError("prompt must be a nonblank bounded string")
         if context is not None and not isinstance(context, SessionContext):
             raise TypeError("context must be a SessionContext")
         if stop is not None and not isinstance(stop, StopToken):
