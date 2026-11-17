@@ -1,3 +1,25 @@
+# ТЕКУЩИЙ HANDOFF — 2026-11-17 / AI Agent Engine / 4.2 PARTIAL, ЖИВОЙ КОНТРОЛЛЕР НЕ ЗАПУЩЕН
+
+**Номер задачи:** только глобальный `4.2`; не переходить к `4.3`. **Источник:** `vl-ktk/ai-agent-engine` main. **Разрешение владельца:** устанавливать и тестировать контроллер на имеющемся Netcup VPS; бесплатные штатные действия внутри порученной задачи не переспрашивать (правило внесено в `AGENTS.md`, commit `58ccd27194488bb198cb60d4d367fb6c3dec42b1`). Отдельно подтверждать действия, для которых более строгие политики UI требуют подтверждения при выполнении.
+
+## Что объективно сделано и проверено
+
+- **Релиз подготовлен:** manual owner-only GitHub Actions [#44174524655](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44174524655) SUCCESS, artifact `14370485162` из точного source commit `85375103800845eeff696e53f510c66c428408ed`. Wheel SHA-256: `f1741dcaeeeca1f83447c283512e3a543d02e32730ad18f832991af562cab6cb`; ZIP SHA-256: `2eb175e9e25175365126b83f8eb2c98b271fd073187ad1dd3bad5ffc4ed8938f`. Manifest + wheel локально `verify PASS`.
+- **Передача без привилегий:** создан GitHub workflow `.github/workflows/netcup-owner-release-transfer.yml` на main коммитом `9eae5a048d05b26d0d411d3b5b1846285a5d7508` (исходный main для отката этой правки `58ccd27194488bb198cb60d4d367fb6c3dec42b1`); ручной запуск [#44177758050](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44177758050) SUCCESS. Сверены commit, manifest, независимый wheel SHA и SSH fingerprint. Релиз находится на VPS в `/home/ae-deploy/ae-incoming/85375103800845eeff696e53f510c66c428408ed/`.
+- **Живой VPS:** Netcup SCP, сервер `v2202611460959561466` на `62.83.131.128`, root VNC console доступна (проверено `whoami=root`). Python 3.13.5; пользователь `ae-runtime` существует; `/opt/ai-agent-engine/releases` существует, но **`current` отсутствует**, `ae-controller.service` не установлен. Старый `ae-host-check.timer` active; другие сервисы не затрагивались.
+- **Подготовлено на сервере:** `/tmp/ae-promotion.py` скачан строго из source commit, SHA-256 `d841fdd2b9af5cbf955a898e2fe67086cbcdba7eeed80fb71eb2a76709794afc` совпал с исходником. `/tmp/ae-controller.service` SHA-256 `117f43a16da8c810d478f0d1af3bb03422bceae14d92af111fb3634a10489ff2` совпал с исходником. `python3 /tmp/ae-promotion.py verify ...` на самом VPS: **PASS**, без изменений сервиса.
+- **Точный блокер:** `stage` не смог создать venv: отсутствует Debian 13 пакет `python3.13-venv` (`ensurepip` не доступен). `apt-cache policy` нашёл кандидата `3.13.5-2+deb13u5`. `apt-get -s install python3.13-venv` (ТОЛЬКО СИМУЛЯЦИЯ) показывает 3 новых пакета `python3.13-venv`, `python3-pip-whl`, `python3-setuptools-whl`, **0 обновлений и 0 удалений**. Платные операции не требуются. Пакеты НЕ установлены; недопроверенная версия НЕ активирована; stage удалил временный каталог. Проверено `ls -la /opt/ai-agent-engine`: только `releases`.
+- **Итог живой части на данный момент:** нет `current`, нет `ae-controller.service`, нет health/watchdog/restart/rollback живого контроллера. `4.2` остаётся PARTIAL/BLOCKED, НЕ отмечать done.
+
+## Продолжение строго 4.2
+
+1. Снять action-time UI-блокировку на установку 3 официальных пакетов Debian; выполнить `apt-get install --no-install-recommends python3.13-venv` на VPS, проверить результат. Не менять пароль/секреты/доступ.
+2. Повторить `promotion.py stage` с `--bundle /home/ae-deploy/ae-incoming/85375103800845eeff696e53f510c66c428408ed`, `--root /opt/ai-agent-engine`, точным `--source-sha`, `--expected-wheel-sha256 f174...`, `--confirmation OWNER_APPROVED_RELEASE_OPERATION`. Перед каждым действием сверять текущую версию; `current` ожидается NONE.
+3. `promote --expected-current NONE` с CAS; установить `/tmp/ae-controller.service` в systemd, `systemd-analyze verify`, daemon-reload, enable/start. Проверить systemd active/enabled, `ae-runtime`, heartbeat, watchdog, после restart; провести безопасную проверку восстановления/отката (первое развёртывание, прежней версии контроллера нет).
+4. После полного PASS обновить `IMPLEMENTATION_ROADMAP.md` и этот HANDOFF, записать номер релиза, id для отката и тесты. К `4.3` не переходить до команды Владислава.
+
+---
+
 # 2026-11-17 — Глобальный 4.2: исходник lifecycle-контроллера и ручной staging, НЕ live
 
 - **Результат фиксации в источнике:** [PR #53](https://github.com/vl-ktk/ai-agent-engine/pull/53) успешно объединён в `main` коммитом `cb906139b7f68d098e1ed1ffaae96b63c6738101` (предыдущий `main` для code rollback: `c889c13b2ac29896575344a3871d909c77487761`). [PR CI (offline) #44172406144](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44172406144) — SUCCESS 5/5 (Linux 3.11/3.12/3.13, Windows 3.12, wheel staging); [VPS automation config (offline) #44172406098](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44172406098) — SUCCESS. Эти проверки **не** доказывают, что Netcup VPS изменён или контроллер запущен.
