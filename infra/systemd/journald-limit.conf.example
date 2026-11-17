@@ -1,5 +1,7 @@
-# Optional global VPS journal cap. NOT installed or activated.
-# Requires separate owner permission because it affects logs of ALL services.
+# Historical preparation example. The same approved values are now LIVE on the
+# Netcup VPS at /etc/systemd/journald.conf.d/90-ai-agent-engine-limit.conf.
+# Source of the active drop-in: infra/systemd/90-ai-agent-engine-limit.conf.
+# Both caps are SYSTEM-WIDE, not scoped to AI Agent Engine.
 [Journal]
 SystemMaxUse=256M
 RuntimeMaxUse=128M
