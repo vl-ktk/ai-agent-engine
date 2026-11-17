@@ -1,10 +1,10 @@
 # Stage 4.2 / 6.2 — Netcup SCP Firewall и SSH: журнал внедрения
 
-**Фактический статус на 2026-11-17: LIVE APPLIED; новый SSH IPv4 PASS; DNS и прямой UDP/NTP тест PASS; IPv4 closed TCP8022 PASS, SSH Match PASS; IPv6 SSH извне INCONCLUSIVE (runner без маршрута).** Первоначальный preflight-план ниже сохранён как исторический документ. Его старые утверждения об отсутствии политики не описывают текущее состояние.
+**Фактический статус на 2026-11-17: LIVE APPLIED; новый SSH IPv4 PASS; DNS и прямой UDP/NTP тест PASS; IPv4 closed TCP8022 PASS, SSH Match PASS; IPv6 SSH intentionally disabled on service level by owner (AddressFamily inet), new IPv4 Ansible PASS.** Первоначальный preflight-план ниже сохранён как исторический документ. Его старые утверждения об отсутствии политики не описывают текущее состояние.
 
 ## Применённые изменения
 
-1. По разрешению владельца создана конфигурация /etc/ssh/sshd_config.d/00-hardening.conf: PermitRootLogin no; PasswordAuthentication no; KbdInteractiveAuthentication no; PubkeyAuthentication yes. sshd -t и основные sshd -T значения PASS. systemctl reload ssh SUCCESS. Пароль root не изменялся; перезагрузки VPS не было.
+1. По разрешению владельца создана конфигурация /etc/ssh/sshd_config.d/00-hardening.conf: AddressFamily inet (добавлено позже при закрытии 6.2); PermitRootLogin no; PasswordAuthentication no; KbdInteractiveAuthentication no; PubkeyAuthentication yes. sshd -t и основные sshd -T значения PASS. systemctl reload ssh SUCCESS. Пароль root не изменялся; перезагрузки VPS не было.
 2. До Netcup firewall: новый SSH key-only вход для ae-deploy через GitHub-hosted runner и закреплённый host key, read-only Ansible ping [#44130562809](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44130562809): SUCCESS, 23 секунды.
 3. Создана и назначена **только VPS v2202611460959561466** политика Netcup с названием **AI Agent Engine VPS - SSH and NTP ingress**. Правило Allow SSH TCP22 = INCOMING TCP ACCEPT, source any, source port any, destination any, destination port 22. Правило Allow NTP UDP reply source123 = INCOMING UDP ACCEPT, source any, source port 123, destination any, destination port any. Пользовательских EGRESS правил нет; стандартные Mail block/Ping allow сохранены.
 4. Через Edit Policies → Apply → Save → OK политика применена. После повторной загрузки Netcup SCP показывает её на сервере, implicit **DROP ALL INCOMING** и **ACCEPT ALL OUTGOING**, без сообщения о несохранённых изменениях. Применение без перезагрузки.
@@ -17,14 +17,22 @@
 - DNS: `getent hosts debian.org` вернул адреса, включая `2a04:4e42::644`; PASS.
 - Время: `timedatectl show -p NTP -p NTPSynchronized` → `NTP=yes`, `NTPSynchronized=yes`; `timedatectl timesync-status` → сервер `2a01:b2e0:2::61`, stratum 2, packet count 9, offset +16.528ms, состояние leap normal.
 - Свежий UDP NTP ответ: через стандартный `python3` без установки пакетов отправлен пакет на `0.debian.pool.ntp.org`/UDP 123; новый ответ: длина 48, mode 4 (server), stratum 2. **PASS реального UDP return трафика при действующем firewall.** Сама systemd-timesyncd не перезапускалась, момент нового автоматического цикла не отслеживался.
-- Остались отдельными пунктами: SSH по IPv6 (если используем), отрицательная проверка закрытого порта, effective SSH Match/source-specific анализ. **Этап 6.2 не закрыт**.
+- Закрытые TCP порты и SSH Match проверены; внешний IPv6 SSH не используется и отключён по решению владельца. **6.2 ЗАКРЫТ** для текущей архитектуры.
 
 ## Внешний IPv4 и SSH Match аудит (2026-11-17)
 
 - [Внешний read-only GitHub Actions probe #44140170876](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44140170876) (`ubuntu-24.04`) на существующем VPS: `IPV4_SSH22_PASS`, fresh TCP connection + SSH banner; `IPV4_TCP8022_DENIED_PASS: TimeoutError`, положительный контроль TCP22 прошёл. Проверяли ровно два порта **своего** сервера; пароли, SSH-ключи, пакеты, сервисы и сетевые правила не трогали.
 - IPv6 тот же runner: `IPV6_SSH22_UNREACHABLE: OSError [Errno 101] Network is unreachable`. Это отсутствие IPv6 маршрута **на GitHub runner**, не доказанный отказ Netcup VPS; внешний IPv6 SSH **INCONCLUSIVE**, не считать PASS/FAIL. Дополнительный IPv6-внешний источник не поднимался.
 - Netcup SCP OOB console: в `/etc/ssh/sshd_config*` нет активных `Match` блоков; `sshd -T -C` для `root` и `ae-deploy`, simulated peer `::1` подтверждает `permitrootlogin no`, `passwordauthentication no`, `kbdinteractiveauthentication no`, `pubkeyauthentication yes`. Effective SSH Match/source-specific audit PASS; это не сеть IPv6 извне.
-- 6.2 остаётся OPEN исключительно на усмотрение владельца по внешнему IPv6 SSH (если требуется для использования); менять SSH/firewall без согласия нельзя.
+- Владелец разрешил отключить только входящий IPv6 SSH; после настройки и свежего IPv4 Ansible ping **6.2 закрыт**. Остальные IPv6 сетевые функции не менялись.
+
+## Финальная приёмка 6.2: SSH только IPv4 (2026-11-17)
+
+- Владелец прямо согласовал отключить **только входящий SSH через IPv6** и продолжить по плану. Перед изменением `ssh.socket` был inactive, `ssh.service` active; `sshd -T` показывал addressfamily=any, `listenaddress [::]:22` и `0.0.0.0:22`.
+- Резервная копия старого 4-строчного конфигурационного файла: `/root/ssh-hardening-backup.conf` (только на VPS). Добавлена первая строка `AddressFamily inet` к `/etc/ssh/sshd_config.d/00-hardening.conf`; прочие 4 правила оставлены без изменения. Восстановление: вернуть резервную копию, `sshd -t`, `systemctl reload ssh` через Netcup OOB; только при явном разрешении.
+- `sshd -t` PASS; `sshd -T` показал `addressfamily inet`, `listenaddress 0.0.0.0:22`; `systemctl reload ssh` PASS. После reload `ss -ltn | grep ':22'`: только `LISTEN ... 0.0.0.0:22`, IPv6 SSH listener отсутствует. **IPv6 стек и NTP не отключались**.
+- [GitHub Actions read-only Ansible ping #44134072220, новая попытка 2](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44134072220) SUCCESS, `ok=1 changed=0 unreachable=0 failed=0`; свежая SSH IPv4 key-only сессия после изменения. Пароли/secrets/firewall не менялись, других серверов нет.
+- **6.2 принят и закрыт для выбранной IPv4 SSH-архитектуры.** Ранее внешний IPv6 тест был INCONCLUSIVE из-за GitHub runner без маршрута, но после решения владельца входящего IPv6 SSH больше нет и он не нужен.
 
 ## Контрольный список
 
@@ -35,7 +43,7 @@
 - [x] Штатные Netcup Mail/Ping сохранены; нет дополнительного EGRESS правила.
 - [x] DNS **после** изменения: `getent hosts debian.org` вернул IPv6-адреса; запрос к `0.debian.pool.ntp.org` дополнительно подтвердил разрешение IPv4 A-записи для NTP.
 - [x] **Свежий NTP UDP-обмен после firewall:** read-only Python socket отправил 48-байтный UDP NTP-запрос на `0.debian.pool.ntp.org:123`; получен новый ответ 48 байт, NTP mode=4, stratum=2. `timedatectl show -p NTP -p NTPSynchronized`: NTP=yes / NTPSynchronized=yes; `timedatectl timesync-status`: stratum 2, 9 пакетов, сервер Debian pool. Не проводились restart/forced resync сервиса; подтверждён сетевой NTP-обмен, а не отдельный запуск новой синхронизации системной службы.
-- [ ] Вход SSH по IPv6 при необходимости, поскольку GitHub Actions тестировал IPv4.
+- [x] Внешний SSH по IPv6 признан **не требующимся** по решению владельца, слушатель IPv6 отключён через `AddressFamily inet`; runtime `ss` подтвердил отсутствие `:::22`. IPv6 для остальных сервисов сохранён.
 - [x] Отрицательный внешний тест **только нашего VPS**: [GitHub Actions read-only probe #44140170876](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44140170876) сначала получил SSH-баннер на IPv4 TCP22, затем TCP8022 завершился по тайм-ауту. IPv4 8022 недоступен извне; PASS.
 - [x] Проверка SSH Match/source-specific правил: read-only `grep -RniE '^[[:space:]]*Match' /etc/ssh/sshd_config*` не нашёл секций; `sshd -T -C` для `root` и `ae-deploy` с peer `::1` подтвердил rootlogin=no, passwordauthentication=no, kbdinteractiveauthentication=no, pubkeyauthentication=yes. PASS для текущего эффективного конфига; реального IPv6 подключения это не заменяет.
 
@@ -43,7 +51,7 @@
 
 Открыть Netcup SCP → VPS → Firewall → Edit Policies. Переместить только политику **AI Agent Engine VPS - SSH and NTP ingress** из Selected в Available, нажать Apply → Save и подтвердить. Проверить, что implicit INCOMING вернулся к ACCEPT ALL, а OUTGOING остался ACCEPT ALL, затем повторить новый SSH ping. **Restore Default Policies не открепляет кастомную политику.** Сохраняется резервный доступ через Netcup SCP Screen. Откат SSH hardening — отдельная привилегированная операция с проверкой sshd -t, сейчас не делалась.
 
-**Не заявлять пункт 6.2 завершённым** до оставшихся live проверок. Не открывать 80/443 или другие порты до отдельного согласования сетевой архитектуры и сервисов.
+**Пункт 6.2 закрыт после согласования IPv4-only SSH и новой live-проверки.** Не открывать 80/443 или другие порты до отдельного согласования сетевой архитектуры и сервисов.
 
 ---
 
