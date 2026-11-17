@@ -1,12 +1,20 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 4.1 — controller VPS selection (owner decision pending; 2026-11-17)
+
+- **Source/rollback baseline:** `vl-ktk/ai-agent-engine` `main` `1c372b75c30bcd1cd1b51addae7d0c88997b4dc4` before this documentation. No runtime or production changes.
+- **Owner decision:** 3.7 and global Stage 3 **accepted** 2026-11-17. Roadmap 3.7 and global 03 marked `[x]`, with the explicit boundary: the experimental offline engine is accepted, not autonomous production. Owner requested moving only to original 4.1.
+- **4.1 research:** [STAGE4_VPS_SELECTION.md](./STAGE4_VPS_SELECTION.md) records official 2026 Hetzner prices and a *candidate*, not an order: x86 CX33, 4 shared vCPU, 8 GiB RAM, 80 GB NVMe, €8.49/month excluding VAT, backups 20%, IPv4 €0.50 -> ~€10.69 before taxes. Stock and checkout price unverified; fallback requires owner decision. This must not be confused with the separate 125B/GPU/iPad plans.
+- **Blockers:** 1.6–1.7 VM/Claude unattended GO/NO-GO still HOLD; explicit VPS/monthly budget approval and exact checkout price are missing. **4.1 remains `[ ]`; no server, payment, token transfer, live model or other project action. Do not start 4.2 yet.**
+- **Next owner action:** decide on candidate CX33 and budget ceiling (proposed ≤€15/month including taxes for VPS/backups/IPv4); once approved and stage-1 gates resolved, recheck availability/price before any provisioning. This document must be updated with actual PR/main CI and rollback details after publication.
+
 ## Stage 3.7 — audit and owner acceptance gate (2026-11-17)
 
 - **Source/rollback:** `vl-ktk/ai-agent-engine` `main` at `f0483fc18813884b907859614c6400cfd606a8fb` immediately before 3.7. Only this project; no production, other repositories or provider calls.
 - **Owner decision:** stage 3.6 accepted on 2026-11-17 after PR #18, PR CI 4/4 and final main CI 4/4; roadmap 3.6 marked `[x]`. Owner commissioned **3.7 only**.
 - **Audit:** see [STAGE3_ENGINE_AUDIT.md](./STAGE3_ENGINE_AUDIT.md), including explicit GO for synthetic offline prototype and NO-GO for autonomous production. Proven defects: final model answers could be empty/non-string while returning `done`, prompts were unbounded, and source scanner accepted NUL-containing files. Fixed in `core.py` and `scripts/check_public_source.py`; added integrated security regression `tests/test_engine_audit.py`, expanded scanner test; preview package version `0.3.7a0`.
 - **Checks:** baseline 168/168; 171/171 local synthetic tests PASS; compileall and source scanner PASS. Built preview wheel `0.3.7a0`, installed without network in a fresh venv, and ran offline demo outside checkout PASS. [PR #19](https://github.com/vl-ktk/ai-agent-engine/pull/19) MERGED as `ddce1ee11488d7cbe90ac7806acc08db38eeb1cb` (branch audit commit `26e7504113591cd03f16120e30835648e93161ad`). [PR CI run 44069601297](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44069601297): **4/4 PASS** on Linux Python 3.11–3.13 and Windows Python 3.12, including install and smoke. **Rollback to pre-3.7 `main`: `f0483fc18813884b907859614c6400cfd606a8fb`.** No real credentials, paid API, VM or deployed service used.
-- **Remaining:** formal stage 3.7 owner acceptance; later VM, orchestration, OS isolation, durable state, authorization, provider policy/quotas. **Do not mark 3.7 `[x]` or start global stage 4 without owner decision.**
+- **Acceptance:** owner accepted Stage 3.7 and commissioned preparatory Stage 4.1 on 2026-11-17. Roadmap 3.7 and global 03 `[x]`; later VM, orchestration, OS isolation, durable state, authorization and provider policy/quotas remain pending. This is not production authorization.
 
 ## Stage 3.6 — package install, CI and safe public source (2026-11-17)
 
