@@ -18,8 +18,17 @@ oversized final responses and rejects prompts above 65,536 characters before
 invoking a model; both behaviors are covered by offline regression tests.
 
 **Stage 4.1:** [controller VPS selection review](./STAGE4_VPS_SELECTION.md)
-is a recommendation awaiting owner approval and Stage 1 VM gates. No server
-has been purchased, configured, or deployed.
+was approved by the owner. The existing Netcup Debian 13 VPS has a verified
+non-root runtime identity, private directories, journald limits and a live
+host-health timer; see [Stage 4.2 / 6.3 evidence](./infra/systemd/STAGE63.md).
+**No application controller is deployed or running on the VPS.**
+
+**Stage 4.2 / 6.3 (source only):** `python -m ai_agent_engine.controller`
+provides a long-running non-root process with a persistent SQLite self-test
+queue, singleton lease, heartbeat and `status`/`health`. Its only executable
+job type is synthetic, offline `core_self_test`; no GPT/Claude provider,
+paid API or autonomous production actions run through this controller.
+Systemd controller and health units are **prepared, not installed**.
 
 ## What works in the prototype
 
