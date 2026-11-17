@@ -96,6 +96,8 @@ class AgentToolsTests(unittest.TestCase):
             self.assertNotIn("previous_response_id", body)
             self.assertEqual(body["tools"][0]["type"], "namespace")
             self.assertEqual(body["tools"][0]["name"], "sandbox")
+            self.assertIn("Agent role: executor", body["instructions"])
+            self.assertIn("Project: ai-agent-engine", body["instructions"])
             self.assertEqual(
                 [t["name"] for t in body["tools"][0]["tools"]],
                 ["write_new_file", "read_file"],
