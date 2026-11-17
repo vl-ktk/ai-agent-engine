@@ -6,8 +6,10 @@
 
 - VPS Netcup, Debian 13.7, учетная запись автоматизации `ae-deploy`. Рабочая связка GitHub Actions → pinned SSH host key → SSH key → Ansible подтверждена; последнее чтение системы: [Actions 44121113323](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44121113323), `ok=18 changed=0 unreachable=0 failed=0`.
 - Слушатели: TCP только 22 на IPv4/IPv6; UDP LISTEN нет. Это состояние **слушающих сокетов**, а не список разрешенных firewall направлений.
-- В SCP Firewall включен, но последняя увиденная провайдерская политика фактически **ACCEPT ANY INCOMING / ACCEPT ANY OUTGOING**, кроме штатного SMTP-блока 25/465/587 и явных ICMP-правил. Guest nftables/iptables без root не осмотрены.
-- Эффективные настройки SSH (включая root/password authentication) и привилегии sudo **не проверены**. Нельзя объявлять SSH защищённым лишь на основании работы `ae-deploy`. Исходный root-пароль и секрет GitHub по выбору владельца оставлены без изменений; не читать, не применять, не менять в рамках 6.2.
+- Live Netcup SCP firewall всё ещё **ACCEPT ANY INCOMING / ACCEPT ANY OUTGOING**, кроме штатного SMTP block и ping правил. Живая команда root `nft list ruleset` вернула пустой ruleset: фильтрации через nftables сейчас нет.
+- Live SCP Screen `root` login **PASS** на повторной попытке: первичный сбой был вводом lowercase `l` вместо uppercase `I`; пароль владельца не изменялся. Корневая сессия закрыта командой `exit` (возврат к Debian `login:`). При чтении от root `sshd -T` вывел `port 22`, `permitrootlogin yes`, `passwordauthentication yes`, `pubkeyauthentication yes`, `kbdinteractiveauthentication no`, `authenticationmethods any`, `usepam yes`. Это **публично доступный риск root/password SSH**, а не доказательство успешного SSH-логина по сети и не проверка всех Match rules. Полные sudoers отдельно не изучались, GitHub secret не использовался.
+
+- DNS/NTP preflight: `/etc/resolv.conf` содержит DNS Netcup на IPv4 и IPv6, `NTP=yes`, `NTPSynchronized=yes`; `timedatectl timesync-status` показал динамический IPv6-пир Debian pool. Это не доказывает, что NTP UDP-ответы пройдут после назначения пользовательской Netcup INGRESS policy; необходима отдельная live проверка с подготовленным откатом. DHCP не проверялся.
 
 ## 2. Особенности Netcup — проверено по документации
 
@@ -37,12 +39,14 @@
 
 - [ ] Владелец отдельно разрешил **конкретную** публикацию политики. Нет молчаливого разрешения на password rotation, SSHD/системный firewall или root.
 - [ ] Сохранены ID текущих назначенных SCP firewall policies и скриншоты текущего `ACCEPT ANY`; подтверждён рабочий вход в SCP.
-- [ ] Открыта **независимая web/VNC-консоль Netcup** и проверено, что она доступна без SSH; известны шаги отката через SCP. Не считать просто наличие пункта меню доказательством рабочей консоли.
+- [x] Netcup SCP Screen доступна без SSH: проверен реальный root login, а после диагностики выполнен logout к `login:`. Порядок отката документацией определён (открепление policy через SCP), но **сам rollback пока не запускался**.
 - [ ] Подтверждена новая SSH-сессия `ae-deploy` с доверенным host key, без пароля; подтверждена работа GitHub workflow на стандартном runner, без временных IP allowlists.
 - [ ] Уполномоченно прочитаны фактические `sshd -T`/Match-условия, root/password authentication, и правила guest firewall. Без этой проверки при публичном SSH22 — HOLD.
 - [ ] Сверены используемые DNS/NTP/DHCP источники, маршруты IPv4/IPv6, собственные SSH-подключения и API-клиенты; выяснено, какие UDP ответы необходимо явно пропустить. Сначала подготовить правила UDP, только потом назначать политику.
 - [ ] Задокументированы проверка новой SSH-сессии, новые GitHub Actions run IDs, интернет/DNS/NTP и обратный путь в SCP. Ни один preflight не требует отправлять root-пароль в чат.
 - [ ] Указано окно изменения и простой безусловный критерий немедленного отката; при разногласиях — не применять.
+
+**Новый критический STOP:** пока sshd допускает `PermitRootLogin yes` и `PasswordAuthentication yes`, не объявлять SSH безопасным. Предлагаемое отключение root/password SSH не требует менять пароль root для SCP Screen, но изменение SSHD требует отдельного разрешения владельца.
 
 ## 5. Порядок применения — ТОЛЬКО ПО ОТДЕЛЬНОМУ СОГЛАСИЮ
 
