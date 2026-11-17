@@ -21,6 +21,7 @@ APPROVED_WORKFLOWS = {
     "netcup-readonly-system-audit.yml",
     "vps-automation-checks.yml",
     "release-preparation.yml",
+    "netcup-owner-release-transfer.yml",
 }
 RETIRED_BOOTSTRAP = "netcup-one-time-bootstrap.yml"
 PRIVILEGED_TRIGGERS = ("pull_request_target", "workflow_run", "repository_dispatch", "schedule")
@@ -32,6 +33,7 @@ MANUAL_CONFIRMATIONS = {
     "netcup-readonly-access-audit.yml": "AUDIT",
     "netcup-readonly-ansible-ping.yml": "VERIFY",
     "netcup-readonly-system-audit.yml": "SYSTEM_AUDIT",
+    "netcup-owner-release-transfer.yml": "TRANSFER_PREPARED_RELEASE",
 }
 
 
@@ -39,8 +41,13 @@ def inspect_workflow(name: str, source: str) -> list[str]:
     errors: list[str] = []
     # Existing workflows use a multiline top-level permissions mapping.
     matches = re.findall(r"(?m)^permissions:\s*\n((?:  [^\n]*\n)+)", source)
-    if len(matches) != 1 or matches[0].splitlines() != ["  contents: read"]:
-        errors.append("GITHUB_TOKEN permissions must be top-level contents: read only")
+    expected_permissions = ["  contents: read"]
+    if name == "netcup-owner-release-transfer.yml":
+        # Read access to Actions artifacts is required to fetch the pinned
+        # prepared wheel. No write token permission is allowed.
+        expected_permissions.append("  actions: read")
+    if len(matches) != 1 or matches[0].splitlines() != expected_permissions:
+        errors.append("GITHUB_TOKEN permissions differ from reviewed read-only scope")
     if re.search(r"(?m)^\s{2,}permissions\s*:", source):
         errors.append("job-specific permissions overrides are disallowed")
     for trigger in PRIVILEGED_TRIGGERS:

@@ -67,6 +67,30 @@ class WorkflowBoundaryTests(unittest.TestCase):
         findings = inspect_workflow("release-preparation.yml", source)
         self.assertTrue(any("owner gate" in issue for issue in findings))
 
+    def test_release_transfer_requires_explicit_read_only_actions_scope(self):
+        source = (
+            "on:\n  workflow_dispatch:\n"
+            "permissions:\n  contents: read\n  actions: write\n"
+            "jobs:\n  transfer:\n"
+            "    if: ${{ github.ref == 'refs/heads/main' && "
+            "github.actor == 'vl-ktk' && "
+            "inputs.confirmation == 'TRANSFER_PREPARED_RELEASE' }}\n"
+            "    steps:\n      - run: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}\n"
+        )
+        self.assertTrue(any("permissions" in finding for finding in
+                            inspect_workflow("netcup-owner-release-transfer.yml", source)))
+
+    def test_release_transfer_requires_owner_confirmation(self):
+        source = (
+            "on:\n  workflow_dispatch:\n"
+            "permissions:\n  contents: read\n  actions: read\n"
+            "jobs:\n  transfer:\n"
+            "    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' }}\n"
+            "    steps:\n      - run: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}\n"
+        )
+        self.assertTrue(any("condition" in finding for finding in
+                            inspect_workflow("netcup-owner-release-transfer.yml", source)))
+
 
 if __name__ == "__main__":
     unittest.main()
