@@ -1,5 +1,12 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 4.1 — owner-approved shortlist update (2026-11-17)
+
+- **Decision:** owner accepted **OVHcloud VPS-2 primary, Hetzner CX33 backup**, only for controller VM. This supersedes the previous CX33-first recommendation; detailed comparison and official sources are in [STAGE4_VPS_SELECTION.md](./STAGE4_VPS_SELECTION.md).
+- **No spending permission:** shortlist priority approval is **not** approval of pricing, monthly budget, rental, account provisioning or unattended ChatGPT/Claude execution. Stage 4.1 stays **[ ]**, Stage 4.2 untouched, Stage 1.6–1.7 VM GO/NO-GO still HOLD. No secrets, chargeable API, VM, or live sessions touched.
+- **Outstanding:** OVHcloud VPS-2 price for Ukraine, actual stock in chosen EU region, month-to-month/advance commitment, included backup vs 7-day premium, taxes, renewal. Next request a distinct budget/purchase authorization before order.
+- **Source/rollback:** prior main `dbf38514b9e5342ecf824c44be400756552b4057`. Documentation-only change; PR, CI, merged SHA and final rollback audit to be recorded after completion.
+
 ## Stage 4.1 — controller VPS selection (owner decision pending; 2026-11-17)
 
 - **Source/rollback baseline:** `vl-ktk/ai-agent-engine` `main` `1c372b75c30bcd1cd1b51addae7d0c88997b4dc4` before this documentation. No runtime or production changes.
