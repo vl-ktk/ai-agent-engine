@@ -1,0 +1,116 @@
+name: Netcup one-time deploy access bootstrap
+
+# Owner-triggered only. A password never appears in the repository, inputs, or logs.
+on:
+  workflow_dispatch:
+    inputs:
+      server_ipv4:
+        description: "Netcup public IPv4 address"
+        required: true
+        type: string
+      deploy_public_key:
+        description: "New ae-deploy Ed25519 PUBLIC key (not the private key)"
+        required: true
+        type: string
+      confirmation:
+        description: "Type BOOTSTRAP to confirm one-time creation of ae-deploy"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-agent-engine-netcup-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  create-deploy-user:
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'BOOTSTRAP' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      SERVER_IP: ${{ inputs.server_ipv4 }}
+      DEPLOY_PUBLIC_KEY: ${{ inputs.deploy_public_key }}
+    steps:
+      - name: Fetch reviewed bootstrap source
+        uses: actions/checkout@v4
+
+      - name: Validate inputs and pinned host fingerprint
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "Expected IPv4 address."; exit 1
+          fi
+          if [[ "$DEPLOY_PUBLIC_KEY" != ssh-ed25519\ * || "$DEPLOY_PUBLIC_KEY" == *$'\n'* ]]; then
+            echo "Expected one Ed25519 public key."; exit 1
+          fi
+          if ! printf '%s\n' "$DEPLOY_PUBLIC_KEY" | ssh-keygen -l -f - >/dev/null 2>&1; then
+            echo "Invalid SSH public key."; exit 1
+          fi
+          umask 077
+          ssh-keyscan -T 10 -p 22 -t ed25519 "$SERVER_IP" 2>/dev/null > "$RUNNER_TEMP/netcup_known_hosts"
+          if [[ ! -s "$RUNNER_TEMP/netcup_known_hosts" ]]; then
+            echo "SSH port 22 is unreachable from GitHub runner."; exit 1
+          fi
+          actual_fp="$(ssh-keygen -lf "$RUNNER_TEMP/netcup_known_hosts" | awk 'NR==1 {print $2}')"
+          expected_fp="SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg"
+          if [[ "$actual_fp" != "$expected_fp" ]]; then
+            echo "SSH host fingerprint differs from the provider-confirmed value; refusing connection."; exit 1
+          fi
+
+      - name: Prepare ephemeral SSH client
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends sshpass
+
+      - name: Create non-root deploy user with public key
+        env:
+          SSHPASS: ${{ secrets.NETCUP_ROOT_BOOTSTRAP_PASSWORD }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$SSHPASS" ]]; then
+            echo "Missing NETCUP_ROOT_BOOTSTRAP_PASSWORD secret."; exit 1
+          fi
+          {
+            printf 'set -- %q\n' "$DEPLOY_PUBLIC_KEY"
+            sed '1{/^#!/d;}' infra/bootstrap/create_deploy_user.sh
+          } | sshpass -e ssh -T \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$RUNNER_TEMP/netcup_known_hosts" \
+              -o PreferredAuthentications=password \
+              -o PubkeyAuthentication=no \
+              -o NumberOfPasswordPrompts=1 \
+              -o ConnectTimeout=15 \
+              "root@$SERVER_IP" bash -s
+
+      - name: Verify non-root SSH access
+        env:
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "$DEPLOY_PRIVATE_KEY" ]]; then
+            echo "Missing AE_DEPLOY_PRIVATE_KEY secret."; exit 1
+          fi
+          umask 077
+          keyfile="$RUNNER_TEMP/ae-deploy-private"
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$keyfile"
+          chmod 0600 "$keyfile"
+          trap 'rm -f "$keyfile"' EXIT
+          derived_key="$(ssh-keygen -y -f "$keyfile" | awk '{print $1 " " $2}')"
+          requested_key="$(printf '%s\n' "$DEPLOY_PUBLIC_KEY" | awk '{print $1 " " $2}')"
+          if [[ "$derived_key" != "$requested_key" ]]; then
+            echo "Deploy key secret does not match supplied public key."; exit 1
+          fi
+          ssh -T -i "$keyfile" \
+              -o IdentitiesOnly=yes \
+              -o BatchMode=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$RUNNER_TEMP/netcup_known_hosts" \
+              -o ConnectTimeout=15 \
+              "ae-deploy@$SERVER_IP" 'test "$(id -un)" = "ae-deploy" && printf "Non-root deploy SSH: OK\n"'

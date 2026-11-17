@@ -1,3 +1,10 @@
+# 2026-11-17 — one-time automated Netcup bootstrap prepared (NOT RUN)
+
+- The owner authorized moving away from manual Netcup/Termius entry, and supplied the existing VPS root credentials as a screenshot. **Do not copy any password or private key into GitHub source, logs, docs, or tool output.**
+- Proposed one-time owner-gated GitHub Actions workflow: `.github/workflows/netcup-one-time-bootstrap.yml` on branch `stage4-2-unattended-bootstrap`, pending merge/CI. It connects via a one-time encrypted GitHub Action secret, verifies an already owner-confirmed SSH host fingerprint, creates **non-sudo** `ae-deploy` via `infra/bootstrap/create_deploy_user.sh`, and tests SSH with a separate deploy private-key Secret. Manual dispatch from `main` only and `github.actor == vl-ktk`; network restrictions may still block SSH.
+- **No encrypted secret has been saved yet; no SSH keypair has been generated; workflow not executed; VPS not modified.** UI GitHub Actions Secrets is accessible to owner account. Need creation of two Secrets `NETCUP_ROOT_BOOTSTRAP_PASSWORD` and `AE_DEPLOY_PRIVATE_KEY`, generate a deploy keypair, merge the workflow after checks, launch the one-time run and verify; remove temporary root bootstrap secret after success with the owner's confirmation.
+- Previous `main` SHA at branch creation: `ab9383afdb53dfd5ecbe5aef08a8c9bdf41dd5f9`. Rollback: revert new bootstrap workflow (no production deployment). Last known Netcup guest state: unmodified.
+
 # HANDOFF — AI Agent Engine
 
 ## Stage 4.2 — stage 1 ACCEPTED; stage 2 bootstrap prepared (2026-11-17)
