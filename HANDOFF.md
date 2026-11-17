@@ -1,3 +1,11 @@
+# 2026-11-17 — Stage 4.2 / 6.2 live Netcup OOB preflight BLOCKED (no firewall changes)
+
+- **Checked in live Netcup SCP:** target VPS running, firewall enabled. `Firewall` still shows only provider default `netcup Mail block`, `netcup Ping allow`, and `Implicit Rules` with **ACCEPT ANY INCOMING / ACCEPT ANY OUTGOING**; no custom policy was added or attached, no `Save` or settings write performed.
+- **OOB console:** Netcup `Screen` opens and displays Debian GNU/Linux 13 tty1 interactive `login:` prompt. One owner-supplied root credential was attempted through the web console solely to verify fallback access and resulted in `Login incorrect`. This may be a credential or keyboard-entry issue; it does not prove the real password is changed or invalid. No further guesses, no password resets, no root setting changes. Accordingly **functioning authenticated out-of-band access is not established**.
+- **Result:** Stage 6.2 must remain `OFFLINE PREPARED / LIVE HOLD`. DO NOT attach a custom ingress policy: if it blocks new SSH, there is no validated emergency root console session. Effective `sshd -T`, root/password auth policy and guest nftables remain unverified. GitHub Actions read-only SSH check from stage 6.1 previously succeeded, but not a substitute for privileged OOB fallback.
+- **Status/rollback:** No live firewall or guest changes, so no VPS rollback. Repo change adds only status/docs. Follow the design in `infra/firewall/NETCUP_SCP_ROLLOUT.md` when prerequisites and owner approval are satisfied.
+- **Next:** Owner may verify existing root console credential independently without sharing it in chat, or authorize another tested recovery path. Do not change the root password without explicit request. Until then, work on independent read-only/offline tasks; Stage 6.2 cannot be marked PASS.
+
 # 2026-11-17 — Stage 4.2 / 6.2 Netcup ingress firewall & SSH rollout OFFLINE PREPARED (LIVE HOLD)
 
 - **Сделано в источнике:** подготовлен безопасный draft `infra/firewall/NETCUP_SCP_ROLLOUT.md`; раздел 6.2 плана уточнён как OFFLINE PREPARED / LIVE HOLD. В документе Netcup policy proposal, TCP22 для стандартных GitHub Actions runners, проверка SSH/guest firewall, DNS/NTP/UDP, явные критерии STOP и откат через SCP.
