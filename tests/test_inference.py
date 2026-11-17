@@ -9,7 +9,7 @@ import unittest
 from urllib.error import HTTPError
 
 from ai_agent_engine import inference
-from ai_agent_engine.siwc import CredentialStore
+from ai_agent_engine.siwc import CredentialStore, RESOURCE, TOKEN_URL
 
 
 class FakeTransport:
@@ -82,6 +82,85 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://api.openai.com/v1/models")
         self.assertEqual(request.get_header("Authorization"), "Bearer super-secret-token")
         self.assertEqual(timeout, 20)
+
+    def test_nearly_expired_session_refreshes_before_model_catalog(self):
+        session = self.store.load_session()
+        session["expires_at"] = time.time() + 15
+        self.store.save_session(session)
+        replacement = json.dumps({
+            "access_token": "rotated-private-access",
+            "refresh_token": "rotated-private-refresh",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }).encode("utf-8")
+        transport = FakeTransport(replacement, MODEL_ROWS)
+
+        self.assertEqual(inference.list_models(self.store, opener=transport),
+                         [("gpt-test-1", "GPT test")])
+        self.assertEqual(len(transport.requests), 2)
+        refresh_request = transport.requests[0][0]
+        self.assertEqual(refresh_request.full_url, TOKEN_URL)
+        self.assertEqual(refresh_request.get_method(), "POST")
+        from urllib.parse import parse_qs
+        fields = parse_qs(refresh_request.data.decode("utf-8"))
+        self.assertEqual(fields["resource"], [RESOURCE])
+        self.assertEqual(fields["client_id"], ["oaiapp_test"])
+        self.assertNotIn("scope", fields)
+        model_request = transport.requests[1][0]
+        self.assertEqual(model_request.full_url, "https://api.openai.com/v1/models")
+        self.assertEqual(model_request.get_header("Authorization"),
+                         "Bearer rotated-private-access")
+        self.assertEqual(self.store.load_session()["refresh_token"],
+                         "rotated-private-refresh")
+
+    def test_nearly_expired_session_refreshes_once_before_full_model_probe(self):
+        session = self.store.load_session()
+        session["expires_at"] = time.time() + 15
+        self.store.save_session(session)
+        replacement = json.dumps({
+            "access_token": "rotated-private-access",
+            "refresh_token": "rotated-private-refresh",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }).encode("utf-8")
+        transport = FakeTransport(replacement, MODEL_ROWS, MODEL_ROWS, COMPLETE_STREAM)
+
+        slug, answer = inference.probe_first_model(self.store, opener=transport)
+        self.assertEqual((slug, answer), ("gpt-test-1", "Hello, world!"))
+        self.assertEqual(len(transport.requests), 4)
+        self.assertEqual(sum(req.full_url == TOKEN_URL for req, _ in transport.requests), 1)
+        for request, _ in transport.requests[1:]:
+            self.assertEqual(request.get_header("Authorization"),
+                             "Bearer rotated-private-access")
+
+    def test_failed_refresh_blocks_model_request_and_keeps_credentials(self):
+        session = self.store.load_session()
+        session["expires_at"] = time.time() - 10
+        self.store.save_session(session)
+        requests = []
+        def rejected_refresh(request, timeout):
+            requests.append(request)
+            raise HTTPError(request.full_url, 401, "private-provider-error", None, None)
+
+        with self.assertRaises(inference.InferenceError) as caught:
+            inference.request_answer("gpt-test-1", "hello", self.store,
+                                     opener=rejected_refresh)
+        self.assertIn("refresh", str(caught.exception))
+        self.assertNotIn("private-provider-error", str(caught.exception))
+        self.assertNotIn(session["refresh_token"], str(caught.exception))
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0].full_url, TOKEN_URL)
+        self.assertEqual(self.store.load_session(), session)
+
+    def test_unreadable_session_fails_without_any_model_request(self):
+        from unittest.mock import patch
+        from ai_agent_engine.siwc import AuthError
+        transport = FakeTransport(MODEL_ROWS)
+        with patch.object(self.store, "load_session",
+                          side_effect=AuthError("Credential record cannot be read")):
+            with self.assertRaisesRegex(inference.InferenceError, "cannot be accessed safely"):
+                inference.list_models(self.store, opener=transport)
+        self.assertEqual(transport.requests, [])
 
     def test_rejects_unlisted_model_before_inference(self):
         transport = FakeTransport(MODEL_ROWS)

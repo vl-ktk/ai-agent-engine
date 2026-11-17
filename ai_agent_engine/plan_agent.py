@@ -20,7 +20,7 @@ from urllib.request import urlopen
 from .api_errors import stream_plan_error
 from .core import Action, Agent, AgentResult, Message, ModelTurn, Tool
 from .inference import (
-    API_ORIGIN, MAX_STREAM_BYTES, InferenceError, _access_token,
+    API_ORIGIN, MAX_STREAM_BYTES, InferenceError, _fresh_access_token,
     _authorized_request, _open, list_models,
 )
 from .session_refresh import SessionRefreshError, refresh_if_needed
@@ -283,7 +283,9 @@ class OpenAIPlanModel:
             "store": False,
             "stream": True,
         }).encode("utf-8")
-        request = _authorized_request(API_ORIGIN + "/responses", _access_token(self.store), data=body)
+        request = _authorized_request(API_ORIGIN + "/responses",
+                                      _fresh_access_token(self.store, opener=self.opener),
+                                      data=body)
         self.requests_sent += 1
         try:
             with _open(request, opener=self.opener, timeout=90) as response:
