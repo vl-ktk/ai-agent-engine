@@ -1,3 +1,11 @@
+# 2026-11-17 — Stage 4.2 / 6.2 COMPLETE: SSH IPv4-only, fresh Ansible PASS
+
+- **Owner authorization:** разрешил отключить входящий SSH по IPv6 и продолжить; не менять работу всего IPv6. `ssh.socket` inactive / `ssh.service` active. Ранее `sshd -T` адреса: any, [::]:22 и 0.0.0.0:22.
+- **Live VPS change:** резервная копия `/root/ssh-hardening-backup.conf`; в `/etc/ssh/sshd_config.d/00-hardening.conf` добавлена `AddressFamily inet` к существующим четырём правилам, root SSH/password disabled, pubkey enabled. `sshd -t` и `sshd -T` PASS, `systemctl reload ssh` SUCCESS, `ss -ltn` = TCP 0.0.0.0:22 only. IPv6 SSH listener отсутствует, IPv6 networking/NTP не изменялись, пароли и firewall неизменны.
+- **Fresh remote proof:** [read-only Ansible #44134072220 attempt 2](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44134072220), SUCCESS `ok=1 changed=0 unreachable=0 failed=0` after SSH change. Предыдущий IPv6 test не показал доступность из-за отсутствующего route GitHub runner, теперь IPv6 SSH сознательно не нужен.
+- **Stage 6.2:** принят и закрыт для IPv4-only SSH; firewall policy остаётся привязанной. Следующий утверждённый пункт — **6.3** (сервисные пользователи, каталоги, systemd, журналы, мониторинг), изменения прав/пакетов только после конкретной санкции владельца.
+- **Rollback:** через доступный Netcup SCP Screen вернуть `/root/ssh-hardening-backup.conf` на место конфигурации и выполнить `sshd -t` + reload, затем проверить слушатели и новый SSH. Rollback не выполнялся. Источник истины `vl-ktk/ai-agent-engine`, старый main перед фиксацией `9f92fb2cc14af06d0554da00ae239fe50f0897c9`.
+
 # 2026-11-17 — Stage 4.2 / 6.2 external IPv4 closed-port and SSH Match PASS; IPv6 route unavailable
 
 - **Netcup OOB root console (read-only):** `/etc/ssh/sshd_config*` содержит ноль активных блоков `Match`; `sshd -T -C` для `root` и `ae-deploy` с условным peer `::1` показал rootlogin=no, passwordauthentication=no, kbdinteractiveauthentication=no, pubkeyauthentication=yes. **SSH effective policy PASS**, не реальный IPv6 SSH-сеанс.
