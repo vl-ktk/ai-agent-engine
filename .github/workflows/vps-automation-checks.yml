@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   ansible-offline:
-    name: Ansible inventory and playbook syntax
+    name: Ansible inventory, syntax and local check-mode
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -50,8 +50,10 @@ jobs:
         run: |
           grep -Fqx 'ExecStart=@ENGINE_EXEC_START@' infra/systemd/ae-controller.service.template
           grep -Fqx 'User=ae-runtime' infra/systemd/ae-controller.service.template
-      - name: Validate inventory without connecting
+      - name: Validate example inventory without connecting
         run: ansible-inventory -i infra/ansible/inventory.example.yml --list
+      - name: Validate offline-only localhost inventory
+        run: ansible-inventory -i infra/ansible/inventory.offline-ci.yml --list
       - name: Validate playbook syntax without connecting
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/verify.yml
       - name: Validate Debian 13 baseline syntax without connecting
@@ -60,3 +62,5 @@ jobs:
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/read-only-access-audit.yml
       - name: Validate read-only system audit syntax without connecting
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/read-only-system-audit.yml
+      - name: Exercise Ansible check-mode against localhost only (not VPS)
+        run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --check --diff -i infra/ansible/inventory.offline-ci.yml infra/ansible/verify.yml
