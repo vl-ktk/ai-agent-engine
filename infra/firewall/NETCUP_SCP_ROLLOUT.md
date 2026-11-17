@@ -1,6 +1,6 @@
 # Stage 4.2 / 6.2 — Netcup SCP Firewall и SSH: журнал внедрения
 
-**Фактический статус на 2026-11-17: LIVE APPLIED; новый SSH IPv4 PASS; DNS/NTP/IPv6/negative tests пока не проверены.** Первоначальный preflight-план ниже сохранён как исторический документ. Его старые утверждения об отсутствии политики не описывают текущее состояние.
+**Фактический статус на 2026-11-17: LIVE APPLIED; новый SSH IPv4 PASS; DNS и прямой UDP/NTP тест PASS; IPv6/negative/SSH Match tests пока не проверены.** Первоначальный preflight-план ниже сохранён как исторический документ. Его старые утверждения об отсутствии политики не описывают текущее состояние.
 
 ## Применённые изменения
 
@@ -11,6 +11,14 @@
 5. После firewall: новое соединение SSH IPv4 и read-only Ansible ping [#44134072220](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44134072220): **SUCCESS, 31 секунда**. Это новая TCP-сессия после изменения, а не существовавшее соединение.
 6. Сетевой интерфейс eth0 имеет статические IPv4 62.83.131.128/22 и IPv6 в сети 2a03:4000:19:1ea0::/64 по /etc/network/interfaces.d/50-cloud-init.cfg; DHCP не используется в текущем конфиге. До firewall DNS Netcup и NTP были синхронизированы.
 
+## Проверка DNS/NTP после назначения Netcup firewall (2026-11-17)
+
+- Root Out-of-Band console Netcup SCP Screen, Debian 13 VPS; никаких изменений конфигурации/сервисов.
+- DNS: `getent hosts debian.org` вернул адреса, включая `2a04:4e42::644`; PASS.
+- Время: `timedatectl show -p NTP -p NTPSynchronized` → `NTP=yes`, `NTPSynchronized=yes`; `timedatectl timesync-status` → сервер `2a01:b2e0:2::61`, stratum 2, packet count 9, offset +16.528ms, состояние leap normal.
+- Свежий UDP NTP ответ: через стандартный `python3` без установки пакетов отправлен пакет на `0.debian.pool.ntp.org`/UDP 123; новый ответ: длина 48, mode 4 (server), stratum 2. **PASS реального UDP return трафика при действующем firewall.** Сама systemd-timesyncd не перезапускалась, момент нового автоматического цикла не отслеживался.
+- Остались отдельными пунктами: SSH по IPv6 (если используем), отрицательная проверка закрытого порта, effective SSH Match/source-specific анализ. **Этап 6.2 не закрыт**.
+
 ## Контрольный список
 
 - [x] Конкретное согласие владельца на firewall.
@@ -18,8 +26,8 @@
 - [x] Новый SSH key-only IPv4 до и после применения.
 - [x] Сохранённая policy видна после обновления страницы; implicit IN DROP / OUT ACCEPT.
 - [x] Штатные Netcup Mail/Ping сохранены; нет дополнительного EGRESS правила.
-- [ ] DNS **после** изменения проверить отдельно; до изменения был PASS.
-- [ ] **Новая** NTP синхронизация после изменения; правило source UDP123 присутствует, но трафик не подтверждён отдельно.
+- [x] DNS **после** изменения: `getent hosts debian.org` вернул IPv6-адреса; запрос к `0.debian.pool.ntp.org` дополнительно подтвердил разрешение IPv4 A-записи для NTP.
+- [x] **Свежий NTP UDP-обмен после firewall:** read-only Python socket отправил 48-байтный UDP NTP-запрос на `0.debian.pool.ntp.org:123`; получен новый ответ 48 байт, NTP mode=4, stratum=2. `timedatectl show -p NTP -p NTPSynchronized`: NTP=yes / NTPSynchronized=yes; `timedatectl timesync-status`: stratum 2, 9 пакетов, сервер Debian pool. Не проводились restart/forced resync сервиса; подтверждён сетевой NTP-обмен, а не отдельный запуск новой синхронизации системной службы.
 - [ ] Вход SSH по IPv6 при необходимости, поскольку GitHub Actions тестировал IPv4.
 - [ ] Отрицательный внешний тест заведомо закрытого TCP-порта, без сканирования чужих серверов.
 - [ ] Проверка SSH Match/source-specific правил.
