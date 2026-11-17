@@ -1,3 +1,13 @@
+# 2026-11-17 — Stage 4.2 / 6.3 OFFLINE PREPARED, single human owner
+
+- **Owner clarification:** only Vlad will be a human user of AI Agent Engine. `ae-deploy` and proposed `ae-runtime` are Linux process identities, not product accounts; no new people, registration or tenant logic.
+- **Live read-only VPS audit:** `ae-deploy` UID 1000 exists; `ae-runtime` absent; `/home/ae-deploy/ai-agent-engine-runtime` and `/releases` mode 0700; no `ae-*` systemd units; no failed units; journald uses 24 MiB. No Linux user, permission, service, journal config, secret, port or firewall was modified during 6.3.
+- **Repo files prepared:** `infra/bootstrap/prepare_runtime_identity.sh` (guarded no-login runtime identity and private state directories); `infra/systemd/ae-controller.service.template` (unactivated and with unresolved entrypoint); `infra/systemd/journald-limit.conf.example` (unapplied, global); `infra/systemd/STAGE63.md` (facts and runbook). Offline CI checks shell syntax and template guard.
+- **Important blocker:** `python -m ai_agent_engine` is an offline demo using `TemporaryDirectory`, not a persistent controller. Do not activate a systemd service for it. Stage 6.3 remains OPEN until owner approves the security/ownership changes and a real long-running controller is implemented, installed and verified.
+- **Authority:** User's instructions require explicit separate permission for Linux user/ACL changes, journald changes, service activation and production deployment. GitHub source only is edited; Netcup production/OS unchanged under 6.3.
+- **Rollback:** no live 6.3 changes to undo; source can be reverted by the new PR. Previous verified main before this preparation: `22801dee057c5f4440dd92b9324a54f7c9fc29a2`. Stage 6.2 remains CLOSED, IPv4-only SSH verified.
+- **Next:** get owner consent for guarded account and directory preparation, run live checks via OOB console with rollback preflight, and defer service activation until actual daemon entrypoint exists.
+
 # 2026-11-17 — Stage 4.2 / 6.2 COMPLETE: SSH IPv4-only, fresh Ansible PASS
 
 - **Owner authorization:** разрешил отключить входящий SSH по IPv6 и продолжить; не менять работу всего IPv6. `ssh.socket` inactive / `ssh.service` active. Ранее `sshd -T` адреса: any, [::]:22 и 0.0.0.0:22.
