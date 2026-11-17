@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/vps-automation-checks.yml'
       - 'infra/ansible/**'
+      - '.github/workflows/netcup-readonly-system-audit.yml'
       - 'infra/bootstrap/**'
       - 'STAGE4_2_AUTOMATION_PLAN.md'
   push:
@@ -13,6 +14,7 @@ on:
     paths:
       - '.github/workflows/vps-automation-checks.yml'
       - 'infra/ansible/**'
+      - '.github/workflows/netcup-readonly-system-audit.yml'
       - 'infra/bootstrap/**'
       - 'STAGE4_2_AUTOMATION_PLAN.md'
   workflow_dispatch:
@@ -48,3 +50,5 @@ jobs:
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/debian13-user-baseline.yml
       - name: Validate read-only access audit syntax without connecting
         run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/read-only-access-audit.yml
+      - name: Validate read-only system audit syntax without connecting
+        run: ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook --syntax-check -i infra/ansible/inventory.example.yml infra/ansible/read-only-system-audit.yml
