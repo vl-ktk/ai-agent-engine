@@ -1,6 +1,9 @@
 name: Netcup one-time deploy access bootstrap
 
-# Owner-triggered only. A password never appears in the repository, inputs, or logs.
+# RETIRED after stage 6.2: root/password SSH is disabled on the actual VPS.
+# Historical bootstrap is preserved for audit only; the job is permanently skipped.
+# Re-enabling requires a separate owner-approved source change and security review.
+# A password never appears in the repository, inputs, or logs.
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +29,7 @@ concurrency:
 
 jobs:
   create-deploy-user:
-    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'BOOTSTRAP' }}
+    if: ${{ false && github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'BOOTSTRAP' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
