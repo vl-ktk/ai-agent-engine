@@ -1,5 +1,7 @@
 # Stage 4.2 / 7.2 — immutable release preparation (NO live deployment)
 
+**Актуализация исходника 17.11.2026:** добавлен проверяемый runtime lifecycle controller и отдельный **ручной**, никогда автоматически не вызываемый promotion helper; см. [`../deploy/README.md`](../deploy/README.md). Исторические пункты ниже относятся к исходнику **до** изменения. Статус живого релиза **по-прежнему BLOCKED**: owner-triggered GitHub release-preparation ещё не проверен вживую, настройки прав/резервного административного доступа не приняты полностью, реальная установка/запуск/rollback на Netcup требуют отдельного согласия. Никаких production/VPS изменений эта запись не означает.
+
 **Owner:** Vlad, one human. **Source of truth:** `vl-ktk/ai-agent-engine` main.
 **Status:** release-preparation source and offline tests prepared; **real controller
 activation and live release are BLOCKED**, because there is no long-running

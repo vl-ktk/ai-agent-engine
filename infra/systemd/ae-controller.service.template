@@ -1,6 +1,6 @@
-# Stage 4.2 / 6.3: NOT A RUNNABLE UNIT until a real daemon exists.
-# Replace @ENGINE_EXEC_START@ only after controller runtime entrypoint is implemented.
-# Install only by separate owner approval; never auto-enable from CI.
+# Stage 4.2: source-only unit; NEVER install/enable without separate owner approval.
+# Requires a verified release in /opt/ai-agent-engine/current/venv.
+# Controller currently manages lifecycle/health only (no task orchestration yet).
 [Unit]
 Description=AI Agent Engine controller (single-owner)
 After=network-online.target
@@ -9,11 +9,15 @@ StartLimitIntervalSec=60
 StartLimitBurst=3
 
 [Service]
-Type=exec
+Type=notify
+NotifyAccess=main
+WatchdogSec=30s
+TimeoutStartSec=30s
 User=ae-runtime
 Group=ae-runtime
 WorkingDirectory=/opt/ai-agent-engine/current
-ExecStart=@ENGINE_EXEC_START@
+ExecStart=/opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller run --interval 5
+ExecStartPost=/opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller check --max-age 15
 Restart=on-failure
 RestartSec=5
 UMask=0077
@@ -33,6 +37,7 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictSUIDSGID=yes
 LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX
 StandardOutput=journal
 StandardError=journal
 LogRateLimitIntervalSec=30s

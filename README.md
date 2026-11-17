@@ -17,9 +17,19 @@ for autonomous production deployment. The agent rejects non-string/blank or
 oversized final responses and rejects prompts above 65,536 characters before
 invoking a model; both behaviors are covered by offline regression tests.
 
-**Stage 4.1:** [controller VPS selection review](./STAGE4_VPS_SELECTION.md)
-is a recommendation awaiting owner approval and Stage 1 VM gates. No server
-has been purchased, configured, or deployed.
+**Stage 4.1:** [controller VPS selection review](./STAGE4_VPS_SELECTION.md).
+The owner has since accepted the existing Netcup VPS; key-only SSH, host
+firewall and limited host monitoring were previously confirmed live. This
+does **not** mean the engine controller has been deployed.
+
+**Stage 4.2 (in progress):** Source version `0.3.8a0` adds a real persistent
+**lifecycle** process (`python -m ai_agent_engine.controller run`) with a
+private heartbeat and systemd watchdog support, plus offline-verified
+immutable release staging and manual promotion/rollback code. See the
+[release operations runbook](./infra/deploy/README.md). No model task queue,
+agent orchestration, controller service installation or live Netcup
+application release is claimed. Those require further work and explicit
+owner permission before production changes.
 
 ## What works in the prototype
 
