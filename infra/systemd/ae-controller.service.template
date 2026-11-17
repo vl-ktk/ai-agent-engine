@@ -1,6 +1,6 @@
-# Stage 4.2 / 6.3: NOT A RUNNABLE UNIT until a real daemon exists.
-# Replace @ENGINE_EXEC_START@ only after controller runtime entrypoint is implemented.
-# Install only by separate owner approval; never auto-enable from CI.
+# Stage 4.2 / 6.3: concrete controller executable, NOT INSTALLED on VPS.
+# Requires approved immutable wheel in /opt/ai-agent-engine/current/venv first.
+# Install/enable only with separate owner approval; no automatic CI deployment.
 [Unit]
 Description=AI Agent Engine controller (single-owner)
 After=network-online.target
@@ -13,9 +13,10 @@ Type=exec
 User=ae-runtime
 Group=ae-runtime
 WorkingDirectory=/opt/ai-agent-engine/current
-ExecStart=@ENGINE_EXEC_START@
+ExecStart=/opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller serve --state-dir /var/lib/ai-agent-engine
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=15
 UMask=0077
 StateDirectory=ai-agent-engine
 StateDirectoryMode=0700
