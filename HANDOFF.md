@@ -1,3 +1,12 @@
+# 2026-11-17 — Stage 4.2 / 6.2 OOB login PASS, SSH risk verified; no settings modified
+
+- **Correction to historical block below:** Netcup SCP Screen root login **PASSED** after reading the screenshot accurately. Prior Login incorrect was our mistaken uppercase Latin I/lowercase l input. User password remains valid and unchanged. After read-only checks we logged out to the Debian tty1 login prompt.
+- **Effective basic SSH configuration:** sshd -T (root) returned port 22, permitrootlogin yes, passwordauthentication yes, pubkeyauthentication yes, kbdinteractiveauthentication no, authenticationmethods any, usepam yes. SSH therefore permits password/root under its basic effective configuration; Match conditions for individual remote source IPs have not been exhaustively tested. This is NOT a hardened SSH policy.
+- **Guest networking:** root command nft list ruleset returned no rules. Current resolv.conf lists Netcup DNS IPv4/IPv6; NTP=yes, NTPSynchronized=yes, timesync-status peer from Debian pool over IPv6. Current Netcup upstream firewall remains implicit ACCEPT ANY INCOMING/OUTGOING plus Mail Block and Ping Allow. Future UDP return traffic under custom INGRESS needs separate verification.
+- **No mutation:** No firewall policy created/assigned, no SSHD/systemd/sudo/password or secret changed, no VPS restart and no GitHub secret used. One successful root login and read-only diagnostics were performed; logged out.
+- **Next:** Stage 6.2 still OPEN: owner must separately authorize changing SSH access settings (can disable root/password SSH while retaining unchanged root console password) and applying SCP firewall. Verify new key-based GitHub SSH connections, console rollback path, UDP and health before declaring PASS.
+- **Rollback:** VPS unchanged; no VPS rollback needed. Previous blocked note below is historical, superseded by this live PASS.
+
 # 2026-11-17 — Stage 4.2 / 6.2 live Netcup OOB preflight BLOCKED (no firewall changes)
 
 - **Checked in live Netcup SCP:** target VPS running, firewall enabled. `Firewall` still shows only provider default `netcup Mail block`, `netcup Ping allow`, and `Implicit Rules` with **ACCEPT ANY INCOMING / ACCEPT ANY OUTGOING**; no custom policy was added or attached, no `Save` or settings write performed.
