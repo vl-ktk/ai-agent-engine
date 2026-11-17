@@ -1,4 +1,4 @@
-# 2026-11-17 — Stage 4.2 / 6.2.1 DNS + NTP UDP LIVE PASS, firewall unchanged
+# 2026-11-17 — Stage 4.2 / 6.2 DNS + NTP UDP LIVE PASS, firewall unchanged
 
 - **Источник:** `vl-ktk/ai-agent-engine`, `main`; результаты внесены в `STAGE4_2_AUTOMATION_PLAN.md` и `infra/firewall/NETCUP_SCP_ROLLOUT.md`.
 - **Live Netcup OOB Screen VPS:** `getent hosts debian.org` разрешил адреса (DNS PASS). `timedatectl show -p NTP -p NTPSynchronized` → `NTP=yes`, `NTPSynchronized=yes`; timesync-status: сервер Debian pool, stratum 2, packet count 9. Отдельный новый UDP запрос Python `socket` на `0.debian.pool.ntp.org:123` получил 48 байт / mode 4 (server) / stratum 2 — **реальный ответ UDP NTP после firewall PASS**. Новая автоматическая синхронизация службы не принуждалась.
