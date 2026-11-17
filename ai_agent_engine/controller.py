@@ -7,8 +7,7 @@ model routing, paid calls, general shell and network actions are NOT enabled.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
-from datetime import datetime, timezone
+from contextlib import closing, contextmanager
 import json
 import os
 from pathlib import Path
@@ -73,8 +72,11 @@ class ControllerStore:
     def connect(self) -> sqlite3.Connection:
         if self.database.is_symlink():
             raise ControllerError("Database path cannot be a symlink")
-        if self.database.exists() and not self.database.is_file():
-            raise ControllerError("Database path must be a regular file")
+        if self.database.exists():
+            if not self.database.is_file():
+                raise ControllerError("Database path must be a regular file")
+            if os.name == "posix" and self.database.stat().st_mode & 0o077:
+                raise ControllerError("Database permissions are not private")
         old_umask = os.umask(0o077)
         try:
             conn = sqlite3.connect(str(self.database), timeout=5, isolation_level=None)
@@ -241,7 +243,7 @@ def run_core_self_test() -> bool:
 def serve(store: ControllerStore, *, poll: float, once: bool = False) -> None:
     if os.name == "posix" and os.geteuid() == 0:
         raise ControllerError("Controller must never run as root")
-    if not 0.05 <= poll <= 60:
+    if not 0.05 <= poll <= LEASE_SECONDS / 3:
         raise ControllerError("Poll interval out of range")
     stop = Event()
     if not once:
@@ -297,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
             serve(store, poll=args.poll_interval if args.command == "serve" else 0.1,
                   once=args.command == "run-once")
         elif args.command == "enqueue":
-            with store.connect() as conn:
+            with closing(store.connect()) as conn:
                 job_id = store.enqueue(conn, args.kind, args.idempotency_key)
             print(json.dumps({"job_id": job_id, "queued": True}))
         else:
