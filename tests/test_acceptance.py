@@ -27,6 +27,11 @@ def grant():
     }
 
 
+STATUS = {"loggedIn": True, "authMethod": "claude.ai",
+          "apiProvider": "firstParty", "subscriptionType": "pro",
+          "email": "PRIVATE@example.invalid"}
+
+
 def cli_reply(payload, *, returncode=0, stderr=b""):
     return subprocess.CompletedProcess(
         args=["claude"], returncode=returncode,
@@ -76,9 +81,9 @@ class AcceptanceTests(unittest.TestCase):
 
     @patch.object(acceptance.shutil, "which", return_value="/usr/local/bin/claude")
     @patch.object(acceptance.subprocess, "run")
-    def test_probe_text_only_one_turn_no_mcp(self, runner, which):
+    def test_probe_text_only_no_bare_no_tools_no_mcp(self, runner, which):
         runner.side_effect = [
-            cli_reply({"authMethod": "claude.ai"}),
+            cli_reply(STATUS),
             cli_reply({
                 "type": "result", "subtype": "success",
                 "is_error": False, "result": "Hello, world!\n",
@@ -87,16 +92,47 @@ class AcceptanceTests(unittest.TestCase):
         acceptance.probe_claude(env={})
         self.assertEqual(runner.call_count, 2)
         cmd = runner.call_args.args[0]
-        self.assertIn("--bare", cmd)
+        # --bare never reads OAuth (official CLI help) and would need an API key.
+        self.assertNotIn("--bare", cmd)
         self.assertIn("--no-session-persistence", cmd)
-        self.assertIn("--max-turns", cmd)
-        self.assertEqual(cmd[cmd.index("--max-turns") + 1], "1")
+        self.assertIn("--strict-mcp-config", cmd)
         self.assertEqual(cmd[cmd.index("--tools") + 1], "")
-        self.assertEqual(cmd[cmd.index("--disallowedTools") + 1], "*")
         self.assertIn("--no-chrome", cmd)
         self.assertEqual(cmd[cmd.index("--output-format") + 1], "json")
         self.assertEqual(cmd[cmd.index("--permission-mode") + 1], "plan")
         self.assertIsNotNone(runner.call_args.kwargs["cwd"])
+
+    @patch.object(acceptance.shutil, "which", return_value="/usr/local/bin/claude")
+    @patch.object(acceptance.subprocess, "run")
+    def test_child_env_drops_parent_claude_session_vars(self, runner, which):
+        runner.return_value = cli_reply(STATUS)
+        acceptance.check_claude(env={"PATH": "/usr/bin", "CLAUDE_CODE_SESSION_ID": "x",
+                                     "CLAUDE_CODE_MESSAGING_TOKEN": "private", "CLAUDECODE": "1"})
+        child = runner.call_args.kwargs["env"]
+        self.assertEqual(child, {"PATH": "/usr/bin"})
+
+    def test_subscription_must_be_personal_first_party(self):
+        self.assertEqual(acceptance.check_claude_subscription(STATUS), "pro")
+        for bad in ({"authMethod": "claude.ai"},
+                    dict(STATUS, subscriptionType="enterprise"),
+                    dict(STATUS, apiProvider="bedrock")):
+            with self.subTest(bad=bad):
+                with self.assertRaises(acceptance.AcceptanceError):
+                    acceptance.check_claude_subscription(bad)
+
+    @patch.object(acceptance.shutil, "which", return_value="/usr/local/bin/claude")
+    @patch.object(acceptance.subprocess, "run")
+    def test_cli_error_reports_only_safe_metadata(self, runner, which):
+        runner.return_value = cli_reply({
+            "type": "result", "subtype": "error_during_execution", "is_error": True,
+            "api_error_status": 429, "result": "PRIVATE provider text",
+        }, returncode=1, stderr=b"PRIVATE stderr")
+        with self.assertRaises(acceptance.AcceptanceError) as ctx:
+            acceptance._run_claude(["-p", "x"], env={})
+        message = str(ctx.exception)
+        self.assertIn("api_error_status=429", message)
+        self.assertIn("subtype=error_during_execution", message)
+        self.assertNotIn("PRIVATE", message)
 
     @patch.object(acceptance.shutil, "which", return_value="/usr/local/bin/claude")
     @patch.object(acceptance.subprocess, "run")
@@ -109,7 +145,7 @@ class AcceptanceTests(unittest.TestCase):
         ):
             with self.subTest(payload=payload):
                 runner.side_effect = [
-                    cli_reply({"authMethod": "claude.ai"}),
+                    cli_reply(STATUS),
                     cli_reply(payload),
                 ]
                 with self.assertRaises(acceptance.AcceptanceError):
@@ -160,45 +196,6 @@ class AcceptanceTests(unittest.TestCase):
         with self.assertRaises(acceptance.AcceptanceError):
             acceptance.check_claude(env={})
         runner.assert_called_once()
-
-    @patch.object(acceptance, "probe_claude")
-    @patch.object(acceptance, "run_one_click")
-    @patch.object(acceptance, "check_claude")
-    @patch.object(acceptance, "check_gpt")
-    @patch.object(acceptance, "CredentialStore")
-    def test_live_preflights_before_provider_call(self, store, gpt, claude, run, probe):
-        run.return_value = ("gpt-test", object(), True, None)
-        with redirect_stdout(io.StringIO()):
-            acceptance.run_live()
-        self.assertEqual(run.call_count, 1)
-        self.assertEqual(probe.call_count, 1)
-        gpt.assert_called_once()
-        claude.assert_called_once()
-        run.assert_called_once()
-        probe.assert_called_once()
-
-    @patch.object(acceptance, "probe_claude")
-    @patch.object(acceptance, "run_one_click")
-    @patch.object(acceptance, "check_claude", side_effect=acceptance.AcceptanceError("not signed in"))
-    @patch.object(acceptance, "check_gpt")
-    @patch.object(acceptance, "CredentialStore")
-    def test_auth_failure_prevents_live_requests(self, store, gpt, claude, run, probe):
-        with self.assertRaises(acceptance.AcceptanceError):
-            acceptance.run_live()
-        run.assert_not_called()
-        probe.assert_not_called()
-
-    @patch.object(acceptance, "probe_claude")
-    @patch.object(acceptance, "run_one_click")
-    @patch.object(acceptance, "check_claude")
-    @patch.object(acceptance, "check_gpt")
-    @patch.object(acceptance, "CredentialStore")
-    def test_gpt_failure_prevents_claude_request(self, store, gpt, claude, run, probe):
-        run.return_value = ("gpt-test", object(), False, "bounded failure")
-        with self.assertRaises(acceptance.AcceptanceError):
-            acceptance.run_live()
-        probe.assert_not_called()
-
 
     def test_owner_has_one_explicit_combined_live_vscode_task(self):
         """One click later; no background/CI-triggered model request."""

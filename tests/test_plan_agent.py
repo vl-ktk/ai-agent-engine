@@ -132,12 +132,15 @@ class AgentToolsTests(unittest.TestCase):
         self.assertIn("unauthorized", err)
         self.assertEqual(len(transport.requests), 2)
 
-    def test_multiple_tools_in_one_response_fail_closed(self):
-        transport = FakeTransport(catalog(), completed(WRITE, READ))
-        _, result, passed, err = plan_agent.run_one_click(self.store, opener=transport)
-        self.assertEqual(result.status, "failed")
-        self.assertFalse(passed)
-        self.assertIn("multiple", err)
+    def test_multiple_tools_in_one_response_are_queued_without_extra_request(self):
+        transport = FakeTransport(catalog(), completed(WRITE, READ), completed(FINISH))
+        _, report, passed, err = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertTrue(passed, plan_agent.describe(report))
+        self.assertIsNone(err)
+        self.assertEqual(report.requests_sent, 2)
+        last = json.loads(transport.requests[-1][0].data)["input"]
+        outputs = [i for i in last if i.get("type") == "function_call_output"]
+        self.assertEqual([o["call_id"] for o in outputs], ["call_write_01", "call_read_01"])
 
     def test_unfinished_stream_fails_and_does_not_write(self):
         transport = FakeTransport(catalog(), b'data: {"type":"response.created"}\n\n')
@@ -194,6 +197,102 @@ class AgentToolsTests(unittest.TestCase):
     def test_only_known_function_schemas_can_be_exposed(self):
         with self.assertRaises(InferenceError):
             plan_agent._tool_names(("run_shell",))
+
+
+    def test_trailing_period_in_content_is_reported_as_mismatch(self):
+        wrong = tool_call("sandbox.write_new_file", {
+            "path": plan_agent.FILE_NAME, "content": plan_agent.FILE_CONTENT + ".",
+        }, "call_w")
+        transport = FakeTransport(catalog(), completed(wrong), completed(READ), completed(FINISH))
+        _, report, passed, err = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertFalse(passed)
+        self.assertIsNone(err)
+        self.assertTrue(report.write_executed)
+        self.assertFalse(report.write_content_ok)
+        self.assertTrue(report.file_exists)
+        self.assertFalse(report.file_content_ok)
+        self.assertFalse(report.read_output_ok)
+        self.assertEqual(report.status, "done")
+
+    def test_tool_rejection_reason_is_recorded_safely(self):
+        dotted = tool_call("write_new_file", {
+            "path": "./" + plan_agent.FILE_NAME, "content": plan_agent.FILE_CONTENT,
+        }, "call_dot")
+        transport = FakeTransport(catalog(), completed(dotted))
+        _, report, passed, _ = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertFalse(passed)
+        self.assertEqual(report.status, "failed")
+        self.assertEqual(report.tool_errors, ["write_new_file: path escapes sandbox"])
+        self.assertFalse(report.write_path_ok)
+        self.assertIn("tool_error:write_new_file", report.audit)
+
+    def test_no_tool_call_is_reported(self):
+        transport = FakeTransport(catalog(), completed(FINISH))
+        _, report, passed, _ = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertFalse(passed)
+        self.assertEqual(report.requested_tools, [])
+        self.assertFalse(report.write_executed)
+        self.assertTrue(report.final_answer)
+
+    def test_replay_drops_reasoning_and_server_ids(self):
+        reasoning = {"type": "reasoning", "id": "rs_1", "summary": []}
+        write = dict(WRITE, id="fc_1", status="completed")
+        transport = FakeTransport(catalog(), completed(reasoning, write),
+                                  completed(READ), completed(FINISH))
+        _, report, passed, _ = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertTrue(passed)
+        second = json.loads(transport.requests[2][0].data)["input"]
+        self.assertFalse(any(i.get("type") == "reasoning" for i in second))
+        self.assertFalse(any("id" in i or "status" in i for i in second))
+
+    def test_request_cap_stops_looping_model(self):
+        reads = [completed(tool_call("read_file", {"path": "missing.txt"}, "c%d" % n))
+                 for n in range(10)]
+        missing_ok = tool_call("write_new_file", {"path": "missing.txt", "content": "x"}, "c_w")
+        transport = FakeTransport(catalog(), completed(missing_ok), *reads)
+        _, report, passed, err = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertFalse(passed)
+        self.assertLessEqual(report.requests_sent, plan_agent.MAX_TOOL_REQUESTS)
+        self.assertLessEqual(len(transport.requests) - 1, plan_agent.MAX_TOOL_REQUESTS)
+
+    def test_unexpected_exception_is_reported_by_class_only(self):
+        import http.client
+
+        class Broken:
+            def __iter__(self):
+                raise http.client.IncompleteRead(b"secret-partial")
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                return False
+
+        calls = [catalog()]
+        def opener(request, timeout):
+            return BytesIO(calls.pop(0)) if calls else Broken()
+        _, report, passed, err = plan_agent.run_one_click(self.store, opener=opener)
+        self.assertFalse(passed)
+        self.assertIn("interrupted", err)
+        self.assertNotIn("secret-partial", err)
+
+        calls2 = [catalog()]
+        def opener2(request, timeout):
+            if calls2:
+                return BytesIO(calls2.pop(0))
+            raise KeyError("private-session-access")
+        _, report, passed, err = plan_agent.run_one_click(self.store, opener=opener2)
+        self.assertEqual(err, "unexpected KeyError (details withheld)")
+        self.assertNotIn("private-session-access", " ".join(plan_agent.describe(report)))
+
+    def test_message_without_content_list_is_safe(self):
+        bad = {"type": "message", "role": "assistant", "content": None}
+        transport = FakeTransport(catalog(), completed(bad))
+        _, report, passed, err = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertFalse(passed)
+        self.assertIn("final agent answer", err)
+
+    def test_prompt_states_exact_content_unambiguously(self):
+        self.assertIn(json.dumps(plan_agent.FILE_CONTENT), plan_agent.TASK_PROMPT)
+        self.assertIn("no trailing period", plan_agent.TASK_PROMPT)
 
 
 if __name__ == "__main__":
