@@ -56,11 +56,15 @@ class PublicSourceScanTests(unittest.TestCase):
             root = Path(directory)
             (root / "large.txt").write_bytes(b"0" * 2_000_001)
             (root / "binary.txt").write_bytes(b"\xff")
+            (root / "null-byte.txt").write_bytes(b"valid UTF-8\x00but binary")
             (root / "alias.txt").symlink_to(Path(other) / "outside.txt")
-            findings = scan_files(root, ("large.txt", "binary.txt", "alias.txt", "../escape"))
+            findings = scan_files(root, (
+                "large.txt", "binary.txt", "null-byte.txt", "alias.txt", "../escape",
+            ))
             self.assertEqual(findings, (
                 ("large.txt", "oversized_public_file"),
                 ("binary.txt", "unreadable_or_binary_file"),
+                ("null-byte.txt", "unreadable_or_binary_file"),
                 ("alias.txt", "unsafe_tracked_file"),
                 ("../escape", "invalid_tracked_path"),
             ))

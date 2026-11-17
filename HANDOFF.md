@@ -1,12 +1,20 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 3.7 — audit and owner acceptance gate (2026-11-17)
+
+- **Source/rollback:** `vl-ktk/ai-agent-engine` `main` at `f0483fc18813884b907859614c6400cfd606a8fb` immediately before 3.7. Only this project; no production, other repositories or provider calls.
+- **Owner decision:** stage 3.6 accepted on 2026-11-17 after PR #18, PR CI 4/4 and final main CI 4/4; roadmap 3.6 marked `[x]`. Owner commissioned **3.7 only**.
+- **Audit:** see [STAGE3_ENGINE_AUDIT.md](./STAGE3_ENGINE_AUDIT.md), including explicit GO for synthetic offline prototype and NO-GO for autonomous production. Proven defects: final model answers could be empty/non-string while returning `done`, prompts were unbounded, and source scanner accepted NUL-containing files. Fixed in `core.py` and `scripts/check_public_source.py`; added integrated security regression `tests/test_engine_audit.py`, expanded scanner test; preview package version `0.3.7a0`.
+- **Checks:** baseline 168/168; 171/171 local synthetic tests PASS; compileall and source scanner PASS. Local wheel build / clean install and GitHub CI/merge records to follow. No real credentials, paid API, VM or deployed service used.
+- **Remaining:** formal stage 3.7 owner acceptance; later VM, orchestration, OS isolation, durable state, authorization, provider policy/quotas. **Do not mark 3.7 `[x]` or start global stage 4 without owner decision.**
+
 ## Stage 3.6 — package install, CI and safe public source (2026-11-17)
 
 - **Source/rollback baseline:** `vl-ktk/ai-agent-engine`, `main` at `1087d02986c2c22f4bfce478cba372f0ce9785aa` before this stage; all changes confined to AI Agent Engine.
 - **Owner decision:** 3.5 accepted on 2026-11-17 after PR #17 and CI 4/4 PASS, now marked `[x]` in the single roadmap. Owner authorized **only 3.6**. Do not start 3.7 without a new decision.
 - **Implementation:** package metadata pinned to `setuptools==84.2.1`, version `0.3.6a0`, zero required runtime dependencies and optional `[siwc]`; Linux/Windows CI adds tracked-file secret scan and installed-package smoke check from an external directory. `ModelRouter` handles provider adapter initialization errors with a fixed non-sensitive message. Auth status catches malformed/non-finite expiry without a traceback. New synthetic regression tests.
 - **Local validation:** baseline 161/161; new 168/168 offline unit tests PASS, compileall PASS, offline demo PASS, Git index scan PASS, `git diff --check` PASS. Built an offline wheel, installed in a fresh venv and ran demo outside checkout PASS. [PR #18](https://github.com/vl-ktk/ai-agent-engine/pull/18) MERGED into `main` as `c388d97e4ab1cd7ad5c158d6f2060dba6a631712` (branch code commit `8a78d9d44b3e2530c5c6da9777631b5bb99d103f`). [PR CI run 44068027837](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44068027837): **4/4 PASS** on Linux Python 3.11–3.13 and Windows Python 3.12, including install from source and smoke outside checkout. **Rollback to immediately previous `main`: `1087d02986c2c22f4bfce478cba372f0ce9785aa`.**
-- **Known limitations:** scanner rejects only known high-confidence secret patterns and forbidden file categories, not every possible credential; tests are synthetic. Optional SIWC dependency versions are ranged, not cryptographically locked. No live providers, personal secrets, VM, deployment, paid usage or other repositories touched. **3.6 awaits owner acceptance** and stays `[ ]`; stage 3.7 stays OPEN.
+- **Known limitations:** scanner rejects only known high-confidence secret patterns and forbidden file categories, not every possible credential; tests are synthetic. Optional SIWC dependency versions are ranged, not cryptographically locked. No live providers, personal secrets, VM, deployment, paid usage or other repositories touched. **Owner accepted 3.6 on 2026-11-17; now `[x]`.**
 
 ## Stage 3.5 — multi-provider model routing (2026-11-17)
 

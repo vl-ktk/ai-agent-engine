@@ -11,6 +11,12 @@ Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 **Phase 1.8 GO/NO-GO (2026-11-17):** [assessment and Stage 2 gates](./PHASE1_GO_NOGO.md).
 Offline architecture work may proceed; unattended VM or Claude Pro operation remains on hold pending live and policy checks.
 
+**Stage 3.7:** [technical engine audit and release boundaries](./STAGE3_ENGINE_AUDIT.md).
+The Python runtime is suitable for offline experimental development, **not**
+for autonomous production deployment. The agent rejects non-string/blank or
+oversized final responses and rejects prompts above 65,536 characters before
+invoking a model; both behaviors are covered by offline regression tests.
+
 ## What works in the prototype
 
 - Generic model interface and bounded model/tool interaction loop.

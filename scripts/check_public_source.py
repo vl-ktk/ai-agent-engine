@@ -79,6 +79,9 @@ def scan_files(root: Path, paths: tuple[str, ...]) -> tuple[tuple[str, str], ...
         except (OSError, UnicodeError):
             violations.append((name, "unreadable_or_binary_file"))
             continue
+        if b"\x00" in raw:
+            violations.append((name, "unreadable_or_binary_file"))
+            continue
         for rule, signature in _SIGNATURES:
             if signature.search(raw):
                 violations.append((name, rule))
