@@ -1,8 +1,42 @@
-# Stage 4.2 / 6.2 — Netcup SCP Firewall и SSH: проект безопасного внедрения
+# Stage 4.2 / 6.2 — Netcup SCP Firewall и SSH: журнал внедрения
+
+**Фактический статус на 2026-11-17: LIVE APPLIED; новый SSH IPv4 PASS; DNS/NTP/IPv6/negative tests пока не проверены.** Первоначальный preflight-план ниже сохранён как исторический документ. Его старые утверждения об отсутствии политики не описывают текущее состояние.
+
+## Применённые изменения
+
+1. По разрешению владельца создана конфигурация /etc/ssh/sshd_config.d/00-hardening.conf: PermitRootLogin no; PasswordAuthentication no; KbdInteractiveAuthentication no; PubkeyAuthentication yes. sshd -t и основные sshd -T значения PASS. systemctl reload ssh SUCCESS. Пароль root не изменялся; перезагрузки VPS не было.
+2. До Netcup firewall: новый SSH key-only вход для ae-deploy через GitHub-hosted runner и закреплённый host key, read-only Ansible ping [#44130562809](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44130562809): SUCCESS, 23 секунды.
+3. Создана и назначена **только VPS v2202611460959561466** политика Netcup с названием **AI Agent Engine VPS - SSH and NTP ingress**. Правило Allow SSH TCP22 = INCOMING TCP ACCEPT, source any, source port any, destination any, destination port 22. Правило Allow NTP UDP reply source123 = INCOMING UDP ACCEPT, source any, source port 123, destination any, destination port any. Пользовательских EGRESS правил нет; стандартные Mail block/Ping allow сохранены.
+4. Через Edit Policies → Apply → Save → OK политика применена. После повторной загрузки Netcup SCP показывает её на сервере, implicit **DROP ALL INCOMING** и **ACCEPT ALL OUTGOING**, без сообщения о несохранённых изменениях. Применение без перезагрузки.
+5. После firewall: новое соединение SSH IPv4 и read-only Ansible ping [#44134072220](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44134072220): **SUCCESS, 31 секунда**. Это новая TCP-сессия после изменения, а не существовавшее соединение.
+6. Сетевой интерфейс eth0 имеет статические IPv4 62.83.131.128/22 и IPv6 в сети 2a03:4000:19:1ea0::/64 по /etc/network/interfaces.d/50-cloud-init.cfg; DHCP не используется в текущем конфиге. До firewall DNS Netcup и NTP были синхронизированы.
+
+## Контрольный список
+
+- [x] Конкретное согласие владельца на firewall.
+- [x] Проверенные root Console Screen и базовый sshd hardening; пароль root неизменен.
+- [x] Новый SSH key-only IPv4 до и после применения.
+- [x] Сохранённая policy видна после обновления страницы; implicit IN DROP / OUT ACCEPT.
+- [x] Штатные Netcup Mail/Ping сохранены; нет дополнительного EGRESS правила.
+- [ ] DNS **после** изменения проверить отдельно; до изменения был PASS.
+- [ ] **Новая** NTP синхронизация после изменения; правило source UDP123 присутствует, но трафик не подтверждён отдельно.
+- [ ] Вход SSH по IPv6 при необходимости, поскольку GitHub Actions тестировал IPv4.
+- [ ] Отрицательный внешний тест заведомо закрытого TCP-порта, без сканирования чужих серверов.
+- [ ] Проверка SSH Match/source-specific правил.
+
+## Восстановление при проблеме
+
+Открыть Netcup SCP → VPS → Firewall → Edit Policies. Переместить только политику **AI Agent Engine VPS - SSH and NTP ingress** из Selected в Available, нажать Apply → Save и подтвердить. Проверить, что implicit INCOMING вернулся к ACCEPT ALL, а OUTGOING остался ACCEPT ALL, затем повторить новый SSH ping. **Restore Default Policies не открепляет кастомную политику.** Сохраняется резервный доступ через Netcup SCP Screen. Откат SSH hardening — отдельная привилегированная операция с проверкой sshd -t, сейчас не делалась.
+
+**Не заявлять пункт 6.2 завершённым** до оставшихся live проверок. Не открывать 80/443 или другие порты до отдельного согласования сетевой архитектуры и сервисов.
+
+---
+
+## Первоначальный preflight-план (историческое состояние до внедрения)
 
 **Статус на 2026-11-17: OFFLINE PREPARED, NOT APPLIED.** Это документ с планом и критериями безопасности, НЕ выгруженная политика и НЕ подтверждение, что на VPS уже включена фильтрация. Изменения провайдерского firewall, OpenSSH, root, sudo, секретов, сервисов или production требуют отдельного явного разрешения владельца.
 
-## 1. Проверенная исходная точка
+## 1. Исходная точка до внедрения (историческая)
 
 - VPS Netcup, Debian 13.7, учетная запись автоматизации `ae-deploy`. Рабочая связка GitHub Actions → pinned SSH host key → SSH key → Ansible подтверждена; последнее чтение системы: [Actions 44121113323](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44121113323), `ok=18 changed=0 unreachable=0 failed=0`.
 - Слушатели: TCP только 22 на IPv4/IPv6; UDP LISTEN нет. Это состояние **слушающих сокетов**, а не список разрешенных firewall направлений.
@@ -21,7 +55,7 @@
 
 Источники: [Netcup Firewall](https://www.netcup.com/en/helpcenter/documentation/server/firewall), [GitHub-hosted runners IP ranges](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
 
-## 3. Черновик политики для SCP (пока не прикреплять)
+## 3. Первоначальный черновик политики (исторический)
 
 | Направление | Протокол | Источник | Destination | Действие | Условие |
 | --- | --- | --- | --- | --- | --- |
@@ -35,7 +69,7 @@
 
 **Ограничение доступа по IP GitHub Actions:** стандартные GitHub-hosted runners имеют изменяемые общие адресные диапазоны; GitHub не рекомендует включать весь их список в allowlist. Поэтому для текущей автоматизации невозможно безопасно сделать статический узкий allowlist без смены способа запуска. Открытый интернет-порт TCP22 — осознанный компромисс **только при подтверждённой безопасной SSH-аутентификации**. Если проверка эффективного SSH показывает доступ root/password и владелец запрещает изменение — **STOP: не прикреплять эту политику и не заявлять 6.2 завершённым.** Этот план не санкционирует изменение пароля.
 
-## 4. Обязательная проверка ПЕРЕД любым живым изменением
+## 4. Первоначальный preflight checklist (исторический)
 
 - [ ] Владелец отдельно разрешил **конкретную** публикацию политики. Нет молчаливого разрешения на password rotation, SSHD/системный firewall или root.
 - [ ] Сохранены ID текущих назначенных SCP firewall policies и скриншоты текущего `ACCEPT ANY`; подтверждён рабочий вход в SCP.
@@ -48,7 +82,7 @@
 
 **Новый критический STOP:** пока sshd допускает `PermitRootLogin yes` и `PasswordAuthentication yes`, не объявлять SSH безопасным. Предлагаемое отключение root/password SSH не требует менять пароль root для SCP Screen, но изменение SSHD требует отдельного разрешения владельца.
 
-## 5. Порядок применения — ТОЛЬКО ПО ОТДЕЛЬНОМУ СОГЛАСИЮ
+## 5. Первоначальная процедура применения (историческая)
 
 1. Прямо перед изменением снова прочесть текущие SCP назначения и GitHub main/политику; если они изменились, пересогласовать.
 2. Подготовить отдельную policy с **всеми заранее проверенными INGRESS rules**, но не назначать серверу до конца preflight. Убедиться, что ни одно EGRESS правило не создано.
