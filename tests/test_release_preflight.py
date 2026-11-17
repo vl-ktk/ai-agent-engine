@@ -107,7 +107,7 @@ class ReleasePreflightTests(unittest.TestCase):
     def test_manifest_is_pinned_and_non_overwriting(self):
         release_dir = Path(self.temporary.name) / "release"
         release_dir.mkdir()
-        wheel = release_dir / "ai_agent_engine-0.3.7a0-py3-none-any.whl"
+        wheel = release_dir / "ai_agent_engine-0.3.8a0-py3-none-any.whl"
         wheel.write_bytes(b"fake package for manifest-only test")
         manifest = write_manifest(
             release_dir, wheel, self.first, "refs/tags/v0.1.0", self.main_head,

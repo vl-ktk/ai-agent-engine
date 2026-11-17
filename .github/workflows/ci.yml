@@ -84,6 +84,30 @@ jobs:
             --release-dir "$RUNNER_TEMP/wheels" --wheel "${wheels[0]}" \
             --commit "$checkout_head" --selected-ref "$checkout_head" \
             --expected-main "$checkout_head"
+      - name: Rehearse verified immutable install and atomic promotion locally
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release_sha="$(git rev-parse HEAD)"
+          local_root="$RUNNER_TEMP/ai-agent-engine"
+          wheel_digest="$(python -c 'import json,os,pathlib; p=pathlib.Path(os.environ["RUNNER_TEMP"])/"wheels"/"release-manifest.json"; print(json.loads(p.read_text())["wheel_sha256"])')"
+          mkdir -p "$local_root/releases"
+          python -m infra.deploy.promotion verify \
+            --bundle "$RUNNER_TEMP/wheels" --source-sha "$release_sha" \
+            --expected-wheel-sha256 "$wheel_digest"
+          python -m infra.deploy.promotion stage \
+            --bundle "$RUNNER_TEMP/wheels" --source-sha "$release_sha" \
+            --expected-wheel-sha256 "$wheel_digest" \
+            --root "$local_root" --confirmation OWNER_APPROVED_RELEASE_OPERATION
+          python -m infra.deploy.promotion promote \
+            --source-sha "$release_sha" --root "$local_root" \
+            --expected-current NONE --confirmation OWNER_APPROVED_RELEASE_OPERATION
+          test "$(readlink "$local_root/current")" = "releases/$release_sha"
+          test -x "$local_root/current/venv/bin/python"
+          test "$(stat -c '%a' "$local_root/releases/$release_sha")" = 755
+          "$local_root/current/venv/bin/python" -I -m ai_agent_engine.controller \
+            check --health-file "$RUNNER_TEMP/nonexistent-controller-health" && exit 1
+          echo 'PASS: disposable release promotion; no VPS/service touched'
       - name: Exercise installed wheel outside the checkout
         working-directory: ${{ runner.temp }}
         run: |

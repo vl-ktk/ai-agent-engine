@@ -1,5 +1,7 @@
 # AI Agent Engine — Stage 4.2 / 6.3
 
+**Актуализация исходника 17.11.2026 (без новой живой выкладки):** `ai_agent_engine.controller` реализован как отдельный постоянно работающий lifecycle-процесс: приватный heartbeat, эксклюзивная блокировка, `READY=1`/`WATCHDOG=1` для systemd, проверка живости и корректный SIGTERM. Шаблон `ae-controller.service.template` теперь содержит конкретный `ExecStart`, `Type=notify` и `WatchdogSec=30s`; релиз можно подготовить с помощью [`../deploy/README.md`](../deploy/README.md). Всё это **только в исходниках и офлайн-тестах**; реальный контроллер **не установлен и не запущен** на VPS, сервис и права не менялись. Исторические абзацы ниже описывают состояние на момент прежних живых аудитов, до этой реализации. Для реальной публикации и проверки нужны отдельное разрешение владельца и выполненные требования глобального `4.2`. Движок пока не имеет исполняющей задачи очереди — это работа этапа 5.
+
 **Only human operator:** Vlad. The Linux accounts `ae-deploy` and `ae-runtime` are technical process identities, **not** other people or engine tenants.
 
 ## Real Netcup VPS, 2026-11-17
