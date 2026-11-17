@@ -1,3 +1,11 @@
+# 2026-11-17 — Stage 4.2 / 6.2 Netcup ingress firewall & SSH rollout OFFLINE PREPARED (LIVE HOLD)
+
+- **Сделано в источнике:** подготовлен безопасный draft `infra/firewall/NETCUP_SCP_ROLLOUT.md`; раздел 6.2 плана уточнён как OFFLINE PREPARED / LIVE HOLD. В документе Netcup policy proposal, TCP22 для стандартных GitHub Actions runners, проверка SSH/guest firewall, DNS/NTP/UDP, явные критерии STOP и откат через SCP.
+- **Статус:** НЕ ВКЛЮЧАЛИ Netcup кастомные rules, не меняли гостевой firewall, sshd, root, sudo, пароли, SSH private keys, GitHub secrets, systemd, VPS состояние или реальные данные. Последняя проверенная конфигурация SCP — implicit INGRESS/EGRESS ACCEPT ANY с SMTP block. Ни одно правило нельзя включать по этому документу без отдельного согласия.
+- **Критический риск:** effective root/password auth и guest firewall остаются неизвестными; github-hosted runner IP динамические, так что сужение TCP22 до адресов runners без архитектурного решения невозможно. Режим DNS/NTP/UDP под кастомным INGESS Netcup тоже требует live preflight. Не путать docs-only CI с рабочим live firewall.
+- **Rollback:** пока не требуется для VPS (изменений нет); для репозитория — revert PR docs-only, который добавил эту запись, план и файл policy (PR number/merge commit фиксируются в истории GitHub). Источник `main` и предыдущие примечания ниже.
+- **Далее:** получить отдельное явное разрешение и выполнить preflight в SCP/OOB/SSH перед применением 6.2. Если разрешения нет — оставить 6.2 открытым, переходить только к независимым offline задачам 6.3.
+
 # 2026-11-17 — Stage 4.2 / Stage 6.1 live system audit PASS (bounded non-root scope)
 
 - **Live evidence:** [Netcup read-only system security inventory #44121113323](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44121113323) SUCCESS on approved main d4074773285488e095db03445596227b7a623617. Ansible recap `ok=18 changed=0 unreachable=0 failed=0`. Owner authorized passing the existing Netcup VPS IPv4 to GitHub Actions for this run. No secrets or passwords printed; no system settings modified.
