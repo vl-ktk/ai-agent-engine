@@ -1,12 +1,21 @@
 # HANDOFF — AI Agent Engine
 
+## Stage 3.5 — multi-provider model routing (2026-11-17)
+
+- **Source/baseline:** `vl-ktk/ai-agent-engine`, `main` revision `5a0fb5c36095f554548a0d63b26745484c88255d` before 3.5. This is the rollback baseline; work only on a branch based on this head.
+- **Owner decision:** 3.4 accepted on 2026-11-17 and marked `[x]`. Owner authorized **only 3.5**; 3.6 and later remain untouched.
+- **Changed:** new `model_routing.py` with explicit provider/model selection, trusted model factory registration and tool-capability preflight; generic `TextOnlyModel` for safe one-turn text callbacks; public exports, README and 3.5 offline regressions. The existing GPT `OpenAIPlanModel` was checked through fake transport; no actual Claude task adapter or provider request was implemented.
+- **Local tests:** baseline 148/148; after 3.5 161/161 offline PASS. Compiled/demo/diff check before publishing; PR/CI/merge details recorded below when completed.
+- **Status:** waiting for GitHub PR/CI, then owner acceptance before marking 3.5 `[x]`. Do not start 3.6 in this task.
+- **Limitations:** per-provider usage quota, unattended Claude Pro authorization, production OAuth sessions, API billing, real tool translation, process isolation and VM deployment are deliberately out of scope; see stages 1.6–1.7 and 6.
+
 ## Stage 3.4 — tool registry, validation, sandbox and audit (2026-11-17)
 
 - **Source/rollback:** `vl-ktk/ai-agent-engine` `main`, initial HEAD `45c2c33c124a7250151bf3204d83675315511a8e`. Working source for 3.4: only that version; rollback by reverting 3.4 PR or returning to the initial HEAD.
 - **Owner decision:** 3.3 accepted on 2026-11-17, marked `[x]` in the single roadmap; development commissioned **only for 3.4**, no changes to 3.5 or later.
 - **Changed:** `core.py` adds `ToolRegistry` with explicit grants, strict `Tool` schemas, arg/result bounds and per-step content-free actor/time audit; `tools.py` hardens path handling, limited reads and POSIX no-follow directory-descriptor opens; `plan_agent.py` retains original GPT test schemas. New offline security tests, documentation and roadmap updated.
 - **Checks:** before 3.4: 134/134 offline PASS. After 3.4: 148/148 offline PASS; `compileall`, demo and `git diff --check` PASS on local Linux. Live models, cloud runtime, production and other projects untouched.
-- **Status:** [PR #16](https://github.com/vl-ktk/ai-agent-engine/pull/16) MERGED as `957a66d1027c2f3c845de226a2a78a1a86a6acc1` (branch commit `593ae6134dc74ff8a23fdcc15ab72d6550c15c1a`). [GitHub Actions run 44063455579](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44063455579): 4/4 PASS on Linux Python 3.11–3.13 and Windows Python 3.12. **Technical PASS; owner acceptance pending.** The 3.4 roadmap checkbox remains `[ ]`; Stage 3.5 not started.
+- **Status:** [PR #16](https://github.com/vl-ktk/ai-agent-engine/pull/16) MERGED as `957a66d1027c2f3c845de226a2a78a1a86a6acc1` (branch commit `593ae6134dc74ff8a23fdcc15ab72d6550c15c1a`). [GitHub Actions run 44063455579](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44063455579): 4/4 PASS on Linux Python 3.11–3.13 and Windows Python 3.12. Final main CI [44063665571](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44063665571) 4/4 PASS. **Owner accepted 3.4 and authorized 3.5 on 2026-11-17; roadmap 3.4 now `[x]`.**
 - **Known boundary:** Windows sandbox cannot claim race resistance against a malicious same-OS-user process; no OS process isolation or persisted audit. These are later infrastructure/system-orchestrator requirements.
 
 ## Stage 3.3 — unified task sessions (PR #15 MERGED; 2026-11-17)
