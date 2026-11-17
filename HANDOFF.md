@@ -5,7 +5,7 @@
 - **Decision:** owner accepted **OVHcloud VPS-2 primary, Hetzner CX33 backup**, only for controller VM. This supersedes the previous CX33-first recommendation; detailed comparison and official sources are in [STAGE4_VPS_SELECTION.md](./STAGE4_VPS_SELECTION.md).
 - **No spending permission:** shortlist priority approval is **not** approval of pricing, monthly budget, rental, account provisioning or unattended ChatGPT/Claude execution. Stage 4.1 stays **[ ]**, Stage 4.2 untouched, Stage 1.6–1.7 VM GO/NO-GO still HOLD. No secrets, chargeable API, VM, or live sessions touched.
 - **Outstanding:** OVHcloud VPS-2 price for Ukraine, actual stock in chosen EU region, month-to-month/advance commitment, included backup vs 7-day premium, taxes, renewal. Next request a distinct budget/purchase authorization before order.
-- **Source/rollback:** prior main `dbf38514b9e5342ecf824c44be400756552b4057`. Documentation-only change; PR, CI, merged SHA and final rollback audit to be recorded after completion.
+- **Source/rollback:** [PR #21](https://github.com/vl-ktk/ai-agent-engine/pull/21) MERGED as `e78222f4d3efb9ba432352377c37ce3e537d381f`; branch head `0a6ecb771e320d5a903e971cae8ef68616df312e`. [PR CI run 44072264674](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44072264674): **4/4 PASS** (Ubuntu Python 3.11, 3.12, 3.13 + Windows Python 3.12; offline tests, build, demo, scan). **Rollback to prior main** `dbf38514b9e5342ecf824c44be400756552b4057`. Documentation-only change, no production deployment.
 
 ## Stage 4.1 — controller VPS selection (owner decision pending; 2026-11-17)
 
