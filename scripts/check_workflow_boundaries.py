@@ -69,12 +69,12 @@ def inspect_workflow(name: str, source: str) -> list[str]:
     if name == "release-preparation.yml":
         if SECRET_REFERENCE.search(source):
             errors.append("release preparation must not receive encrypted repository secrets")
-        if not re.search(r"(?m)^  workflow_dispatch\\s*:", source):
+        if not re.search(r"(?m)^  workflow_dispatch\s*:", source):
             errors.append("release preparation must be manually dispatched")
         for trigger in NONMANUAL_TRIGGERS:
-            if re.search(rf"(?m)^  {trigger}\\s*:", source):
+            if re.search(rf"(?m)^  {trigger}\s*:", source):
                 errors.append(f"release preparation must not use {trigger}")
-        job_if = re.search(r"(?m)^    if:\\s*(.+)$", source)
+        job_if = re.search(r"(?m)^    if:\s*(.+)$", source)
         condition = job_if.group(1) if job_if else ""
         for required in (
             "github.ref == 'refs/heads/main'",
