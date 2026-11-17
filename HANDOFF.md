@@ -1,3 +1,12 @@
+# 2026-11-17 — Stage 4.2 / 6.2 Netcup firewall LIVE APPLIED, fresh SSH PASS
+
+- **Изменено на VPS:** /etc/ssh/sshd_config.d/00-hardening.conf (root SSH no; password SSH no; kbdinteractive no; pubkey yes). sshd -t / basic sshd -T PASS, service reload successful. Пароль root не менялся. OOB Screen root login проверен ранее.
+- **Netcup SCP:** на VPS v2202611460959561466 назначена собственная policy AI Agent Engine VPS - SSH and NTP ingress (TCP IN destination 22 ACCEPT; UDP IN source 123 ACCEPT; no custom EGRESS). Сохранена и подтверждена после reload страницы: implicit DROP ANY INCOMING / ACCEPT ANY OUTGOING. Built-in Mail block и Ping allow сохранены.
+- **Live SSH evidence:** до firewall [read-only Ansible #44130562809](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44130562809) SUCCESS 23 s; после firewall [#44134072220](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44134072220) SUCCESS 31 s. Свежие IPv4 key-only подключения ae-deploy.
+- **OPEN:** DNS и свежая NTP sync после изменения, SSH IPv6 при необходимости, deny test неразрешённого порта, SSH Match/source-specific policies. 6.2 частично выполнен; полная приёмка не заявляется.
+- **Rollback VPS firewall:** SCP → Firewall → Edit Policies → unassign AI Agent Engine VPS - SSH and NTP ingress → Apply → Save → verify implicit incoming ACCEPT → fresh SSH read-only run. Restore Default Policies не снимает кастомную policy. OOB Screen работает.
+- **Источник и rollback точки:** vl-ktk/ai-agent-engine; предыдущий main перед docs PR fddfae9adc6ea346ce35ad229b232e8aaabccab9. Журнал: [infra/firewall/NETCUP_SCP_ROLLOUT.md](infra/firewall/NETCUP_SCP_ROLLOUT.md). Нет расхода средств, deploy приложения, смены паролей или secrets.
+
 # 2026-11-17 — Stage 4.2 / 6.2 OOB login PASS, SSH risk verified; no settings modified
 
 - **Correction to historical block below:** Netcup SCP Screen root login **PASSED** after reading the screenshot accurately. Prior Login incorrect was our mistaken uppercase Latin I/lowercase l input. User password remains valid and unchanged. After read-only checks we logged out to the Debian tty1 login prompt.
