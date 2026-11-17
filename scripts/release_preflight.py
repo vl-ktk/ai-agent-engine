@@ -100,9 +100,11 @@ def write_manifest(
              and not selected_ref.endswith(".lock"))):
         raise ReleaseError("Invalid selected ref")
     release_dir = directory.resolve(strict=True)
+    if wheel.is_symlink():
+        raise ReleaseError("Wheel symlinks are not acceptable")
     wheel_file = wheel.resolve(strict=True)
     if (wheel_file.parent != release_dir or wheel_file.suffix != ".whl"
-            or not wheel_file.is_file() or wheel_file.is_symlink()):
+            or not wheel_file.is_file()):
         raise ReleaseError("Wheel must be one regular file directly in the release output directory")
     name = wheel_file.name
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+\.whl", name):
@@ -110,7 +112,8 @@ def write_manifest(
     size = wheel_file.stat().st_size
     if size <= 0 or size > 100_000_000:
         raise ReleaseError("Unexpected wheel size")
-    digest = hashlib.file_digest(wheel_file.open("rb"), "sha256").hexdigest()
+    with wheel_file.open("rb") as handle:
+        digest = hashlib.file_digest(handle, "sha256").hexdigest()
     manifest = {
         "schema": 1,
         "mode": "prepared_only_no_vps_deploy",
