@@ -15,7 +15,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from .api_errors import InferenceError, http_plan_error, stream_plan_error
-from .siwc import CredentialStore, DIRECT_SCOPE
+from .session_refresh import SessionRefreshError, refresh_if_needed
+from .siwc import AuthError, CredentialStore, DIRECT_SCOPE
 
 API_ORIGIN = "https://api.openai.com/v1"
 MAX_MODEL_RESPONSE_BYTES = 2_000_000
@@ -37,8 +38,25 @@ def _access_token(store: CredentialStore, *, now: float | None = None) -> str:
     if not isinstance(token, str) or not token or type(expiry) not in (int, float):
         raise InferenceError("Saved ChatGPT credentials are invalid")
     if expiry - (time.time() if now is None else now) <= 30:
-        raise InferenceError("ChatGPT access token expired or nearly expired; sign in again")
+        raise InferenceError("ChatGPT access token expired or nearly expired")
     return token
+
+
+def _fresh_access_token(store: CredentialStore, *,
+                        opener: Callable[..., Any]) -> str:
+    """Refresh an expiring personal SIWC session before sending a model request.
+
+    The refresh helper owns the cross-process token-rotation lock. Failed
+    renewal stops the model request; neither credentials nor provider bodies
+    are surfaced through the public diagnostic CLI.
+    """
+    try:
+        refresh_if_needed(store, opener=opener)
+    except SessionRefreshError as exc:
+        raise InferenceError(str(exc)) from None
+    except (AuthError, OSError):
+        raise InferenceError("Saved ChatGPT credentials cannot be accessed safely") from None
+    return _access_token(store)
 
 
 def _open(request: Request, *, opener: Callable[..., Any], timeout: int) -> Any:
@@ -61,7 +79,7 @@ def _authorized_request(url: str, token: str, *, data: bytes | None = None) -> R
 def list_models(store: CredentialStore | None = None, *,
                 opener: Callable[..., Any] = urlopen) -> list[tuple[str, str]]:
     """Return ordered account-visible model slugs and display names."""
-    token = _access_token(store or CredentialStore())
+    token = _fresh_access_token(store or CredentialStore(), opener=opener)
     request = _authorized_request(API_ORIGIN + "/models", token)
     try:
         with _open(request, opener=opener, timeout=20) as response:
@@ -157,7 +175,7 @@ def request_answer(model: str, prompt: str, store: CredentialStore | None = None
     available = list_models(session_store, opener=opener)
     if model not in {slug for slug, _ in available}:
         raise InferenceError("Requested model is not in this ChatGPT account's model list")
-    token = _access_token(session_store)
+    token = _fresh_access_token(session_store, opener=opener)
     body = json.dumps({
         "model": model,
         "input": [{"role": "user", "content": prompt}],

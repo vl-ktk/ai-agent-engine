@@ -44,11 +44,11 @@ On Linux/macOS replace `py` with `python3`. For an **interactive remote desktop*
 
 During `login`, approve the app and requested ChatGPT plan usage in your browser. The callback works only on `127.0.0.1` **on the same computer**. An unrelated phone browser cannot complete a loopback callback for a remote CLI. The owner completed a live same-host remote Firefox/OAuth callback on the GitHub Codespace. This does **not** authorize paid hosting.
 
-Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities. An explicit GPT diagnostic can refresh an expiring token using an OS-managed lock on Linux, macOS or Windows; an explicit `auth logout` command attempts remote refresh-token revocation and removes the local tokens. Neither operation has undergone an owner-operated live integration test; phase 1.7 remains open. On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
+Credentials are saved outside this repository in the OS user's app-data directory (`%LOCALAPPDATA%\\AI Agent Engine` on Windows; `~/.config/ai-agent-engine` on Linux/macOS). Never copy those credentials to chat or GitHub. The one-account pilot does not silently switch identities. Owner-triggered GPT model commands (`models`, `probe`, `ask`, acceptance, sandbox tool-cycle) check whether the saved token needs renewal, using the same OS-managed refresh lock on Linux, macOS or Windows. No background refresh task or scheduled paid model request is installed. An explicit `auth logout` command attempts remote refresh-token revocation and removes the local tokens. Real refresh/revocation has **not** undergone an owner-operated live integration test; phase 1.7 remains open. On Windows the data directory relies on your Windows user-profile ACL; it is **not** a production-grade secret vault.
 
 To sign out manually when the owner chooses to disconnect this installation, run `python3 -m ai_agent_engine.auth logout` (or `py -m ai_agent_engine.auth logout` on Windows). It attempts the OpenAI OIDC refresh-token revocation with limited retries, then deletes the local tokens while retaining the issued client registration and host ID for later sign-in. **This command has NOT been run against the owner's live account.** If remote revocation could not be confirmed, the CLI explicitly advises disconnecting the app in ChatGPT Settings. Never invoke it automatically.
 
-**Limits:** The owner verified one completed streamed GPT answer using the ChatGPT plan allowance. Full native tool calling and Claude remain unverified (phase 1.6). Signing in itself does not start a paid OpenAI API call.
+**Limits:** The owner verified one completed streamed GPT answer and the separate staged GPT native tool + Claude Code acceptance (12/12 PASS on 2026-11-17). These short tests do not establish continuous background reliability, permitted unattended Claude Pro use or live OAuth refresh/revocation. Signing in itself does not start a paid OpenAI API call.
 
 
 
@@ -57,8 +57,9 @@ To sign out manually when the owner chooses to disconnect this installation, run
 This repository retains optional VS Code Tasks for when an owner-assisted live
 acceptance is genuinely needed. **Do not try to run these on an iPhone now:**
 the owner found Safari/VS Code Tasks unreliable, so all intermediate work uses
-automated offline GitHub Actions. The live function-call check remains unverified.
-For a later combined owner-assisted session:
+automated offline GitHub Actions. The combined 12/12 live function-call and
+Claude acceptance passed once on 2026-11-17; a real refresh still awaits
+separate owner authorization. For a later optional owner-assisted session:
 
 1. Open the existing owner-authorized GitHub Codespace in VS Code for the web.
 2. Once the branch with these files is available locally, select
@@ -75,14 +76,16 @@ For a later combined owner-assisted session:
    temporary directory, and refuses to claim PASS without matching contents.
    The click may refresh the saved SIWC token if expired; OAuth refresh is
    protected by a bounded interprocess lock on Linux/macOS/Windows and never printed.
-   The Windows locking path has only synthetic offline tests, not a native Windows
-   OAuth acceptance. This is still an owner-controlled pilot, not production storage.
+   Windows interprocess locking passed native GitHub Actions tests, but a real
+   Windows OAuth refresh remains unverified. This is still an owner-controlled
+   pilot, not production storage.
 
 The tasks do not run on workspace open. They keep OAuth credentials in the
 Codespace user's protected storage; no secrets are passed as task arguments
-or uploaded to GitHub. Tasks 1–3 keep their original expiry-only behavior. The new explicit
-sandbox test (task 4) attempts a safe, single-session token refresh as a
-prerequisite. Live verification of refresh/revocation, native Windows locking and secure VM migration remain phase 1.7.
+or uploaded to GitHub. Task 1 (`auth status`) is read-only; tasks 2–4 check and
+refresh the token near expiry as needed, without automatic model retries if
+refresh fails. This has **offline test coverage only**. Live verification of
+refresh/revocation and secure VM migration remain phase 1.7.
 **The live request must be performed by the owner in the existing Codespace;
 CI cannot validate it and does not possess credentials.**
 

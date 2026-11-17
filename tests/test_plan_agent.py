@@ -10,7 +10,7 @@ from urllib.parse import parse_qs
 
 from ai_agent_engine import plan_agent
 from ai_agent_engine.inference import InferenceError
-from ai_agent_engine.siwc import CredentialStore
+from ai_agent_engine.siwc import CredentialStore, TOKEN_URL
 
 
 class FakeTransport:
@@ -115,6 +115,43 @@ class AgentToolsTests(unittest.TestCase):
             transport.requests[1][0].get_header("Authorization"),
             "Bearer private-session-access",
         )
+
+    def test_tool_cycle_refreshes_between_turns_if_token_nears_expiry(self):
+        requests = []
+        model_turns = 0
+
+        def transport(request, timeout):
+            nonlocal model_turns
+            requests.append(request)
+            if request.full_url.endswith("/models"):
+                return BytesIO(catalog())
+            if request.full_url == TOKEN_URL:
+                return BytesIO(json.dumps({
+                    "access_token": "rotated-private-access",
+                    "refresh_token": "rotated-private-refresh",
+                    "expires_in": 3600,
+                }).encode("utf-8"))
+            model_turns += 1
+            if model_turns == 1:
+                session = self.store.load_session()
+                session["expires_at"] = time.time() + 10
+                self.store.save_session(session)
+                return BytesIO(completed(WRITE))
+            return BytesIO(completed(READ if model_turns == 2 else FINISH))
+
+        _, report, passed, error = plan_agent.run_one_click(self.store, opener=transport)
+        self.assertTrue(passed, plan_agent.describe(report))
+        self.assertIsNone(error)
+        self.assertEqual(len(requests), 5)  # catalog, first turn, refresh, two more turns
+        self.assertEqual([r.full_url for r in requests].count(TOKEN_URL), 1)
+        model_requests = [r for r in requests if r.full_url.endswith("/responses")]
+        self.assertEqual([r.get_header("Authorization") for r in model_requests], [
+            "Bearer private-session-access",
+            "Bearer rotated-private-access",
+            "Bearer rotated-private-access",
+        ])
+        self.assertEqual(self.store.load_session()["refresh_token"],
+                         "rotated-private-refresh")
 
     def test_final_claim_without_actual_tool_calls_is_not_pass(self):
         transport = FakeTransport(catalog(), completed(FINISH))
