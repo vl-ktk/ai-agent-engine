@@ -1,43 +1,19 @@
-# HANDOFF — 2026-11-17, этап 4.15 завершён
+# HANDOFF — 2026-11-18, этап 4.16 завершён
 
-**Источник истины:** `vl-ktk/ai-agent-engine`, `main`. **Единый план:** `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 подпунктов). **Завершены:** технические 4.2–4.13, приёмка 4.14, живой пункт **4.15**. **Следующий открытый пункт — 4.16 (БД и безопасные миграции)**; не начинать без новой команды Владислава. Предыдущий `main` до 4.15: `7754b087f49539d61f09542be4b2750ed99a4d33`.
+**Источник:** `vl-ktk/ai-agent-engine`, `main`. **Единый план:** `IMPLEMENTATION_ROADMAP.md` (11 этапов, 169 подпунктов). **Следующий — 4.17 (хранение секретов и контроль чтения); не начинать без нового «Дальше» Владислава.** 4.15 выполнен 17.11; 4.14 принят; 4.2–4.13 проверены. Старые открытые 1.x/2.x сохраняют статус.
 
-## Новый результат — 4.15, приватные каталоги
+## Результат 4.16
 
-- 17.11.2026 на живом Netcup VPS `v2202611460959561466` под ранее существовавшим приватным корнем `/var/lib/ai-agent-engine` созданы `projects`, `workspaces`, `artifacts`. Каждый: `ae-runtime:ae-runtime`, mode `0700`.
-- Корень до работ: `ae-runtime:ae-runtime`, mode `0700`, пуст. Существующие код, служба, секреты и данные не менялись.
-- Повторные `install -d -m 0700 -o ae-runtime -g ae-runtime` и итоговый `stat` на всех трёх PASS. `runuser -u ae-runtime -- ls -ld .../projects` PASS, `runuser -u ae-deploy -- ls .../projects` → `Permission denied`.
-- После операции `systemctl is-active ae-controller.service` → `active`; `systemctl --failed --no-pager` → `0 loaded units listed`. Платных ресурсов/покупок не создавали.
-- Источник воспроизведения и модель владения: `infra/storage/PROJECT_LAYOUT.md`. Будущих папок конкретных проектов **нет** (проектные ID не утверждены); логическая проектная изоляция ещё не реализована, один системный пользователь сам по себе не изолирует проекты. Следующий шаг — только `4.16`, без самовольного подключения проектов.
-- Откат серверной разметки: только после проверки, что **каждый из трёх** точных новых каталогов пуст и не используется, и отдельного согласования удаления, точечным `rmdir`, без `rm -rf`; корень не трогать. Откат репозитория — к `7754b087f49539d61f09542be4b2750ed99a4d33`, сохраняя чужие изменения.
+- GitHub исходник `0.3.9a0`: `ai_agent_engine/task_db.py`, `tests/test_task_db.py`, `infra/storage/TASK_DB.md`; commit `71907236cf0aa15bfedac6b776a213c84a915383`; предыдущий `main` для отката исходной правки `7a03d14c86adfb5dbe52910f999249e8f3f86474` (откат только отдельным совместимым коммитом, не затирать чужие изменения).
+- В исходнике SQLite миграции `0→1→2` (schema version via `user_version` and migration table), task/project/dependency/event tables, explicit project-scoped CRUD and optimistic revisions; `2→1` rollback разрешён только при пустой таблице событий; `1→0` разрушительный rollback запрещён.
+- Проверки локально: `unittest` **218 OK (1 skipped)**, source scan, workflow permissions, compileall, smoke, wheel сборка — PASS; CI [#44189539204](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44189539204) SUCCESS.
+- 18.11.2026 на существующем Netcup VPS `v2202611460959561466` скачан exact pinned GitHub `task_db.py` во временный путь `/tmp/ae-task-db-71907236.py`. Его SHA-256 `6d60ec9d8513d75a7e5f5323415f5b1a8b1d01b47bcf37fa9d8a958630f366` совпал с локальным источником. Владелец подтвердил запуск.
+- Live под `ae-runtime`: `smoke` на disposable базе **PASS** (CRUD, migration, rollback, integrity); `init` на `/var/lib/ai-agent-engine/projects/engine.sqlite3` → `schema=2, integrity=ok`; `check` → `schema=2, integrity=ok`. `stat` → `ae-runtime:ae-runtime`, mode **0600**; каталог `projects` ранее проверен mode **0700**. Реальные project/task rows не создавались, live rollback не выполнялся.
+- По завершении Netcup `ae-controller.service` **active**, `systemctl --failed` → **0 failed**. Новых платных ресурсов, изменений ключей или чужих данных нет.
 
-## Фактически опубликовано на Netcup
+## Фактически развернуто и ограничения
 
-- VPS `v2202611460959561466` (`62.83.131.128`), Debian 13. Реальный `ai_agent_engine.controller` **0.3.8a0** активен как `ae-controller.service`, systemd `enabled`, `active (running)`, `Controller lifecycle ready`.
-- Точный исходный commit: `85375103800845eeff696e53f510c66c428408ed`; `/opt/ai-agent-engine/current` указывает на `/opt/ai-agent-engine/releases/85375103800845eeff696e53f510c66c428408ed`. Предыдущая версия контроллера **NONE** — это первая установка.
-- Wheel SHA-256: `f1741dcaeeeca1f83447c283512e3a543d02e32730ad18f832991af562cab6cb`. Ручная owner-triggered сборка [Actions #44174524655](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44174524655) SUCCESS, artifact `14370485162`; передача [#44177758050](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44177758050) SUCCESS. Проверка источника, SHA, `verify`, `stage` и compare-and-swap `promote` PASS.
-- На VPS без доплаты установлен пакет `python3.13-venv` с обязательными `python3-pip-whl`, `python3-setuptools-whl`. Точный `ae-controller.service` установлен из верифицированного исходника; `systemd-analyze verify` PASS. Старый `ae-host-check.timer` остался active.
-
-## Проведённые живые тесты
-
-- `runuser -u ae-runtime -- /opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller check --max-age 15` → **controller healthy**, повторно после отката.
-- `systemctl restart` PASS; `stop` → `inactive`; `start` → `active`.
-- `WatchdogUSec=30s`, живой `WatchdogTimestamp` зафиксирован. Controlled SIGKILL только main PID контроллера: systemd сам восстановил процесс, PID `4647`, `NRestarts=1`, `active (running)`; внешний SSH/хост не затронуты.
-- **Rollback первой установки проверен:** `systemctl disable --now ae-controller.service` → `inactive` + `disabled`; затем восстановлено `systemctl enable --now ae-controller.service` → `active` + `enabled`; health повторно PASS. **Возврат к прежнему release SHA невозможен, потому что прежнего релиза не было**; при будущих обновлениях проверять `promote --source-sha PREVIOUS_SHA --expected-current FAILED_SHA` + restart/health. Не удалять файлы и пользовательские данные.
-- `id ae-deploy` только собственная группа; `id ae-runtime` только собственная группа; `sudo -n -l -U` обоих → **not allowed to run sudo**. `systemctl is-active ssh` → active; `systemctl --failed` → **0 loaded units listed**. Netcup SCP root VNC console реально работала и оставлена как резервный путь.
-- CI: source-level 8-workflow guard `permissions: contents: read`, ручные owner-only SSH workflows и offline CI ранее проверены (см. `infra/security/STAGE64.md`). **Настройки GitHub repository/admin/branch protection нельзя подтвердить:** интеграция возвращает 403; не утверждать их проверенными.
-
-## Ограничения и передача
-
-- Контроллер и структура приватных каталогов подготовлены; реальный LLM/очередь/задачи/БД/секретное хранилище/backup остаются для последующих глобальных подпунктов. VPS не тестировался полной перезагрузкой; verified `enabled` и живые `stop/start/restart/auto-recovery`.
-- `systemd-ssh-generator` иногда печатает нефатальное `Failed to query local AF_VSOCK CID` при `daemon-reload/enable/disable`; запуск и здоровье служб это не нарушило.
-- В 4.15 новых платных услуг, изменений паролей/ключей, **существующих** системных прав и потери данных не было. Созданным каталогам назначены предусмотренные права `0700`.
-- Релизный откат первой установки: SCP → root console → `systemctl disable --now ae-controller.service`; оставляет остальные службы активными. Восстановить `systemctl enable --now ae-controller.service`.
-- Основной технический объём старого 4.2 выполнен и разнесён по 4.2–4.13; приёмка 4.14 зафиксирована. **4.15 выполнен на VPS и в GitHub**. Следующий подпункт 4.16 только по новой команде. GitHub до обновления 4.15: `7754b087f49539d61f09542be4b2750ed99a4d33`.
-
-## Новая запись передачи после переразбиения
-
-- Дата: 17.11.2026; владелец прямо поручил увеличить число прямых подпунктов примерно вдвое во **всех** этапах и обновить единый план.
-- 79 → **169** подпунктов, **11** глобальных этапов без третьего уровня; старая редакция плана остаётся в Git history (commit `3b34e25780529e785c165318d46fbbe95b51de48`).
-- Правила синхронизированы в `AGENTS.md`. Только документация и план; работающий Netcup-контроллер/исходный релиз не изменялись.
-- **4.14 принят владельцем, 4.15 выполнен и live-проверен. Следующий пункт: 4.16.** Ранние открытые 1/2 не объявлять закрытыми.
+- На Netcup текущий установленный контроллер **0.3.8a0**, release `85375103800845eeff696e53f510c66c428408ed`, путь `/opt/ai-agent-engine/current`. Этот релиз **не обновлялся до 0.3.9a0**; БД создана самостоятельной проверенной утилитой из GitHub. Сервис `enabled` / `active`. Для остановки первой установки: `systemctl disable --now ae-controller.service`; для восстановления: `systemctl enable --now ae-controller.service` (без удаления данных); более раннего controller release нет.
+- Каталоги `projects`, `workspaces`, `artifacts` существуют с `ae-runtime:ae-runtime` mode `0700` — доказательства `infra/storage/PROJECT_LAYOUT.md`. БД внутри `projects` общая для движка; project_id scoping **не полноценная граница авторизации**, до будущих grants и прав API.
+- **Откат SQLite в production не делать:** он не проверялся на данных, задача резервных копий/восстановления будет в 4.18–4.19. Файл БД нельзя удалять ради отката GitHub; сохранённая схема v2 уже корректна и пуста. Тест backward migration делался только на disposable базе. Новые секреты и очередь не добавлялись (этапы 4.17 и 5).
+- Следующая работа **строго 4.17** после команды владельца. Сначала проверить фактический main, live Controller release и HANDOFF; при новой публикации сделать source/CI/live проверки, сохранить версию и rollback id.

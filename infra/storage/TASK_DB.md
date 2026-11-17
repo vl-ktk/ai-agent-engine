@@ -47,3 +47,13 @@ python -m ai_agent_engine.task_db smoke
 - On a disposable test database, `migrate(db, 1)` explicitly rolls version 2 back to 1 if no `task_events` exist; `migrate(db, 2)` re-applies. It never reverses populated event history.
 - A real-world database backup/restore/rotation is not yet implemented and remains assigned to 4.18–4.19.
 - Code is committed to the GitHub source; **do not say the running controller was updated** unless a new version-locked release is independently deployed and verified. Initialization of the standalone DB does not change `ae-controller.service`.
+
+## Live Netcup verification — 2026-11-18
+
+- VPS `v2202611460959561466` (Debian 13), previously running `ae-controller.service` version `0.3.8a0`; no controller deploy/restart or existing DB alteration.
+- Pinned source: `71907236cf0aa15bfedac6b776a213c84a915383`, `ai_agent_engine/task_db.py`; downloaded as `/tmp/ae-task-db-71907236.py` and SHA-256 independently verified against the source: `6d60ec9d8513d75a7e5f5323415f5b1a8b1d01b47bcf37fa9d8a958630f366`.
+- `runuser -u ae-runtime -- python3 /tmp/ae-task-db-71907236.py smoke` → `task DB disposable CRUD/rollback smoke: PASS`. This creates, tests and reverses only a disposable temporary DB; **no rollback executed against live data**.
+- Same runner `init` → `task DB schema=2, integrity=ok`; runner `check` → `task DB schema=2, integrity=ok`.
+- `stat -c '%U:%G %a %n' /var/lib/ai-agent-engine/projects/engine.sqlite3` → `ae-runtime:ae-runtime 600 /var/lib/ai-agent-engine/projects/engine.sqlite3`; parent previously checked `0700` in 4.15.
+- `systemctl is-active ae-controller.service` → `active`; `systemctl --failed --no-pager` → `0 loaded units listed`.
+- Source version `0.3.9a0`, GitHub source commit `71907236...` and [CI #44189539204](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44189539204) SUCCESS. **Runtime controller remains `0.3.8a0`; the new task DB module is not installed into its running release.** Future wiring belongs to later steps.
