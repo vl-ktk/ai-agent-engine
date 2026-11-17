@@ -8,6 +8,9 @@ Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 > write/read sandbox tool calls verified on disk, and one official Claude Code `claude -p` reply under the
 > owner's personal Claude Pro sign-in (no API key). No server deployment or production access exists.
 
+**Phase 1.8 GO/NO-GO (2026-11-17):** [assessment and Stage 2 gates](./PHASE1_GO_NOGO.md).
+Offline architecture work may proceed; unattended VM or Claude Pro operation remains on hold pending live and policy checks.
+
 ## What works in the prototype
 
 - Generic model interface and bounded model/tool interaction loop.
