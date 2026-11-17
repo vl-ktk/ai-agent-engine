@@ -48,8 +48,9 @@ jobs:
         run: bash -n infra/bootstrap/prepare_runtime_identity.sh
       - name: Validate unactivated systemd service template
         run: |
-          grep -Fqx 'ExecStart=@ENGINE_EXEC_START@' infra/systemd/ae-controller.service.template
+          grep -Fqx 'ExecStart=/opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller serve --state-dir /var/lib/ai-agent-engine' infra/systemd/ae-controller.service.template
           grep -Fqx 'User=ae-runtime' infra/systemd/ae-controller.service.template
+          grep -Fqx 'NoNewPrivileges=yes' infra/systemd/ae-controller.service.template
       - name: Validate example inventory without connecting
         run: ansible-inventory -i infra/ansible/inventory.example.yml --list
       - name: Validate offline-only localhost inventory
