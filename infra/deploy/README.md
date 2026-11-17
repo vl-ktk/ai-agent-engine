@@ -1,48 +1,30 @@
-# 4.2 — проверяемая выкладка контроллера (инструкция, НЕ разрешение)
+# 4.2 — живой контроллер Netcup, проверка и откат
 
-**Состояние:** код и офлайн-репетиция; **не запущено на Netcup**. Без отдельного явного разрешения Владислава запрещено выполнять команды, меняющие `/opt/ai-agent-engine`, systemd, права/секреты либо production. Это доказательная инструкция по текущему подпункту 4.2, не отдельный план.
+**Состояние на 17.11.2026:** `ae-controller.service` реально установлен на Netcup `v2202611460959561466`, `active (running)`, `enabled`; версия `0.3.8a0`. Владелец 17.11 дал постоянное разрешение на бесплатные штатные действия внутри порученного подпункта. Изменения секретов, прав, платных услуг и опасное удаление остаются под отдельным согласием.
 
-## Границы готового ПО
+## Артефакт и воспроизводимость
 
-- `ai_agent_engine.controller` — настоящий долгоживущий **lifecycle-процесс** с одним экземпляром, приватным heartbeat, `READY=1` и `WATCHDOG=1` для systemd. Сейчас он **не** исполняет задания/LLM и **не** является оркестратором этапа 5. Портов и внешних соединений не открывает.
-- `infra/systemd/ae-controller.service.template` использует root-owned `/opt/ai-agent-engine/current/venv/bin/python`, `ae-runtime` без логина, приватный `/run/ai-agent-engine`, `Type=notify`, `WatchdogSec=30s` и sandboxing. Это **исходник шаблона**; на VPS не установлен.
-- `infra/deploy/promotion.py` отдельно проверяет SHA-256 артефакта, создаёт новый неизменяемый каталог `releases/<commit>`, и по явной команде оператора атомарно меняет ссылку `current`. **Не** изменяет sudo/SSH/Netcup firewall и **не** перезапускает/включает сервис. Повторное создание существующего релиза отвергается.
-- `.github/workflows/release-preparation.yml` только готовит wheel+manifest по закреплённому Git SHA, с повторной проверкой `main`. Не содержит деплоя. Живая ручная проверка этого workflow ещё не подтверждена.
+- Точный source SHA: `85375103800845eeff696e53f510c66c428408ed`.
+- Wheel SHA-256: `f1741dcaeeeca1f83447c283512e3a543d02e32730ad18f832991af562cab6cb`.
+- GitHub owner-only сборка [#44174524655](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44174524655), artifact `14370485162`; owner-only доставка [#44177758050](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44177758050), обе SUCCESS.
+- На VPS доверенные `promotion.py` и шаблон systemd сверены по SHA с source commit. `verify`, `stage`, `promote` успешно выполнены. `/opt/ai-agent-engine/current` → `releases/85375103800845eeff696e53f510c66c428408ed`. **Прежняя версия: NONE**. Установлено `python3.13-venv` с пакетами-зависимостями без новых платных ресурсов.
+- Сервис использует `ae-runtime` без sudo и приватный runtime, systemd `Type=notify`, `WatchdogSec=30s`, hardening. Он является **lifecycle-контроллером**; сейчас **не** исполняет пользовательские/LLM-задачи и не открывает API-порт.
 
-## Условия перед первой реальной выкладкой
+## Проверки LIVE
 
-- Отдельное разрешение владельца на **конкретную** production/VPS-запись и установку/запуск unit, с известным окном и действием при сбое.
-- Закрыть оставшиеся read-only аудиты минимально необходимых sudo/резервной SCP-консоли/права на запуск и доступ к CI; разрешить административные изменения только отдельно. `ae-deploy` не должен получать постоянный root.
-- Проверить текущую версию VPS и права каталогов; сделать и проверить резервную копию нужного состояния. Сейчас `/opt/ai-agent-engine` и `releases` были root:root 0755, `/var/lib/ai-agent-engine` — `ae-runtime` 0700; это исторический аудит, не гарантия актуального состояния.
-- Получить успешный **owner-triggered** release-preparation artifact по точному Git SHA. Независимо сверить commit, workflow run, wheel SHA-256 и исходник `promotion.py` с доверенным `main` перед переносом. **Одна только контрольная сумма из того же скачанного архива не доказывает происхождение.**
+- `systemd-analyze verify` unit — PASS; `systemctl is-active ae-controller.service` → active; `systemctl is-enabled ae-controller.service` → enabled.
+- `runuser -u ae-runtime -- /opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller check --max-age 15` → `controller healthy` до и после тестов.
+- `systemctl restart` успешно; `stop` → inactive; `start` → active.
+- `WatchdogUSec=30s`, `WatchdogTimestamp` обновился. SIGKILL main процесса через `systemctl kill` — systemd восстановил процесс (другой MainPID, `NRestarts=1`).
+- `sudo -n -l -U ae-deploy` и `ae-runtime` → не разрешено; оба только в собственной группе. `ssh` active, `systemctl --failed` 0, резервная root VNC-консоль Netcup SCP проверена, хостовый таймер active.
+- При systemctl enable/disable были некритичные сообщения AF_VSOCK generator; рабочее состояние не нарушилось.
 
-## Репетиция и последующая ручная операция
+## Rollback (первый релиз и последующие)
 
-На безопасной тестовой машине создать пустой корень `.../ai-agent-engine/releases`, затем проверить артефакт и работу `verify → stage → promote → controller check`. CI делает такую репетицию **только в собственном временном каталоге runner**, без VPS. Для настоящего хоста нужен trusted `promotion.py` из утверждённого commit и защищённо доставленные wheel+manifest.
+**Первый релиз:** старого SHA ещё нет, переключать `current` некуда. Проверен безопасный откат функциональности `systemctl disable --now ae-controller.service` (`inactive`, `disabled`); затем успешное восстановление `systemctl enable --now ae-controller.service` (`active`, `enabled`), health PASS. Файлы релиза и данные остаются, других systemd-сервисов не затрагиваем.
 
-При отдельном разрешении и подтверждённых переменных оператора:
+**Последующие релизы:** до обновления записывать старый SHA и сверять `current`; проверять signed/trusted artifact; `stage` в отдельный неизменяемый каталог, `promote --source-sha NEW_SHA --expected-current OLD_SHA`; запуск/health. При отказе `promote --source-sha OLD_SHA --expected-current NEW_SHA` и `systemctl restart ae-controller.service`, затем health/журналы. `promotion.py` **сам сервис не перезапускает**. Не удалять пользовательские данные.
 
-```bash
-# Пример интерфейса, НЕ команда к автоматическому выполнению.
-python3 promotion.py verify --bundle /SAFE/approved-artifact \
-  --source-sha EXACT_40_HEX_SHA --expected-wheel-sha256 EXACT_64_HEX_DIGEST
+## Границы приёмки
 
-python3 promotion.py stage --bundle /SAFE/approved-artifact \
-  --root /opt/ai-agent-engine --source-sha EXACT_40_HEX_SHA \
-  --expected-wheel-sha256 EXACT_64_HEX_DIGEST \
-  --confirmation OWNER_APPROVED_RELEASE_OPERATION
-
-python3 promotion.py promote --root /opt/ai-agent-engine \
-  --source-sha EXACT_40_HEX_SHA --expected-current NONE \
-  --confirmation OWNER_APPROVED_RELEASE_OPERATION
-```
-
-`NONE` допустимо **только** при первой выкладке без предыдущей ссылки `current`; впоследствии указывать фактически проверенный предыдущий SHA. Скрипт не даёт произвольных shell-команд и откажет при несовпадении ожидаемой версии.
-
-После проверки подготовленного unit доверенным оператором: установить его от root в `/etc/systemd/system/ae-controller.service`, выполнить `systemctl daemon-reload`, `systemctl enable --now ae-controller`, убедиться в `active`, а затем **вживую** проверить `python -m ai_agent_engine.controller check` под `ae-runtime`, 2+ успешных watchdog-пульса, `systemctl show ...`, рестарт, автозапуск после перезагрузки (только с разрешения владельца), отсутствие ошибок, сохранность SSH и готовность отката. Не открывать новый сетевой порт.
-
-## Откат
-
-При обновлении сначала сохранить **предыдущий** SHA. Если запуск или health нового релиза не прошёл — под разрешённым оператором переключить `current` назад командой `promote --source-sha PREVIOUS_SHA --expected-current FAILED_SHA` и снова перезапустить сервис; проверить здоровье и журнал. Скрипт не перезапускает сервис автоматически. Для **первой** выкладки с `NONE` предыдущего работающего релиза нет: безопасное восстановление — остановить новый unit и оставить исходные серверные службы нетронутыми; дальнейшее удаление ссылки/данных требует отдельного решения. Нельзя удалять данные пользователя или изменения других проектов при откате.
-
-**Требования к приёмке 4.2:** фактические SSH/sudo/SCP проверки, GitHub run ID, release SHA + wheel digest, unit status/health/watchdog/restart, проверенный порядок rollback, прежняя версия и решение владельца. Офлайн-тесты, даже полностью зелёные, этого не заменяют.
+Основные технические проверки **PASS**, но owner acceptance ещё не зарегистрирована в roadmap. Full VPS reboot не тестировался. Проверка GitHub source-level token permissions/guards PASS, но административные settings/branch protection вернули 403 — не называть их проверенными. **4.3** — отдельная работа: хранилища, БД, backup и реальное восстановление данных; ещё не выполнялась. Подробные факты — [HANDOFF](../../HANDOFF.md).
