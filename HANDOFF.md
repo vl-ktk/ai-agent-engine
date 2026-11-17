@@ -1,3 +1,13 @@
+# 2026-11-17 — Stage 4.2 / 6.3 persistent controller (source-only; live activation OPEN)
+
+- **Scope and source:** sole owner Vlad; tracked branch `stage42-63-real-controller-daemon`, [PR #52](https://github.com/vl-ktk/ai-agent-engine/pull/52). Previous `main` for rollback: `c95b18038567cebcdf3def4cb1fcaf2fee440f7c`.
+- **Implemented:** `ai_agent_engine/controller.py` real non-root long-running controller; SQLite WAL bounded persistent `core_self_test` queue, singleton lease + heartbeat, restart retry recovery, idempotent enqueue, health/status, graceful stop; `tests/test_controller.py` offline process tests; concrete `infra/systemd/ae-controller.service.template` and separate health service/timer.
+- **Evidence:** [PR CI run #44159624738](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44159624738) PASS; [offline VPS config run #44159624555](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44159624555) PASS on implementation commit `4cb42560ce7305c5f3a6bb53b6ea1c8e7a7d036b`. Re-run/check new HEAD CI after documentation commits; these are **not** live service tests.
+- **Not done:** installing versioned wheel under `/opt/ai-agent-engine/current/venv`, systemd daemon deployment/activation, live controller health and queue checks, real model or paid-API integration, manual owner release workflow dispatch. No changes to live VPS, secrets, ports, user privileges or production data in this PR.
+- **Open stages:** 6.3 until specifically owner-authorized live rollout and app acceptance; 7.2 until controlled deployment/activation verified. If handed off, compare code/PR and new CI runs first. See `infra/systemd/STAGE63.md` and `STAGE4_2_AUTOMATION_PLAN.md`.
+
+---
+
 # 2026-11-17 — Stage 4.2 / 7.2 pinned release preparation SOURCE PARTIAL
 
 - **Scope:** sole owner Vlad; pre-7.2 main `abe34aa65ecc5d25e4eb7dae445cacc0cdc5c814`. [PR #51](https://github.com/vl-ktk/ai-agent-engine/pull/51) adds *manual owner-only release package preparation*, **not live CD**.
