@@ -1,0 +1,17 @@
+# Stage 4.2 / 6.3: only install after authorized controller activation.
+[Unit]
+Description=AI Agent Engine controller heartbeat check
+After=ae-controller.service
+
+[Service]
+Type=oneshot
+User=ae-runtime
+Group=ae-runtime
+ExecStart=/opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.controller health --state-dir /var/lib/ai-agent-engine --max-age 10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
