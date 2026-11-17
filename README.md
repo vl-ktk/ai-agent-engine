@@ -31,6 +31,32 @@ python -m unittest discover -s tests -v
 
 The demo uses a disposable temporary directory and does not touch working projects.
 
+## Installable core (stage 3.6; offline)
+
+The public core is a Python 3.11+ package with no third-party runtime
+dependencies. The build backend is pinned in `pyproject.toml` to
+`setuptools==84.2.1`; Python package metadata uses an explicit preview version.
+From a clean checkout:
+
+```bash
+python -m pip install --no-deps .
+python -m ai_agent_engine
+```
+
+The same installed demo also runs **outside the source directory**. Only when
+working on the owner-operated OAuth flow, install the separate optional extras
+with `python -m pip install '.[siwc]'` (or use `requirements-siwc.txt` for
+the existing tests). These optional dependencies use a version range and are
+**not a fully locked, byte-for-byte reproducible environment**. Installation
+does not sign in, contact AI providers, create a VM, or deploy services.
+
+CI builds on the original Linux/Windows Python matrix, then installs the
+packaged core and runs its demo from the runner's temporary directory. It also
+checks Git-tracked files (including force-added ignored files) for common
+credential paths, key patterns, symlinks and unexpected binary files through
+`scripts/check_public_source.py`. The scanner is a narrow defense in depth:
+it cannot prove there are no undisclosed tokens or credentials in public code.
+
 ## Unified agent roles and task sessions (phase 3.3; offline-tested)
 
 The same provider-neutral `Agent` model/tool loop is now available through
@@ -334,7 +360,7 @@ python3 -m ai_agent_engine.acceptance run-live
 
 Source of truth is GitHub `vl-ktk/ai-agent-engine`, branch `main`.
 
-- GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on every push or pull request to `main`: compile, unit tests, and the local scripted demo. No account credentials, AI requests, or deployment steps are present.
+- GitHub Actions [CI (offline)](.github/workflows/ci.yml) checks Python 3.11, 3.12 and 3.13 on Linux plus Python 3.12 on Windows on every push or pull request to `main`: compile, indexed-source safety scan, unit tests, local demo, installation of the core package, and an installed-package demo outside the checkout. No account credentials, AI requests, or deployment steps are present.
 - Optional [Codespaces dev container](.devcontainer/devcontainer.json) supplies a remote Python 3.12 development environment. An owner-approved free-quota Codespace was **created and tested on 2026-11-16**: Python 3.12.11, 21/21 offline tests PASS. A password-protected noVNC desktop was also installed in that instance, reachable through one GitHub **Private** forwarded port; the real ChatGPT OAuth login and consent have since **passed** in this same-host desktop, and a live GPT model response passed. Native tool calls are still unverified. The GUI system packages were installed interactively and are not yet reproducible after container rebuild. GitHub Codespaces consumes personal account compute/storage quota, so stop the instance when idle. Details: [HANDOFF.md](./HANDOFF.md).
 - These automated tests verify logic but cannot complete interactive OAuth, confirm user scopes or prove that a live GPT model answers.
 
