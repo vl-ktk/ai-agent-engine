@@ -14,6 +14,15 @@
 **Rollback baseline (before OAuth browser fix):** `715f651f0a9ca1403bdc6da320e3767e95a8260b`.
 **Scope:** Only AI Agent Engine. Not KTK Social, ATHL, or the separate local-AI project.
 
+## Stage 2 — architecture reconciliation (2026-11-17; documentation branch)
+
+- **Source and rollback baseline:** `vl-ktk/ai-agent-engine` `main` at `6d0a8781cd0c1a23e64286d2517ceedc5d9a1957` before this document change. Working branch: `docs/stage2-reconciliation-20261117`. No runtime code or production deployment changed.
+- **What is documented:** `STAGE2_ARCHITECTURE_SPEC.md` maps discussion topics 2.1–2.9 to the original 2.1–2.7 roadmap and records approved global leaders/project teams, scoped AI task reassignment, standing project-scoped release grants, safe rollback, cross-project sanitized knowledge, budget policy, critical alerts, reports, and individual future city avatars. `ARCHITECTURE_DECISIONS.md` and `IMPLEMENTATION_ROADMAP.md` are aligned.
+- **Status:** conceptual 2.1/2.4/2.5 decisions accepted; exact engineering details 2.2/2.3/2.6/2.7 proposed, **not owner-approved**, so Stage 2 stays OPEN. Stage 3.1/3.2 remain completed; Stage 3.3–3.7 remain OPEN. Global Stage 1 and real refresh/revoke, VM, Claude unattended policy remain pending.
+- **Next owner handoff:** select unresolved original Stage 2 technical contracts (source manifests and concurrency; database fields and state transitions; CPU controller vs optional GPU; exchange/acceptance/rollback). Only then mark corresponding Stage 2 lines complete. Independent Stage 3 offline work may be commissioned separately. No paid environment, credentials, external projects, model calls or deployment were changed in this documentation task.
+- **Checks:** verified original seven Stage 2 checklist items and unchanged original eleven global roadmap stages; verified relative document links and new agreed-vs-proposed labels. GitHub CI / PR number / merge SHA to be recorded after verification; do not claim PASS in advance.
+
+
 ## Phase 1.8 — итоговый GO/NO-GO (2026-11-17; PR #13 MERGED)
 
 - Источник: [PHASE1_GO_NOGO.md](./PHASE1_GO_NOGO.md); первичные документы OpenAI, Anthropic и Hetzner сверены 2026-11-17. Зафиксированы именно подтверждённые LIVE 12/12, реальный GPT OAuth, PR #12 refresh с офлайн CI 4/4 и границы того, чего эти проверки не доказывают.
