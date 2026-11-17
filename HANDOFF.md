@@ -1,3 +1,12 @@
+# 2026-11-17 — Stage 4.2 / 6.3 LIVE PARTIAL PASS: runtime identity and directories
+
+- **Owner authorization:** explicitly approved creating one technical `ae-runtime` account without login and private directories on the existing Netcup VPS. Vlad remains the only product user. This supersedes the older 6.3 offline-only note below.
+- **Live preflight:** root OOB console, `getent passwd ae-runtime` absent; `/opt/ai-agent-engine` and `/var/lib/ai-agent-engine` absent. No running `ae-*` units before the work.
+- **Live changes (Netcup root console, not executing repo script):** `useradd -r -U -d /var/lib/ai-agent-engine -s /usr/sbin/nologin ae-runtime`; created `/opt/ai-agent-engine` and `/releases` as `root:root` 0755 and `/var/lib/ai-agent-engine` as `ae-runtime:ae-runtime` 0700. **No changes** to `ae-deploy`, SSH, firewall, password secrets, sudo, systemd units or journald configuration.
+- **Live verification:** `getent passwd ae-runtime` => `ae-runtime:x:988:988::/var/lib/ai-agent-engine:/usr/sbin/nologin`; `id` => UID/GID 988, sole group `ae-runtime`; `passwd -S` => status `L` (locked); `stat -c` confirmed all three owners and modes. `systemctl --failed` => none.
+- **Source:** main before documentation: `ffeb36b0ad47994e6ea0cc258dbdfc2fd96e8e5a`; updated `infra/systemd/STAGE63.md` and Stage4.2 plan. No new engine release; 6.3 remains open.
+- **Remaining:** application is still offline demo, no long-running controller executable. Do not activate placeholder `.service`. Global journald caps and application monitoring are not live, and will need their own owner approvals when applicable. Do not delete live user/data for rollback without a new explicit instruction; none is necessary after this successful check.
+
 # 2026-11-17 — Stage 4.2 / 6.3 OFFLINE PREPARED, single human owner
 
 - **Owner clarification:** only Vlad will be a human user of AI Agent Engine. `ae-deploy` and proposed `ae-runtime` are Linux process identities, not product accounts; no new people, registration or tenant logic.
