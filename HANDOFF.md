@@ -1,3 +1,10 @@
+# 2026-11-17 — Stage 4.2 / read-only access and TCP inventory prepared
+
+- **Requested next safe step:** inspect VPS as existing non-root `ae-deploy` without modifying the host. Prepared `infra/ansible/read-only-access-audit.yml` and owner-gated `.github/workflows/netcup-readonly-access-audit.yml` (`workflow_dispatch` with confirmation `AUDIT`; pinned SSH host key; encrypted deploy key; no sudo/root).
+- **What the playbook checks:** Debian 13, non-root effective UID, absence of root/sudo group membership, hostname, group names and listening TCP addresses/ports via `ss -lntH`. It does **not** prove no alternate per-user sudoers privileges, Netcup provider firewall state or viability of SCP console fallback. It does not read credentials or process command lines.
+- **Status:** pending PR/offline CI/merge/live run at writing. Last published `main` before these changes `26fe0113f11058f5663c3c2109fd9872a574e087`. Previous verified Debian baseline [run #44114355675](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44114355675) success, check/apply/check final changed=0.
+- **Next:** merge if CI is clean and main unchanged; manually run owner-gated read-only audit, inspect minimal results, update plan/handoff with real evidence. No system changes, paid resources, root secret deletion or security remediation without explicit owner consent.
+
 # 2026-11-17 — Stage 4.2 / Debian 13 non-root baseline live SUCCESS
 
 - **Live run:** [Netcup Debian 13 baseline #44114355675](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44114355675) SUCCESS; job `user-baseline`, Ansible `infra/ansible/debian13-user-baseline.yml`. Debian 13, non-root `ae-deploy`, compatible Python checks passed. Check-mode predicted `ok=4 changed=2 unreachable=0 failed=0`, controlled apply was `ok=4 changed=2 unreachable=0 failed=0`, final idempotency check was `ok=4 changed=0 unreachable=0 failed=0`.
