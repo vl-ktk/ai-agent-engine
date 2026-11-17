@@ -8,7 +8,7 @@
 **Проверки для 1.1–1.5:** [PR #26](https://github.com/vl-ktk/ai-agent-engine/pull/26) смержен squash в `main` `a6a8a1c3d9442bb364ef55317a029c2fa30db22f`. [Ansible offline CI #44093814944](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44093814944) — PASS 1/1 (inventory, playbook syntax, без SSH); [основной CI #44093814678](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44093814678) — PASS 4/4. Предыдущий `main` для rollback: `60bdb12b7732a61f0920b5cd54acb93bd424379a`. Работа на Netcup VPS не проводилась. **Пункт 1 принят владельцем 2026-11-17** («Да»).
 
 
-**Живые проверки 2026-11-17:** [GitHub Actions #44110311382](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44110311382) — создание `ae-deploy` и реальный SSH SUCCESS; [read-only Ansible #44112659558](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44112659558) — SUCCESS (`ok=1 changed=0 unreachable=0 failed=0`). Ни пакеты, ни firewall, ни backup, ни production этим не настроены.
+**Живые проверки 2026-11-17:** [GitHub Actions #44110311382](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44110311382) — создание `ae-deploy` и реальный SSH SUCCESS; [read-only Ansible #44112659558](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44112659558) — SUCCESS (`ok=1 changed=0 unreachable=0 failed=0`). Ни пакеты, ни firewall, ни backup, ни production этим не настроены. [Debian 13 non-root baseline #44114355675](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44114355675) — SUCCESS: check `changed=2`, apply `changed=2`, повторный check `ok=4 changed=0 unreachable=0 failed=0`. Это подтверждает только пользовательские каталоги (0700), не системную настройку.
 
 ## Подробный план — 10 пунктов
 
@@ -31,10 +31,10 @@
   - [x] 4.1. Запустить отдельный ручной workflow, выполнить безвредный Ansible `ping`. **PASS:** [run #44112659558](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44112659558), `ok=1 changed=0 unreachable=0 failed=0`; SSH key-only, no root.
   - [ ] 4.2. Проверить имя/OS/доступ и отсутствие секретов в логах; зафиксировать успешный run ID.
   - [x] 4.3. Ошибки доступа решать без изменения production-сервисов. **PASS:** workflow syntax fix [PR #31](https://github.com/vl-ktk/ai-agent-engine/pull/31) (first bad YAML rejected with 0 jobs), then clean run; no prod/OS modification.
-- [ ] **5. Создать воспроизводимую Ansible-конфигурацию Debian 13.**
+- [x] **5. Создать воспроизводимую Ansible-конфигурацию Debian 13 в non-root scope.** **PASS 2026-11-17:** [PR #32](https://github.com/vl-ktk/ai-agent-engine/pull/32) merged `00f8ca5f7b6207e0721d45125844f0524d602843` (rollback code `1839cd8430922149102b4cb603e1268f55e2ad9e`), offline CI both PASS, [live run #44114355675](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44114355675) PASS. Системные apt-пакеты/привилегии/сервисы отложены, **не установлены**.
   - [x] 5.1. Зафиксировать базовые пакеты и Python runtime с совместимыми версиями. **Документировано:** [DEBIAN13_BASE.md](./infra/ansible/DEBIAN13_BASE.md), Debian 13 Python 3.13; базовые apt-пакеты **не установлены**, административный доступ не расширялся.
-  - [ ] 5.2. Добавить idempotent playbooks для подготовительного состояния; повторный прогон не должен портить систему. **Подготовлено:** `infra/ansible/debian13-user-baseline.yml` (non-root каталоги); проверка idempotency на VPS ещё впереди.
-  - [ ] 5.3. Сначала прогон `--check --diff`, затем управляемое применение и повторная проверка.
+  - [x] 5.2. Добавить idempotent playbooks для подготовительного состояния. **PASS:** `infra/ansible/debian13-user-baseline.yml`, user `ae-deploy`, Debian 13/Python assertions, два приватных каталога. На VPS повторный check показал `changed=0`.
+  - [x] 5.3. Прогон `--check --diff`, затем управляемое применение и повторный `--check --diff`. **PASS:** [GitHub Actions #44114355675](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44114355675), check `changed=2`, apply `changed=2`, idempotency check `changed=0`; `unreachable=0 failed=0` на всех трёх прогонах.
 - [ ] **6. Подготовить безопасность и системные процессы.**
   - [ ] 6.1. Инвентаризировать порты, SSH, сетевую политику, сервисы и системные журналы.
   - [ ] 6.2. Подготовить firewall/доступы так, чтобы не потерять связь с SCP/SSH; применять только после проверки.
