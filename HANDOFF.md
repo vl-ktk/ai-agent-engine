@@ -6,7 +6,7 @@
 - **Owner decision:** 3.4 accepted on 2026-11-17 and marked `[x]`. Owner authorized **only 3.5**; 3.6 and later remain untouched.
 - **Changed:** new `model_routing.py` with explicit provider/model selection, trusted model factory registration and tool-capability preflight; generic `TextOnlyModel` for safe one-turn text callbacks; public exports, README and 3.5 offline regressions. The existing GPT `OpenAIPlanModel` was checked through fake transport; no actual Claude task adapter or provider request was implemented.
 - **Local tests:** baseline 148/148; after 3.5 161/161 offline PASS. Compiled/demo/diff check before publishing; PR/CI/merge details recorded below when completed.
-- **Status:** waiting for GitHub PR/CI, then owner acceptance before marking 3.5 `[x]`. Do not start 3.6 in this task.
+- **Status:** [PR #17](https://github.com/vl-ktk/ai-agent-engine/pull/17) MERGED as `7da9048b7086a65a364d9189e82d96df49751461` (branch commit `6a92fbf937ce25ffd4391608eae8e535a8967150`). [GitHub Actions run 44065059155](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44065059155): 4/4 PASS on Linux Python 3.11–3.13 and Windows Python 3.12. **Technical PASS, owner acceptance pending; 3.5 stays `[ ]`.** Do not start 3.6 in this task.
 - **Limitations:** per-provider usage quota, unattended Claude Pro authorization, production OAuth sessions, API billing, real tool translation, process isolation and VM deployment are deliberately out of scope; see stages 1.6–1.7 and 6.
 
 ## Stage 3.4 — tool registry, validation, sandbox and audit (2026-11-17)
