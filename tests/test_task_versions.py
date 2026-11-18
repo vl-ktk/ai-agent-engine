@@ -279,7 +279,7 @@ class VersionRecordingTests(unittest.TestCase):
                              baseline_commit=self.base_shas["gpt"])
         with self.inbox._store._db() as db:
             db.execute("UPDATE task_source_versions SET result_commit=? WHERE task_id=?",
-                       ("BADCOMMIT", tid))
+                       ("Z" * 40, tid))
         self.assert_code("version_corrupt", lambda: self.recorder.read_version(tid))
 
     def test_migration_of_private_v9_retains_original_task(self):
