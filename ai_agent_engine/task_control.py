@@ -14,9 +14,14 @@ import signal
 import subprocess
 from threading import Event, Lock, Thread, current_thread
 import time
+from typing import Callable, TypeVar
 
 from .task_api import OwnerScope, TaskInbox, TaskNotFound
+from .task_permissions import PermissionUnavailable, ProtectedAction, TaskPermissionGate
 from .task_state import TaskState, TransitionRejected
+
+
+_T = TypeVar("_T")
 
 
 class TaskControlError(RuntimeError):
@@ -44,13 +49,19 @@ class TaskProcessController:
     """
 
     def __init__(self, inbox: TaskInbox, *, grace_seconds: float = 0.15,
-                 check_interval: float = 0.05) -> None:
+                 check_interval: float = 0.05,
+                 permission_gate: TaskPermissionGate | None = None) -> None:
         if not isinstance(inbox, TaskInbox):
             raise TypeError("expected TaskInbox")
         for value in (grace_seconds, check_interval):
             if (type(value) not in (int, float) or not 0.01 <= value <= 5):
                 raise ValueError("invalid control interval")
         self.inbox = inbox
+        if permission_gate is not None and (
+                not isinstance(permission_gate, TaskPermissionGate)
+                or permission_gate.inbox is not inbox):
+            raise TypeError("permission gate must belong to the task inbox")
+        self.permission_gate = permission_gate
         self.grace_seconds = float(grace_seconds)
         self.check_interval = float(check_interval)
         self._mutex = Lock()
@@ -315,6 +326,33 @@ class TaskProcessController:
                 raise TaskControlError("delivery attempts are not exhausted")
             return self.inbox.transition_state(task_id, TaskState.FAILED,
                                                scope, actor_id=run.worker_id)
+
+    def execute_protected(self, task_id: str, scope: OwnerScope,
+                          *, actor_id: str, action: ProtectedAction,
+                          operation: Callable[[], _T]) -> _T:
+        """5.13: guard a sensitive callback while its managed job stays live.
+
+        Missing gate refuses by default. The per-run lock prevents a normal
+        cancel/timeout from completing while the trusted action is in flight.
+        No arbitrary command string or HTTP endpoint is introduced.
+        """
+        if self.permission_gate is None:
+            raise PermissionUnavailable("protected execution needs trusted grants")
+        with self._mutex:
+            if self._closed:
+                raise TaskControlError("task controller is closed")
+            run = self._runs.get(task_id)
+            if run is None:
+                raise TaskControlError("task has no managed process")
+        with run.lock:
+            if (run.done or run.process.poll() is not None
+                    or self.inbox.state(task_id, scope) is not TaskState.RUNNING
+                    or (run.deadline is not None
+                        and time.monotonic() >= run.deadline)):
+                raise TaskControlError("managed task is not executing")
+            return self.permission_gate.run(
+                task_id, scope, actor_id=actor_id,
+                action=action, operation=operation)
 
     def _watch(self) -> None:
         while not self._shutdown.wait(self.check_interval):

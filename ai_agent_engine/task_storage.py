@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 4  # v4 adds idempotent admission and bounded delivery ledger.
+SCHEMA_VERSION = 5  # v5 adds private metadata-only action authorization audit.
 
 
 class StorageUnavailable(RuntimeError):
@@ -96,9 +96,10 @@ class SQLiteTaskStore:
                 self._create_claims_table(db)
                 self._create_lifecycle_tables(db)
                 self._create_delivery_tables(db)
+                self._create_permission_audit_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -110,7 +111,9 @@ class SQLiteTaskStore:
                     self._create_claims_table(db)
                 if version in (1, 2):
                     self._create_lifecycle_tables(db)
-                self._create_delivery_tables(db)
+                if version in (1, 2, 3):
+                    self._create_delivery_tables(db)
+                self._create_permission_audit_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -176,6 +179,24 @@ class SQLiteTaskStore:
             retry_at REAL NOT NULL DEFAULT 0,
             result TEXT CHECK(result IN ('success','failure') OR result IS NULL),
             CHECK(attempts_used <= max_attempts)
+        )""")
+
+    @staticmethod
+    def _create_permission_audit_table(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE task_permission_audit (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            action TEXT NOT NULL CHECK(action IN
+                ('read_secret','write_workspace','execute_tool',
+                 'external_request','delete_artifact')),
+            allowed INTEGER NOT NULL CHECK(allowed IN (0,1)),
+            reason_code TEXT NOT NULL CHECK(reason_code IN
+                ('granted','grant_missing','grant_expired',
+                 'worker_mismatch','task_not_running')),
+            principal_kind TEXT NOT NULL CHECK(principal_kind IN
+                ('assigned_worker','other_worker')),
+            occurred_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         )""")
 
     def load(self) -> tuple[list[tuple], list[tuple[str, str]], list[tuple], list[tuple]]:
@@ -373,6 +394,28 @@ class SQLiteTaskStore:
                 (task_id,)).fetchall()
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot read transition audit") from exc
+
+    def write_permission_audit(self, task_id: str, action: str, allowed: bool,
+                               reason_code: str, principal_kind: str) -> None:
+        """Durable allow/deny decision before any sensitive callback."""
+        try:
+            with self._db() as db:
+                db.execute("""INSERT INTO task_permission_audit
+                    (task_id,action,allowed,reason_code,principal_kind)
+                    VALUES (?,?,?,?,?)""", (task_id, action, int(allowed),
+                                             reason_code, principal_kind))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist permission decision") from exc
+
+    def permission_history(self, task_id: str) -> list[tuple]:
+        """Only task ID, action category, result, and generic reason."""
+        try:
+            return self._db().execute("""SELECT event_id,task_id,action,
+                allowed,reason_code,principal_kind,occurred_at
+                FROM task_permission_audit WHERE task_id=? ORDER BY event_id""",
+                (task_id,)).fetchall()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read permission audit") from exc
 
     def close(self) -> None:
         if self._connection is not None:

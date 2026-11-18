@@ -1,6 +1,14 @@
-# HANDOFF — 2026-11-18: 5.12 завершён; следующий 5.13
+# HANDOFF — 2026-11-18: 5.13 завершён; следующий 5.14
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 5.13, гранты и обезличенный аудит 18.11.2026
+
+- **Статус:** `5.13 [x]` — тест опасного действия действительно отказал **до побочного эффекта**, событие denial атомарно записано в приватный журнал. Следующий **5.14 [ ]** — интеграционное offline-тестирование конкуренции, отказа, рестарта и восстановления без LLM, **не начинать без новой команды владельца**. [Протокол](./infra/orchestrator/TASK_PERMISSIONS.md).
+- **Код:** новый `ai_agent_engine/task_permissions.py`: `ProtectedAction` (5 опасных категорий), immutable `ActionGrant` с exact task/worker/action и TTL, `TaskPermissionGate.run` с default-deny, scope/worker/`RUNNING` validation, durable decision-before-callback, owner-scoped sanitized `audit_history`. Приватная **та же** task SQLite обновлена до **schema v5**, добавлен только `task_permission_audit`, миграция своей v1/v2/v3/v4, без новых DB/секретов/прав; действие/тип worker/код причины, но не prompt, пути, worker ID, credentials, аргументы или output. В `TaskProcessController` добавлена опциональная инъекция gate и `execute_protected` для реального управляемого процесса: отсутствие gate, живого процесса или прав отклоняется; независимые task не блокируют друг друга.
+- **Проверки:** **24 новых PASS** (`tests/test_task_permissions.py`), полный регресс **472 unittest OK (1 skipped)**; реальная попытка опасной записи/удаления не создаёт файл, 32 конкурентных отказа → 32 записи, SQL trigger/storage failure предотвращает side effect, expiry/worker/scope isolation, immutable grants, restart/migrate v4→v5, отсутствие HTTP-grant, 3 реальные subprocess интеграции. compileall/workflow/source/diff checks — перед публикацией; не утверждать GitHub CI PASS без наблюдения.
+- **Границы:** локальная проверка **только доверенного Python-кода**, не полноценная внешняя аутентификация, не изоляция ОС и не автоматическая выдача прав из пользовательского prompt. Публичного action/grant endpoint нет. Защита действительна для вызывающих через gate адаптеров; другие вызовы Python не перехватываются. Netcup/production, OS права, ключи/секреты, systemd/порты/другие проекты не менялись, расходов нет.
+- **Версия/откат:** GitHub `main` **до 5.13** `604157247785ffdfc4d963c386f28435df208837`; откат адресным обратным коммитом от актуального `main` без force/reset. Netcup не развёртывался.
 
 ## Текущая передача — 5.12, retries/idempotency/resume 18.11.2026
 
