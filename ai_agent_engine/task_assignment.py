@@ -116,7 +116,7 @@ class WorkspaceRoot:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError as exc:
-                raise WorkspaceBusy("workspace already reserved") from exc
+                raise WorkspaceBusy("workspace already in use by another active task") from exc
             except OSError as exc:
                 raise InvalidAssignment("workspace filesystem cannot be locked") from exc
             return WorkspaceLease(directory, fd)
