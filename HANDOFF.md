@@ -1,3 +1,17 @@
+# HANDOFF — 2026-11-18: 6.11 exclusive workspace edits; следующий 6.12
+
+**Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md`. Перед публикацией 6.11 подтверждённый head/откат `39cb815d2cc493facae75c9b8ed46144723a8fd9` (6.10), PR #55, тестовая ветка `stage-6.11-workspace-conflict`. Откат только адресным обратным коммитом от актуального main, без force/reset.
+
+## Текущая передача — 6.11: один писатель на физическую workspace
+
+- **Статус:** `6.11 [x]` в рамках одной task workspace на Linux. Существующая блокировка `WorkspaceRoot.acquire` (nonblocking `flock` каталога) применяется до `TaskDeliveryManager.reserve` и запуска провайдера; остаётся до безопасного терминального перехода. Уточнена Python-ошибка `WorkspaceBusy("workspace already in use by another active task")`; стабильные HTTP `409 workspace_busy` и reason_code `workspace_busy` сохранены.
+- **Новый тест:** `tests/test_task_workspace_edit_conflict.py`: 2 независимых настоящих Linux gated-process теста, GPT→Claude и Claude→GPT, разные проекты и один каталог. Пока первый процесс редактирует тестовый marker, второй получает `WorkspaceBusy`, остаётся `QUEUED`, без файла, PID, delivery ticket, provider/permission audit; SQLite записывает отказ. После завершения первого тот же второй task выполняется один раз, а после повторного открытия SQLite обе записи `SUCCEEDED` и сохранён reason_code. Без вызова реального GPT/Claude.
+- **Проверки на PR #55:** GitHub Actions Ubuntu/Python 3.11, 3.12, 3.13 **PASS**; wheel/build PASS; на 3.12 полный регресс **590 unittest OK**. Windows CI FAIL по старому Linux-only импорту `fcntl` в `task_assignment.py`, до этого пункта тоже падал; не называть всю CI-матрицу зелёной. Изоляция `fcntl` на Windows не входит в 6.11.
+- **Границы:** `flock` работает только в пределах одного host/общей файловой системы с совместимой семантикой. Если разные копии проекта физически разделены, файлы не конфликтуют; межхостовой distributed lock не реализован. Это исключение **двух доверенных назначений на одну папку**, а не запрет любой записи произвольного shell/CLI за пределы workspace. Для прямых сетевых GPT/Claude subprocess полная OS-изоляция по-прежнему не заявлена (см. 6.8). Нет Netcup, real provider calls, paid API, новых расходов, secret/permission changes, production database migrations.
+- **Следующий:** `6.12 [ ]` — фактическая передача и проверка артефактов, **не начат**; владелец должен дать новую команду. [Протокол](./infra/orchestrator/TASK_WORKSPACE_CONFLICTS.md).
+
+---
+
 # HANDOFF — 2026-11-18: 6.10 parallel provider-adapter process sessions; следующий 6.11
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`, `IMPLEMENTATION_ROADMAP.md`; перед публикацией 6.10 исходный head/откат `724f9e2971e8271b610efb1fbd8c39d21bb1fe1d` (6.9). GitHub PR #54, ветка `stage-6.10-parallel-sessions`. При откате — адресный revert на актуальном main, без force/reset.
