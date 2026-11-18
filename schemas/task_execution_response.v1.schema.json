@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vl-ktk/ai-agent-engine/schemas/task_execution_response.v1.schema.json",
+  "title": "AI Agent Engine trusted terminal response v1",
+  "description": "Internal terminal result only; not a file transfer, provider billing statement or public HTTP reply.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "provider", "model_id", "state", "result", "error", "limits"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "task_id": {"type": "string", "pattern": "^(task|subtask)_[0-9a-f]{32}$"},
+    "provider": {"enum": ["gpt", "claude"]},
+    "model_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}$"},
+    "state": {"enum": ["succeeded", "failed", "cancelled", "timed_out"]},
+    "result": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text", "artifacts"],
+          "properties": {
+            "text": {"type": ["string", "null"], "maxLength": 20000},
+            "artifacts": {
+              "type": "array", "maxItems": 16,
+              "items": {"$ref": "#/$defs/artifact"}
+            }
+          },
+          "anyOf": [
+            {"properties": {"text": {"type": "string", "minLength": 1}}},
+            {"properties": {"artifacts": {"minItems": 1}}}
+          ]
+        }
+      ]
+    },
+    "error": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code"],
+          "properties": {
+            "code": {"enum": ["quota", "auth", "unsupported", "unavailable", "worker_failure", "invalid_result", "timed_out", "cancelled"]}
+          }
+        }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeout_ms", "max_text_chars", "text_chars", "token_usage"],
+      "properties": {
+        "timeout_ms": {"type": "integer", "minimum": 50, "maximum": 86400000},
+        "max_text_chars": {"const": 20000},
+        "text_chars": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "token_usage": {"type": "null"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"state": {"const": "succeeded"}}},
+      "then": {"properties": {"result": {"type": "object"}, "error": {"type": "null"}}},
+      "else": {"properties": {"result": {"type": "null"}, "error": {"type": "object"}, "limits": {"properties": {"text_chars": {"const": 0}}}}}
+    },
+    {
+      "if": {"properties": {"state": {"const": "failed"}}},
+      "then": {"properties": {"error": {"properties": {"code": {"enum": ["quota", "auth", "unsupported", "unavailable", "worker_failure", "invalid_result"]}}}}}
+    },
+    {
+      "if": {"properties": {"state": {"const": "cancelled"}}},
+      "then": {"properties": {"error": {"properties": {"code": {"const": "cancelled"}}}}}
+    },
+    {
+      "if": {"properties": {"state": {"const": "timed_out"}}},
+      "then": {"properties": {"error": {"properties": {"code": {"const": "timed_out"}}}}}
+    }
+  ],
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "media_type"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}(/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}){0,7}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 100000000},
+        "media_type": {"type": "string", "pattern": "^[a-z][a-z0-9.+-]{0,49}/[a-z0-9][a-z0-9.+-]{0,49}$"}
+      }
+    }
+  }
+}

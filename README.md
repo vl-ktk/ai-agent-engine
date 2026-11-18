@@ -15,7 +15,14 @@ request v1 now has a [JSON schema, strict validator, owner-bound builder and
 offline fixture](./infra/orchestrator/TASK_EXECUTION_REQUEST.md). This
 internal contract does not modify either provider's live invocation or
 grant permissions by including them in JSON. The next stage is 6.5 (response
-contract); no new GPT/Claude network calls or Netcup deployment.
+contract); no new GPT/Claude network calls or Netcup deployment occurred
+during stage 6.4.
+
+**Stage 6.5 [x]:** Both trusted GPT and Claude outcomes now have an
+[offline-verified common terminal response schema and adapter](./infra/orchestrator/TASK_EXECUTION_RESPONSE.md):
+result text, sanitized failure, configured limits and a syntactic artifact
+manifest. Actual file transfer, checksum verification and durable result
+storage are **not** implemented; those are later roadmap items.
 
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.

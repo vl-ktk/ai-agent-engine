@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "task_id": "subtask_33333333333333333333333333333333",
+  "provider": "gpt",
+  "model_id": "gpt-test-model",
+  "state": "succeeded",
+  "result": {
+    "text": null,
+    "artifacts": [{
+      "path": "reports/synthetic.json",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "size_bytes": 128,
+      "media_type": "application/json"
+    }]
+  },
+  "error": null,
+  "limits": {"timeout_ms": 30000, "max_text_chars": 20000, "text_chars": 0, "token_usage": null}
+}

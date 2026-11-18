@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "task_id": "task_22222222222222222222222222222222",
+  "provider": "claude",
+  "model_id": "default",
+  "state": "failed",
+  "result": null,
+  "error": {"code": "quota"},
+  "limits": {"timeout_ms": 180000, "max_text_chars": 20000, "text_chars": 0, "token_usage": null}
+}

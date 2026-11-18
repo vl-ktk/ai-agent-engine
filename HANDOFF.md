@@ -1,8 +1,17 @@
-# HANDOFF — 2026-11-18: 6.4 запрос GPT/Claude v1; следующий 6.5
+# HANDOFF — 2026-11-18: 6.5 единый ответ GPT/Claude v1; следующий 6.6
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
 
-## Текущая передача — 6.4: схема, валидатор и fixture единого запроса
+## Текущая передача — 6.5: схема и адаптер терминального ответа
+
+- **Статус:** `6.5 [x]` — единый provider-neutral контракт ответа v1: итог, структурный список артефактов, обезличенный код ошибки и честные лимиты. **Следующий `6.6 [ ]`** — файловые операции в разрешённой рабочей области, только по новой команде Владислава. [Спецификация 6.5](./infra/orchestrator/TASK_EXECUTION_RESPONSE.md).
+- **Источник/версия:** GitHub `vl-ktk/ai-agent-engine`, `main`. Непосредственно **до 6.5** опубликован `32390ef583ef2c54dac187215b83bb59d8ca5890` (код 6.4). Новый SHA проверять после публикации; откат 6.5 — адресный обратный коммит после сверки актуального `main`, без force-push/reset. Netcup не выкладывался, серверного отката не требуется.
+- **Реализовано:** `ai_agent_engine/task_response.py` — `TaskExecutionResponse`, `ArtifactDescriptor`, `parse_task_response` и `adapt_task_outcome`. `schemas/task_execution_response.v1.schema.json`, три синтетических fixture (`success`, `failure`, `artifact`), `tests/test_task_response.py`, документация. Адаптер использует доверенный `GPTTaskOutcome` от `GPTTaskExecutor` и owner-bound наследника `ClaudeTaskExecutor`, проверяет terminal state в scoped SQLite и **ровно одно** matching provider event. Переход `executed=False` нельзя представить вторым успехом.
+- **Точность:** успешный ответ содержит реальный текст в памяти; ошибка только `{code}` из allowlist без сырого body/stack; cancelled/timed_out различаются. `timeout_ms` — настроенный deadline, `text_chars` измерен, `max_text_chars=20000`, **`token_usage=null` — токены и биллинг не измерены**. Артефакт только дескриптор `path/sha256/size_bytes/media_type`, без содержимого, файловых операций, реальной SHA-проверки и передачи: это **6.12**. Живой адаптер пока выставляет `artifacts=[]`.
+- **Проверки:** 10 новых структурных тестов 6.5 PASS, полный регресс **533 unittest OK (1 skipped)**. Два настоящих локальных offline subprocess — GPT и Claude — с одинаковым форматом успеха/квоты, а также timeout, ложный повтор, spoofed audit, malformed JSON, traversal, неправильный checksum-формат, size/error-limit mismatch. Compileall/source/workflow/staged tree проверить перед публикацией; GitHub CI не объявлять успешным без результата.
+- **Границы:** не выполнено ни одного нового реального провайдерского запроса, нет платного API, новых секретов, изменений Codespace/Netcup/production SQLite/SSH/systemd/других проектов. Ранее подтверждённые одиночные live PASS GPT 6.2 и Claude Pro 6.3 не повторяли; unattended Claude на Netcup остаётся HOLD.
+
+## Историческая передача — 6.4: схема, валидатор и fixture единого запроса
 
 - **Статус:** `6.4 [x]` — внутренний provider-neutral request v1 с точными полями задачи, контекста, роли и **запрошенных**, но не выданных, действий. **Следующий `6.5 [ ]`** — формат результата, артефактов, ошибок и лимитов, начать только по новой явной команде Владислава. [Контракт 6.4](./infra/orchestrator/TASK_EXECUTION_REQUEST.md).
 - **Источник/версия:** GitHub `vl-ktk/ai-agent-engine`, `main`. До 6.4 опубликован `1c06f77307537aea0c120f272903f3895956d2f4` (документы 6.3; код Claude `e46b751`). Коммит текущего 6.4 подтвердить по GitHub после публикации; Netcup release не меняется. Откат — только адресным обратным коммитом от **актуального** `main`, без force/reset/серверного отката.
