@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 9  # v9 adds private, atomic report+artifact bytes persistence.
+SCHEMA_VERSION = 10  # v10 adds immutable task-scoped Git source version receipts.
 
 
 class StorageUnavailable(RuntimeError):
@@ -100,9 +100,10 @@ class SQLiteTaskStore:
                 self._create_provider_audit_table(db)
                 self._create_process_table(db)
                 self._create_artifact_tables(db)
+                self._create_source_version_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -134,6 +135,7 @@ class SQLiteTaskStore:
                     db.execute("DROP TABLE task_provider_audit_v6")
                 self._create_process_table(db)
                 self._create_artifact_tables(db)
+                self._create_source_version_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -322,6 +324,57 @@ class SQLiteTaskStore:
             return bytes(report[0]), tuple(rows)
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot read stored artifact bundle") from exc
+
+    @staticmethod
+    def _create_source_version_table(db: sqlite3.Connection) -> None:
+        """Stage 6.13: task-local immutable Git head + patch digest.
+
+        A version receipt is not a Git commit or an automatic git push.
+        """
+        db.execute("""CREATE TABLE IF NOT EXISTS task_source_versions (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            worker_id TEXT NOT NULL,
+            baseline_commit TEXT NOT NULL,
+            result_commit TEXT NOT NULL,
+            patch_sha256 TEXT,
+            recorded_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            CHECK(length(baseline_commit) IN (40,64)),
+            CHECK(length(result_commit) IN (40,64)),
+            CHECK(patch_sha256 IS NULL OR length(patch_sha256) = 64)
+        )""")
+
+    def write_source_version(self, task_id: str, worker_id: str,
+                             baseline_commit: str, result_commit: str,
+                             patch_sha256: str | None) -> None:
+        """Insert one source receipt after verified completed ACK, never replace."""
+        try:
+            with self._db() as db:
+                row = db.execute("""SELECT s.state,d.status,d.result,c.worker_id
+                    FROM task_states s
+                    LEFT JOIN task_deliveries d ON d.task_id=s.task_id
+                    LEFT JOIN task_claims c ON c.task_id=s.task_id
+                    WHERE s.task_id=?""", (task_id,)).fetchone()
+                if row != ("succeeded", "completed", "success", worker_id):
+                    raise StorageUnavailable("source version requires completed task")
+                db.execute("""INSERT INTO task_source_versions
+                    (task_id,worker_id,baseline_commit,result_commit,patch_sha256)
+                    VALUES (?,?,?,?,?)""",
+                    (task_id,worker_id,baseline_commit,result_commit,patch_sha256))
+        except sqlite3.IntegrityError as exc:
+            raise StorageUnavailable("source version already exists or is invalid") from exc
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist source version") from exc
+
+    def read_source_version(self, task_id: str) -> tuple | None:
+        """The caller must verify owner/project scope before using this method."""
+        try:
+            return self._db().execute("""SELECT worker_id,baseline_commit,
+                result_commit,patch_sha256,recorded_at
+                FROM task_source_versions WHERE task_id=?""",
+                (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect source version") from exc
 
     def process_record(self, task_id: str) -> tuple | None:
         try:
