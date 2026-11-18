@@ -196,6 +196,8 @@ class AssignmentInboxTests(unittest.TestCase):
         store = SQLiteTaskStore(self.path)
         db = store._db()
         with db:
+            db.execute("DROP TABLE task_deliveries")
+            db.execute("DROP TABLE task_admission_keys")
             db.execute("DROP TABLE task_transition_audit")
             db.execute("DROP TABLE task_states")
             db.execute("DROP TABLE task_claims")
@@ -208,7 +210,7 @@ class AssignmentInboxTests(unittest.TestCase):
         self.reopen()
         self.assertEqual(self.inbox.get_assignment(task.task_id, OWNER_A), assigned)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                         (3,))
+                         (4,))
 
     def test_tampered_persisted_workspace_fails_closed(self):
         task = self.create()

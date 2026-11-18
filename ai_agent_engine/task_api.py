@@ -1,4 +1,4 @@
-"""Stages 5.1-5.8: scoped intake, durable ordering and audited task lifecycle.
+"""Stages 5.1-5.12: scoped intake, durable ordering and audited task lifecycle.
 
 Owner identity is bound by trusted server configuration, NOT HTTP input.
 Use --db for SQLite persistence; without it the inbox stays in memory.
@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import re
@@ -41,6 +42,7 @@ _PROJECT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _REQUIRED_FIELDS = frozenset({"project_id", "title", "prompt"})
 _OPTIONAL_FIELDS = frozenset({"parent_task_id", "priority"})
 _TASK_ID = re.compile(r"(?:task|subtask)_[0-9a-f]{32}\Z")
+_IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 
 
 class InvalidJSON(ValueError):
@@ -49,6 +51,10 @@ class InvalidJSON(ValueError):
 
 class InvalidTask(ValueError):
     """Task fields do not match the narrow admission contract."""
+
+
+class IdempotencyConflict(ValueError):
+    """An existing key is bound to a different task payload."""
 
 
 class InboxFull(RuntimeError):
@@ -242,6 +248,7 @@ class TaskInbox:
         self._assignments: dict[str, TaskAssignment] = {}
         self._leases: dict[str, WorkspaceLease] = {}
         self._states: dict[str, TaskState] = {}
+        self._idempotent: dict[tuple[str, str, str], tuple[str, str]] = {}
         self._events: list[TaskTransitionEvent] = []  # RAM-only audit without SQLite
         self._next_receipt = 1
         self._max_pending = max_pending
@@ -353,16 +360,49 @@ class TaskInbox:
                 DependencyCycle, InvalidJSON, InvalidTask) as exc:
             raise StorageUnavailable("invalid persisted task graph") from exc
 
-    def accept(self, submission: TaskSubmission, scope: OwnerScope) -> TaskRecord:
+    def accept(self, submission: TaskSubmission, scope: OwnerScope,
+               *, idempotency_key: str | None = None) -> TaskRecord:
+        """Admit a task once per trusted owner/project/key and exact payload.
+
+        With no key this retains the original 5.1 API behaviour. Replays of
+        a keyed admission return the same task ID, even when the inbox is full
+        or the task has completed. No raw key or prompt goes into the ledger.
+        """
         if not isinstance(submission, TaskSubmission):
             raise TypeError("expected a validated TaskSubmission")
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected a trusted OwnerScope")
         if type(submission.priority) is not int or not 0 <= submission.priority <= MAX_PRIORITY:
             raise InvalidTask("invalid priority")
+        if idempotency_key is not None and (type(idempotency_key) is not str
+                                             or not _IDEMPOTENCY_KEY.fullmatch(idempotency_key)):
+            raise InvalidTask("invalid idempotency key")
         with self._lock:
             if submission.project_id not in scope.project_ids:
                 raise ProjectForbidden("project outside configured scope")
+            key_ref = None
+            fingerprint = None
+            if idempotency_key is not None:
+                digest = sha256(idempotency_key.encode("ascii")).hexdigest()
+                key_ref = (scope.owner_id, submission.project_id, digest)
+                fingerprint = sha256(json.dumps({
+                    "project_id": submission.project_id,
+                    "title": submission.title,
+                    "prompt": submission.prompt,
+                    "parent_task_id": submission.parent_task_id,
+                    "priority": submission.priority,
+                }, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":")).encode("utf-8")).hexdigest()
+                existing = (self._store.admission_key(*key_ref)
+                            if self._store is not None
+                            else self._idempotent.get(key_ref))
+                if existing is not None:
+                    previous_id, previous_fingerprint = existing
+                    if fingerprint != previous_fingerprint:
+                        raise IdempotencyConflict("idempotency key reused for different task")
+                    if previous_id not in self._by_id:
+                        raise StorageUnavailable("idempotent task record is missing")
+                    return self._by_id[previous_id]
             if submission.parent_task_id is not None:
                 parent = self._by_id.get(submission.parent_task_id)
                 if (parent is None or parent.owner_id != scope.owner_id
@@ -379,13 +419,17 @@ class TaskInbox:
             record = TaskRecord(task_id=task_id, owner_id=scope.owner_id,
                                 receipt=receipt, submission=submission)
             if self._store is not None:
-                self._store.insert_task(record)  # commit before admission response
+                self._store.insert_task(record,
+                    key_hash=key_ref[2] if key_ref else None,
+                    payload_hash=fingerprint)  # atomic task + key before ACK
             self._next_receipt += 1
             self._pending.append(record)
             self._by_id[task_id] = record
             self._dag.add_task(task_id, receipt)
             self._priorities[task_id] = submission.priority
             self._states[task_id] = TaskState.QUEUED
+            if key_ref is not None:
+                self._idempotent[key_ref] = (task_id, fingerprint)
             return record
 
     def claim_task(self, task_id: str, worker_id: str, workspace_name: str,
@@ -815,8 +859,19 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             except InvalidTask:
                 self._reply(422, "invalid_task")
                 return
+            keys = self.headers.get_all("Idempotency-Key") or []
+            if len(keys) > 1:
+                self._reply(422, "invalid_idempotency_key")
+                return
+            key = keys[0] if keys else None
             try:
-                record = inbox.accept(submission, scope)
+                record = inbox.accept(submission, scope, idempotency_key=key)
+            except IdempotencyConflict:
+                self._reply(409, "idempotency_conflict")
+                return
+            except InvalidTask:
+                self._reply(422, "invalid_idempotency_key")
+                return
             except ProjectForbidden:
                 self._reply(403, "project_forbidden")
                 return

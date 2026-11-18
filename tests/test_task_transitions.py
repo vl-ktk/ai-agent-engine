@@ -267,13 +267,15 @@ class StateTransitionTests(unittest.TestCase):
         store = SQLiteTaskStore(self.path)
         db = store._db()
         with db:
+            db.execute("DROP TABLE task_deliveries")
+            db.execute("DROP TABLE task_admission_keys")
             db.execute("DROP TABLE task_transition_audit")
             db.execute("DROP TABLE task_states")
             db.execute("PRAGMA user_version=2")
         store.close()
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.path), workspace_root=self.root)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                         (3,))
+                         (4,))
         self.assertIs(self.inbox.state(claimed, OWNER), TaskState.ASSIGNED)
         self.assertIs(self.inbox.state(unclaimed, OWNER), TaskState.QUEUED)
         self.assertEqual(self.history(claimed), ())  # old v2 has no audit

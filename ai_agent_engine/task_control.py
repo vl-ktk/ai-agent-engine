@@ -196,6 +196,11 @@ class TaskProcessController:
                     raise TaskControlError("running process is not managed")
                 return self.inbox.transition_state(task_id, TaskState.CANCELLED,
                                                    scope, actor_id="orchestrator")
+            if run.done and state is TaskState.RUNNING:
+                # A failed attempt was stopped but the next attempt is not
+                # attached yet. Hold the registry lock against attach_retry.
+                return self.inbox.transition_state(task_id, TaskState.CANCELLED,
+                                                   scope, actor_id="orchestrator")
         return self._stop_run(run, TaskState.CANCELLED)
 
     def finish(self, task_id: str, scope: OwnerScope, *, success: bool) -> TaskState:
@@ -226,6 +231,90 @@ class TaskProcessController:
                                         actor_id=run.worker_id)
             run.done = True
             return target
+
+    def complete_failed_attempt(self, task_id: str, scope: OwnerScope) -> int:
+        """5.12: verify failed attempt ended without finalizing logical task.
+
+        The trusted adapter may then ACK failure to TaskDeliveryManager and
+        reserve another bounded attempt. A failure cannot release the lease
+        or fabricate an allowed transition from a terminal task.
+        """
+        with self._mutex:
+            if self._closed or self.inbox.state(task_id, scope) is not TaskState.RUNNING:
+                raise TaskControlError("task is not running")
+            run = self._runs.get(task_id)
+            if run is None:
+                raise TaskControlError("task has no managed process")
+        with run.lock:
+            if run.done:
+                raise TransitionRejected("invalid_edge")
+            code = run.process.poll()
+            if code is None or self._group_running(run.pgid):
+                raise TaskControlError("attempt process group is still running")
+            if code == 0:
+                raise TaskControlError("successful process is not a failed attempt")
+            run.process.wait(timeout=0)
+            run.done = True
+            return code
+
+    def attach_retry(self, task_id: str, process: subprocess.Popen,
+                     scope: OwnerScope, *, actor_id: str, delivery_token: str,
+                     timeout_seconds: float | None = None) -> None:
+        """Attach a new child only for an issued durable retry ticket.
+
+        All earlier group members must have stopped and been acknowledged.
+        State stays RUNNING; the original workspace lease remains exclusive.
+        """
+        if timeout_seconds is not None and (type(timeout_seconds) not in (int, float)
+                                             or not 0.01 <= timeout_seconds <= 86400):
+            raise ValueError("invalid timeout")
+        pgid = self._validate_process(process)
+        with self._mutex:
+            if self._closed:
+                raise TaskControlError("task controller is closed")
+            previous = self._runs.get(task_id)
+            if previous is None or not previous.done:
+                raise TaskControlError("previous attempt has not stopped")
+            if any(run.pgid == pgid and not run.done for run in self._runs.values()):
+                raise TaskControlError("process group already belongs to a task")
+            assignment = self.inbox.get_assignment(task_id, scope)
+            if assignment is None or assignment.worker_id != actor_id:
+                raise TaskControlError("worker does not own task assignment")
+            if self.inbox.state(task_id, scope) is not TaskState.RUNNING:
+                raise TaskControlError("retry requires a running logical task")
+            if self.inbox._store is None:
+                raise TaskControlError("durable retry ledger is required")
+            with self.inbox._lock:
+                row = self.inbox._store.delivery(task_id)
+            if (row is None or row[1] < 2 or row[2] != delivery_token
+                    or row[3] != "active"):
+                raise TaskControlError("retry ticket is not active")
+            deadline = (time.monotonic() + timeout_seconds
+                        if timeout_seconds is not None else None)
+            self._runs[task_id] = _ManagedRun(task_id, process, pgid, scope,
+                                               actor_id, deadline)
+            if deadline is not None and self._watchdog is None:
+                self._watchdog = Thread(target=self._watch, daemon=True,
+                                        name="ae-task-timeouts")
+                self._watchdog.start()
+
+    def finalize_exhausted(self, task_id: str, scope: OwnerScope) -> TaskState:
+        """5.12: close failed logical task only after all safe retries end."""
+        with self._mutex:
+            if self._closed:
+                raise TaskControlError("task controller is closed")
+            run = self._runs.get(task_id)
+            if (run is None or not run.done
+                    or self.inbox.state(task_id, scope) is not TaskState.RUNNING):
+                raise TaskControlError("failed process is not safely stopped")
+            if self.inbox._store is None:
+                raise TaskControlError("durable retry ledger is required")
+            with self.inbox._lock:
+                row = self.inbox._store.delivery(task_id)
+            if row is None or row[3] != "exhausted":
+                raise TaskControlError("delivery attempts are not exhausted")
+            return self.inbox.transition_state(task_id, TaskState.FAILED,
+                                               scope, actor_id=run.worker_id)
 
     def _watch(self) -> None:
         while not self._shutdown.wait(self.check_interval):

@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 3  # v3 adds durable lifecycle and metadata-only audit.
+SCHEMA_VERSION = 4  # v4 adds idempotent admission and bounded delivery ledger.
 
 
 class StorageUnavailable(RuntimeError):
@@ -95,9 +95,10 @@ class SQLiteTaskStore:
                 )""")
                 self._create_claims_table(db)
                 self._create_lifecycle_tables(db)
+                self._create_delivery_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -107,7 +108,9 @@ class SQLiteTaskStore:
             with db:
                 if version == 1:
                     self._create_claims_table(db)
-                self._create_lifecycle_tables(db)
+                if version in (1, 2):
+                    self._create_lifecycle_tables(db)
+                self._create_delivery_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -153,6 +156,28 @@ class SQLiteTaskStore:
                 (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         )""")
 
+    @staticmethod
+    def _create_delivery_tables(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE task_admission_keys (
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            key_hash TEXT NOT NULL,
+            payload_hash TEXT NOT NULL,
+            task_id TEXT NOT NULL UNIQUE REFERENCES tasks(task_id),
+            PRIMARY KEY(owner_id,project_id,key_hash)
+        )""")
+        db.execute("""CREATE TABLE task_deliveries (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            max_attempts INTEGER NOT NULL CHECK(max_attempts BETWEEN 1 AND 5),
+            attempts_used INTEGER NOT NULL CHECK(attempts_used BETWEEN 1 AND 5),
+            attempt_token TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN
+                ('active','retryable','completed','exhausted')),
+            retry_at REAL NOT NULL DEFAULT 0,
+            result TEXT CHECK(result IN ('success','failure') OR result IS NULL),
+            CHECK(attempts_used <= max_attempts)
+        )""")
+
     def load(self) -> tuple[list[tuple], list[tuple[str, str]], list[tuple], list[tuple]]:
         """Read committed records/edges/claims/states; caller validates scope."""
         try:
@@ -170,7 +195,8 @@ class SQLiteTaskStore:
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot load task database") from exc
 
-    def insert_task(self, record) -> None:
+    def insert_task(self, record, *, key_hash: str | None = None,
+                    payload_hash: str | None = None) -> None:
         try:
             with self._db() as db:
                 db.execute("""INSERT INTO tasks
@@ -182,8 +208,90 @@ class SQLiteTaskStore:
                      record.submission.priority, record.submission.priority))
                 db.execute("INSERT INTO task_states (task_id,state) VALUES (?, 'queued')",
                            (record.task_id,))
+                if key_hash is not None and payload_hash is not None:
+                    db.execute("""INSERT INTO task_admission_keys
+                        (owner_id,project_id,key_hash,payload_hash,task_id)
+                        VALUES (?,?,?,?,?)""", (record.owner_id, record.project_id,
+                                                  key_hash, payload_hash, record.task_id))
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot persist task") from exc
+
+    def admission_key(self, owner_id: str, project_id: str,
+                      key_hash: str) -> tuple[str, str] | None:
+        try:
+            return self._db().execute("""SELECT task_id,payload_hash
+                FROM task_admission_keys
+                WHERE owner_id=? AND project_id=? AND key_hash=?""",
+                (owner_id, project_id, key_hash)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read admission key") from exc
+
+    def delivery(self, task_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT max_attempts,attempts_used,
+                attempt_token,status,retry_at,result
+                FROM task_deliveries WHERE task_id=?""", (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read delivery") from exc
+
+    def begin_delivery(self, task_id: str, max_attempts: int,
+                       token: str, now: float) -> tuple[tuple, bool]:
+        """Under inbox lock: commit a new bounded attempt or replay existing."""
+        try:
+            with self._db() as db:
+                existing = self.delivery(task_id)
+                if existing is None:
+                    db.execute("""INSERT INTO task_deliveries
+                        (task_id,max_attempts,attempts_used,attempt_token,status)
+                        VALUES (?,?,1,?,'active')""", (task_id, max_attempts, token))
+                    return (max_attempts, 1, token, "active", 0.0, None), True
+                limit, used, old_token, status, retry_at, result = existing
+                if limit != max_attempts:
+                    raise StorageUnavailable("delivery policy cannot be changed")
+                if status != "retryable" or now < retry_at:
+                    return existing, False
+                if used >= limit:
+                    raise StorageUnavailable("invalid retryable delivery")
+                updated = db.execute("""UPDATE task_deliveries SET
+                    attempts_used=?,attempt_token=?,status='active',retry_at=0,result=NULL
+                    WHERE task_id=? AND attempt_token=? AND status='retryable'""",
+                    (used + 1, token, task_id, old_token))
+                if updated.rowcount != 1:
+                    raise StorageUnavailable("delivery changed unexpectedly")
+                return (limit, used + 1, token, "active", 0.0, None), True
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot reserve task delivery") from exc
+
+    def settle_delivery(self, task_id: str, token: str, success: bool,
+                        retry_at: float) -> tuple[tuple, bool]:
+        """Persist one ACK; repeated ACK never counts as another attempt."""
+        try:
+            with self._db() as db:
+                current = self.delivery(task_id)
+                if current is None:
+                    return None, False
+                limit, used, old_token, status, _, result = current
+                if old_token != token:
+                    return current, False
+                if status != "active":
+                    if ((status == "completed" and success)
+                            or (status in ("retryable", "exhausted") and not success)):
+                        return current, False
+                    return current, False
+                next_status = ("completed" if success else
+                               "exhausted" if used >= limit else "retryable")
+                outcome = "success" if success else "failure"
+                updated = db.execute("""UPDATE task_deliveries SET
+                    status=?,retry_at=?,result=?
+                    WHERE task_id=? AND attempt_token=? AND status='active'""",
+                    (next_status, retry_at if next_status == "retryable" else 0,
+                     outcome, task_id, token))
+                if updated.rowcount != 1:
+                    raise StorageUnavailable("delivery changed unexpectedly")
+                return (limit, used, token, next_status,
+                        retry_at if next_status == "retryable" else 0, outcome), True
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot settle task delivery") from exc
 
     def replace_dependencies(self, task_id: str, prerequisites: tuple[str, ...]) -> None:
         try:

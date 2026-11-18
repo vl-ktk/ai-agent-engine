@@ -1,6 +1,14 @@
-# HANDOFF — 2026-11-18: 5.11 завершён; следующий 5.12
+# HANDOFF — 2026-11-18: 5.12 завершён; следующий 5.13
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 5.12, retries/idempotency/resume 18.11.2026
+
+- **Статус:** `5.12 [x]` по критерию повторной доставки и отсутствия дублирующих разрешённых выдач. Следующий **5.13 [ ]** — права/grants и обезличенный аудит опасных действий, **не начинать без новой команды Владислава**. [Протокол и границы](./infra/orchestrator/TASK_RETRIES.md).
+- **Код:** `TaskInbox.accept` с опциональным `idempotency_key`, локальный HTTP `Idempotency-Key` (один ID/receipt при повторе, конфликт `409`), приватная task SQLite **v4** с `task_admission_keys` и `task_deliveries` (единственное хранилище, миграция собственной v1/v2/v3). Новый доверенный `TaskDeliveryManager`: одна исполняемая выдача/токен на активную попытку, лимит `1..5`, сохраняемая задержка, ACK dedupe, owner/worker isolation, не переиспользует неизвестный active после restart. Дополнен `TaskProcessController`: проверка остановки failed-attempt, `attach_retry` только для активного ticket, `finalize_exhausted`, корректная отмена между попытками. Машина состояний 5.7, основная БД Netcup и внешние API не изменены.
+- **Проверки:** **33 новых PASS** (`tests/test_task_delivery.py`), полный регресс **448 unittest OK (1 skipped)**; 32 concurrent keyed admits/deliveries, 12 HTTP POST с одним ключом, один реальный процесс при дублях, два отдельных процесса при retry с удержанием одного workspace, отказ старых токенов, SQLite storage failures, v1/v2/v3 upgrades, RAM refusal, owner/worker. compileall/workflow/source/diff checks — перед публикацией; GitHub CI не считать PASS без статуса.
+- **Безопасность/границы:** это локальный протокол доверенных исполнителей, **не** гарантия «exactly once» внешних побочных эффектов и **не** автоповтор неизвестного процесса после crash. Неизвестный active остаётся заблокирован до сверки результата; внешний API должен поддерживать идемпотентность по `task_id`. Нет HTTP исполнения, клиентской auth и реальных AI-моделей. Netcup/production/порты/systemd/секреты/другие проекты не трогали, расходов нет.
+- **Версия/откат:** GitHub `main` **до 5.12** `dbef2dbe49187ea533dcaf1b54a1b128250fc361`; откат адресным обратным коммитом от актуального `main` без force/reset. Netcup не развёртывался.
 
 ## Текущая передача — 5.11, отмена и таймауты 18.11.2026
 
