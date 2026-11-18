@@ -1,3 +1,17 @@
+# HANDOFF — 2026-11-18: 6.10 parallel provider-adapter process sessions; следующий 6.11
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`, `IMPLEMENTATION_ROADMAP.md`; перед публикацией 6.10 исходный head/откат `724f9e2971e8271b610efb1fbd8c39d21bb1fe1d` (6.9). GitHub PR #54, ветка `stage-6.10-parallel-sessions`. При откате — адресный revert на актуальном main, без force/reset.
+
+## Текущая передача — 6.10: одновременно работающие GPT + Claude task adapters
+
+- **Статус:** `6.10 [x]` исключительно как **одновременная работа двух реальных Linux managed subprocess** через существующие GPT/Claude adapters, без live моделей. Новый `tests/test_task_parallel_sessions.py`; отдельные owner-bound задачи из двух проектов с двумя приватными workspace, собственными worker IDs, разрешениями и журналами.
+- **Реальные проверки:** оба настоящих Popen дошли до независимых marker/barrier, оба процесса оставались живыми и `RUNNING` одновременно, разные PID зарегистрированы в SQLite v8, `flock` двух каталогов удерживались независимо, оба вернули корректный результат, имели по одному approval/provider event/ACK; не было повторного выполнения; после закрытия и повторного открытия SQLite оба состояния `SUCCEEDED`, процессы `stopped`.
+- **CI:** тест на PR #54 подтвердил PASS на Linux Python 3.11, 3.13, 3.12 (последний после rerun); полный повтор 3.12: **588 unittest OK**. Wheel build PASS. Первый прогон 3.12 показал существующую гонку в `test_stage5_integration.py` (короткий процесс завершился до `attach`), повтор PASS. Windows matrix остаётся красной ещё с 6.9: Linux-only `fcntl` import; новый тест на Windows имеет skip guard.
+- **Границы:** реальных запросов к аккаунтам GPT/Claude **не было**: два worker subprocess используют только синтетический JSON. Это доказательство Linux process concurrency, а **не** проверка одновременных лимитов подписок/длительных личных CLI-сессий или работы на Netcup. Нет новых расходов, API ключей, новых секретов, production, чужих проектов. Старт реального unattended Claude на VPS остаётся HOLD.
+- **Следующий:** `6.11 [ ]` — конфликтующие правки одной области; **не начат**. Подробности: [6.10](./infra/orchestrator/PARALLEL_PROVIDER_SESSIONS.md).
+
+---
+
 # HANDOFF — 2026-11-18: 6.9 crash-safe process recovery; следующий 6.10
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
