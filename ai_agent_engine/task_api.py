@@ -1,4 +1,4 @@
-"""Stages 5.1-5.3: scoped, loopback-only task admission and dependencies.
+"""Stages 5.1-5.4: scoped, loopback-only intake and task ordering.
 
 Submissions stay in a process-local inbox. Owner identity is bound by trusted
 server configuration, NOT HTTP input. This is not client authentication,
@@ -25,9 +25,10 @@ MAX_TITLE_CHARS = 1_024
 MAX_PROMPT_CHARS = 32_768
 DEFAULT_MAX_PENDING = 128
 MAX_DEPENDENCIES = 64
+MAX_PRIORITY = 100
 _PROJECT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _REQUIRED_FIELDS = frozenset({"project_id", "title", "prompt"})
-_OPTIONAL_FIELDS = frozenset({"parent_task_id"})
+_OPTIONAL_FIELDS = frozenset({"parent_task_id", "priority"})
 _TASK_ID = re.compile(r"(?:task|subtask)_[0-9a-f]{32}\Z")
 
 
@@ -65,6 +66,7 @@ class TaskSubmission:
     title: str
     prompt: str
     parent_task_id: str | None = None
+    priority: int = 0
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,16 @@ class TaskRecord:
         }
 
 
+@dataclass(frozen=True)
+class TaskChoice:
+    """Atomic snapshot of one eligible task, not a reservation or execution."""
+
+    task_id: str
+    project_id: str
+    priority: int
+    receipt: int
+
+
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     result: dict[str, object] = {}
     for key, value in pairs:
@@ -148,6 +160,9 @@ def parse_submission(data: bytes) -> TaskSubmission:
     if "parent_task_id" in payload and (
             type(parent_task_id) is not str or not _TASK_ID.fullmatch(parent_task_id)):
         raise InvalidTask("invalid parent task identifier")
+    priority = payload.get("priority", 0)
+    if type(priority) is not int or not 0 <= priority <= MAX_PRIORITY:
+        raise InvalidTask("invalid priority")
     if (not isinstance(title, str) or not title.strip()
             or len(title) > MAX_TITLE_CHARS
             or any(ord(char) < 32 or ord(char) == 127 for char in title)):
@@ -161,7 +176,7 @@ def parse_submission(data: bytes) -> TaskSubmission:
     except UnicodeError as exc:
         raise InvalidTask("invalid UTF-8 text") from exc
     return TaskSubmission(project_id=project_id, title=title, prompt=prompt,
-                          parent_task_id=parent_task_id)
+                          parent_task_id=parent_task_id, priority=priority)
 
 
 def parse_dependency_update(data: bytes) -> tuple[str, ...]:
@@ -178,6 +193,17 @@ def parse_dependency_update(data: bytes) -> tuple[str, ...]:
     return tuple(identifiers)
 
 
+def parse_priority_update(data: bytes) -> int:
+    """Require an exact JSON object with an integer priority from 0 to 100."""
+    payload = _decode_json(data)
+    if not isinstance(payload, dict) or set(payload) != {"priority"}:
+        raise InvalidTask("expected priority field")
+    priority = payload["priority"]
+    if type(priority) is not int or not 0 <= priority <= MAX_PRIORITY:
+        raise InvalidTask("invalid priority")
+    return priority
+
+
 class TaskInbox:
     """Thread-safe volatile records with scoped access and random task IDs."""
 
@@ -188,6 +214,7 @@ class TaskInbox:
         self._pending: list[TaskRecord] = []
         self._by_id: dict[str, TaskRecord] = {}
         self._dag = TaskDAG()
+        self._priorities: dict[str, int] = {}
         self._next_receipt = 1
         self._max_pending = max_pending
 
@@ -196,6 +223,8 @@ class TaskInbox:
             raise TypeError("expected a validated TaskSubmission")
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected a trusted OwnerScope")
+        if type(submission.priority) is not int or not 0 <= submission.priority <= MAX_PRIORITY:
+            raise InvalidTask("invalid priority")
         with self._lock:
             if submission.project_id not in scope.project_ids:
                 raise ProjectForbidden("project outside configured scope")
@@ -218,6 +247,7 @@ class TaskInbox:
             self._pending.append(record)
             self._by_id[task_id] = record
             self._dag.add_task(task_id, receipt)
+            self._priorities[task_id] = submission.priority
             return record
 
     def snapshot(self, scope: OwnerScope) -> tuple[TaskRecord, ...]:
@@ -296,6 +326,65 @@ class TaskInbox:
                         if record.owner_id == scope.owner_id
                         and record.project_id == project_id)
             return self._dag.topological_order(ids)
+
+    def priority(self, task_id: str, scope: OwnerScope) -> int:
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        with self._lock:
+            self._scoped_record(task_id, scope)
+            return self._priorities[task_id]
+
+    def set_priority(self, task_id: str, priority: int, scope: OwnerScope) -> int:
+        """Atomically reprioritize one owned task, without mutating its ID."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(priority) is not int or not 0 <= priority <= MAX_PRIORITY:
+            raise InvalidTask("invalid priority")
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            raise TaskNotFound("invalid task identifier")
+        with self._lock:
+            self._scoped_record(task_id, scope)
+            self._priorities[task_id] = priority
+            return priority
+
+    def select_next(self, project_id: str, scope: OwnerScope,
+                    *, completed_task_ids: tuple[str, ...] = ()) -> TaskChoice | None:
+        """Pure selection: eligible unfinished task with highest priority.
+
+        A trusted scheduler may supply completed IDs once the state machine
+        exists (5.7). HTTP never accepts client-claimed completion. Selection
+        does not reserve, transition, execute or remove any task.
+        """
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(project_id) is not str or not _PROJECT_ID.fullmatch(project_id):
+            raise ValueError("invalid project identifier")
+        if project_id not in scope.project_ids:
+            raise ProjectForbidden("project outside configured scope")
+        if (type(completed_task_ids) is not tuple
+                or any(type(task_id) is not str or not _TASK_ID.fullmatch(task_id)
+                       for task_id in completed_task_ids)
+                or len(completed_task_ids) != len(set(completed_task_ids))):
+            raise InvalidTask("invalid completed task IDs")
+        with self._lock:
+            for task_id in completed_task_ids:
+                record = self._scoped_record(task_id, scope)
+                if record.project_id != project_id:
+                    raise TaskNotFound("completed task outside requested project")
+            completed = set(completed_task_ids)
+            ready = [record for record in self._pending
+                     if record.owner_id == scope.owner_id
+                     and record.project_id == project_id
+                     and record.task_id not in completed
+                     and all(dep in completed
+                             for dep in self._dag.dependencies(record.task_id))]
+            if not ready:
+                return None
+            winner = min(ready, key=lambda r: (-self._priorities[r.task_id],
+                                               r.receipt, r.task_id))
+            return TaskChoice(task_id=winner.task_id, project_id=project_id,
+                              priority=self._priorities[winner.task_id],
+                              receipt=winner.receipt)
 
 
 def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHandler]:
@@ -387,23 +476,40 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                 self._reply(503, "inbox_full")
                 return
             self._reply(202, "accepted_in_memory", receipt=record.receipt,
-                        **record.metadata())
+                        **record.metadata(), priority=record.submission.priority)
 
         def do_GET(self) -> None:
             if self.path == TASK_PATH:
                 self._reply(405, "method_not_allowed")
                 return
-            if self.path.startswith("/v1/projects/") and self.path.endswith("/task-order"):
-                project_id = self.path[len("/v1/projects/"):-len("/task-order")]
-                if not _PROJECT_ID.fullmatch(project_id):
-                    self._reply(404, "not_found")
+            if self.path.startswith("/v1/projects/"):
+                for suffix in ("/task-order", "/next-task"):
+                    if not self.path.endswith(suffix):
+                        continue
+                    project_id = self.path[len("/v1/projects/"):-len(suffix)]
+                    if not _PROJECT_ID.fullmatch(project_id):
+                        self._reply(404, "not_found")
+                        return
+                    try:
+                        if suffix == "/task-order":
+                            ordered = inbox.topological_order(project_id, scope)
+                        else:
+                            selected = inbox.select_next(project_id, scope)
+                    except ProjectForbidden:
+                        self._reply(403, "project_forbidden")
+                        return
+                    if suffix == "/task-order":
+                        self._reply(200, "ordered", project_id=project_id,
+                                    task_ids=ordered)
+                    elif selected is None:
+                        self._reply(200, "no_ready_task", project_id=project_id,
+                                    task_id=None)
+                    else:
+                        self._reply(200, "selected", project_id=project_id,
+                                    task_id=selected.task_id,
+                                    priority=selected.priority)
                     return
-                try:
-                    ordered = inbox.topological_order(project_id, scope)
-                except ProjectForbidden:
-                    self._reply(403, "project_forbidden")
-                    return
-                self._reply(200, "ordered", project_id=project_id, task_ids=ordered)
+                self._reply(404, "not_found")
                 return
             if not self.path.startswith(TASK_PATH + "/"):
                 self._reply(404, "not_found")
@@ -414,12 +520,17 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                 self._reply(404, "not_found")
                 return
             self._reply(200, "found", **record.metadata(),
-                        depends_on=inbox.dependencies(task_id, scope))
+                        depends_on=inbox.dependencies(task_id, scope),
+                        priority=inbox.priority(task_id, scope))
 
         def do_PUT(self) -> None:
             prefix = TASK_PATH + "/"
-            suffix = "/dependencies"
-            if not self.path.startswith(prefix) or not self.path.endswith(suffix):
+            if not self.path.startswith(prefix):
+                self._reply(405, "method_not_allowed")
+                return
+            suffix = next((item for item in ("/dependencies", "/priority")
+                           if self.path.endswith(item)), None)
+            if suffix is None:
                 self._reply(405, "method_not_allowed")
                 return
             task_id = self.path[len(prefix):-len(suffix)]
@@ -428,6 +539,23 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                 return
             data = self._read_body()
             if data is None:
+                return
+            if suffix == "/priority":
+                try:
+                    requested_priority = parse_priority_update(data)
+                except InvalidJSON:
+                    self._reply(400, "invalid_json")
+                    return
+                except InvalidTask:
+                    self._reply(422, "invalid_priority")
+                    return
+                try:
+                    priority = inbox.set_priority(task_id, requested_priority, scope)
+                except TaskNotFound:
+                    self._reply(404, "not_found")
+                    return
+                self._reply(200, "priority_updated", task_id=task_id,
+                            priority=priority)
                 return
             try:
                 prerequisites = parse_dependency_update(data)

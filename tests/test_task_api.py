@@ -241,6 +241,7 @@ class TaskHTTPTests(unittest.TestCase):
         self.assertEqual(result["project_id"], "project-a")
         self.assertIsNone(result["parent_task_id"])
         self.assertEqual(result["kind"], "task")
+        self.assertEqual(result["priority"], 0)
         self.assertEqual(response.getheader("Cache-Control"), "no-store")
         self.assertEqual(response.getheader("X-Content-Type-Options"), "nosniff")
         self.assertNotIn("Create a concise report", json.dumps(result))
@@ -332,7 +333,8 @@ class TaskHTTPTests(unittest.TestCase):
         self.assertEqual(response.getheader("Cache-Control"), "no-store")
         self.assertEqual(metadata, {"status": "found", **{
             key: child[key] for key in ("task_id", "owner_id", "project_id",
-                                    "parent_task_id", "kind")}, "depends_on": []})
+                                    "parent_task_id", "kind")},
+                                    "depends_on": [], "priority": 0})
         self.assertNotIn("SECRET", json.dumps(metadata))
         self.assertNotIn("Subtask", json.dumps(metadata))
         self.assertEqual(self.exchange(b"", method="GET",
