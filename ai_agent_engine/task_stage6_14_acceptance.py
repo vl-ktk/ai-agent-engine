@@ -58,10 +58,18 @@ class ProviderCheck:
 def _git(repo: Path, *args: str) -> str:
     """A bounded local-only Git command, always in a new temporary repo."""
     try:
+        # No inherited Git credentials, network helpers, hooks or global config.
+        env = {"PATH": "/usr/bin:/bin", "HOME": "/nonexistent",
+               "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+               "GIT_OPTIONAL_LOCKS": "0", "GIT_TERMINAL_PROMPT": "0",
+               "LC_ALL": "C"}
         result = subprocess.run(
-            ["git", "-C", str(repo), "-c", "commit.gpgsign=false", *args],
-            capture_output=True, stdin=subprocess.DEVNULL, timeout=10,
-            check=False, text=True,
+            ["git", "-C", str(repo),
+             "-c", "commit.gpgsign=false",
+             "-c", "core.hooksPath=/dev/null",
+             "-c", "core.fsmonitor=false", *args],
+            env=env, capture_output=True, stdin=subprocess.DEVNULL,
+            timeout=10, check=False, text=True,
         )
     except (OSError, subprocess.TimeoutExpired):
         raise AcceptanceRejected("local_git_unavailable") from None
