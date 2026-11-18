@@ -1,8 +1,17 @@
-# HANDOFF — 2026-11-18: 6.1 завершён; следующий 6.2
+# HANDOFF — 2026-11-18: 6.2 завершён; следующий 6.3
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
 
-## Текущая передача — 6.1, матрица GPT/Claude разрешённых режимов
+## Текущая передача — 6.2, реальное GPT task→result в Codespace
+
+- **Статус:** `6.2 [x]`, живой GPT-вызов из новой scoped очереди принят 18.11.2026. **Следующий 6.3 [ ]** — условно разрешённый Claude Code Pro адаптер/HOLD, **не начинать без следующего поручения владельца**. Подробный [протокол](./infra/orchestrator/GPT_TASK_ADAPTER.md).
+- **Исходник и выкладка:** GitHub `vl-ktk/ai-agent-engine` `main`, **код** `9934cf2ac659d7333fa4bbbf2655eea8d2b21eb1` (дерево `effd3b59f5594bdda3fb46a15fffe049b1910379`); до пункта `7bd9e4fd4c58a85b4bea0eba425a1e27314dbc62` (дерево `dea8a2a3299fd159a476aacf1f7f045f017c1e38`). Документальный статус и протокол публикуются отдельно поверх кода. Никаких production / Netcup выкладок не было.
+- **Реальный результат:** найден существующий Codespace `laughing disco`, OAuth-профиль ChatGPT с `GRANTED`; access token до теста был истёкшим. На чистом checkout опубликованного `main` code SHA `9934cf2` команда `python3 -m ai_agent_engine.task_gpt_acceptance` выдала **`GPT_TASK_6_2_LIVE PASS`**. GPT `gpt-6.1-sol` возвратил контрольный `AE-62-OK`, точно один запрос/тикет, разрешение перед отправкой, успешная запись `succeeded`, один безопасный provider outcome event, успешный durable ACK; SQLite открыт повторно и состояние совпало. Тестовая БД/рабочая папка одноразовые. Сам Codespace после теста **остановлен**, GitHub отобразил `Codespace "laughing disco" stopped.` В его тестовом checkout HEAD остался detached на `9934cf2`; исходная ветка `fix/staged-live-acceptance` не изменена.
+- **Код:** `ai_agent_engine/task_gpt.py`, `gpt_task_worker.py`, `task_gpt_acceptance.py`, приватная SQLite schema v6 `task_provider_audit`, 17 новых тестов. Одноразовый SIWC worker, отказ без `EXTERNAL_REQUEST` grant, без платного OpenAI API-key/fallback, без передачи OAuth через Git. Журнал хранит только allowlisted исход (`completed/quota/auth/unsupported/unavailable/worker_failure/invalid_result/timed_out/cancelled`), не prompts, ответы или секреты.
+- **Проверки:** **502 unittest OK, 1 skipped**; compileall, workflow/source scan, staged diff clean; локальное и опубликованное дерево кодового коммита совпали. Ошибки квоты/auth/контроллера проверены **офлайн с имитацией**, не реальный вызов 429. Одна живая GPT-задача не доказывает неограниченные квоты, разрешение фоновой работы, полный OAuth refresh/revoke, продуктивную установку на Netcup или файловые артефакты 6.12.
+- **Откат:** перед обратной правкой снова сверить `main`, затем новый адресный обратный коммит только изменений 6.2. Не использовать force-push/reset. Live Netcup rollback не нужен; новых секретов и серверных релизов нет. Краткий запуск ранее существующего Codespace потребил его обычную квоту; фактический счёт и остаток квоты не проверялись.
+
+## Историческая передача — 6.1, матрица GPT/Claude разрешённых режимов
 
 - **Статус:** `6.1 [x]` — матрица **8 режимов** проверена 18.11.2026, [протокол](./infra/orchestrator/PROVIDER_ACCESS_MATRIX.md); следующий **6.2 [ ]** — соединить существующий GPT-пилот с новой scoped task очередью/контроллером, **не начинать без новой команды владельца**.
 - **Подтверждённое ранее, не повторять:** 16–17.11 в Codespace ChatGPT OAuth `GRANTED`, ответ GPT, тестовая запись/чтение файла, официальный Claude Code Pro `claude -p`, общий пилот **12/12 PASS по сохранённому отчёту владельца**, см. `PHASE1_GO_NOGO.md` и `CLAUDE_INTEGRATION_REVIEW.md`. Это не новая модельная проверка 6.1 и не доказательство, что GPT/Claude уже выполняют задания очереди 5.x на Netcup.
