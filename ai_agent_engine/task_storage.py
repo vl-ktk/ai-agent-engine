@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 5  # v5 adds private metadata-only action authorization audit.
+SCHEMA_VERSION = 6  # v6 adds private GPT provider outcome/limit audit.
 
 
 class StorageUnavailable(RuntimeError):
@@ -97,9 +97,10 @@ class SQLiteTaskStore:
                 self._create_lifecycle_tables(db)
                 self._create_delivery_tables(db)
                 self._create_permission_audit_table(db)
+                self._create_provider_audit_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -113,7 +114,9 @@ class SQLiteTaskStore:
                     self._create_lifecycle_tables(db)
                 if version in (1, 2, 3):
                     self._create_delivery_tables(db)
-                self._create_permission_audit_table(db)
+                if version <= 4:
+                    self._create_permission_audit_table(db)
+                self._create_provider_audit_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -195,6 +198,20 @@ class SQLiteTaskStore:
                  'worker_mismatch','task_not_running')),
             principal_kind TEXT NOT NULL CHECK(principal_kind IN
                 ('assigned_worker','other_worker')),
+            occurred_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+
+    @staticmethod
+    def _create_provider_audit_table(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE task_provider_audit (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            provider TEXT NOT NULL CHECK(provider IN ('gpt')),
+            model_id TEXT NOT NULL,
+            outcome TEXT NOT NULL CHECK(outcome IN
+                ('completed','quota','auth','unsupported','unavailable',
+                 'worker_failure','invalid_result','timed_out','cancelled')),
             occurred_at TEXT NOT NULL DEFAULT
                 (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         )""")
@@ -416,6 +433,25 @@ class SQLiteTaskStore:
                 (task_id,)).fetchall()
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot read permission audit") from exc
+
+    def write_provider_audit(self, task_id: str, model_id: str,
+                             outcome: str) -> None:
+        """Persist bounded provider status, never prompt, response or token."""
+        try:
+            with self._db() as db:
+                db.execute("""INSERT INTO task_provider_audit
+                    (task_id,provider,model_id,outcome) VALUES (?,'gpt',?,?)""",
+                    (task_id, model_id, outcome))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist provider outcome") from exc
+
+    def provider_history(self, task_id: str) -> list[tuple]:
+        try:
+            return self._db().execute("""SELECT event_id,task_id,provider,
+                model_id,outcome,occurred_at FROM task_provider_audit
+                WHERE task_id=? ORDER BY event_id""", (task_id,)).fetchall()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read provider outcomes") from exc
 
     def close(self) -> None:
         if self._connection is not None:

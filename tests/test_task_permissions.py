@@ -325,12 +325,13 @@ class TaskPermissionTests(unittest.TestCase):
         self.inbox._store.begin_delivery(task_id, 2, "a" * 32, time.time())
         self.inbox.close()
         with sqlite3.connect(self.path) as db:
+            db.execute("DROP TABLE task_provider_audit")
             db.execute("DROP TABLE task_permission_audit")
             db.execute("PRAGMA user_version=4")
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.path), workspace_root=self.root)
         self.gate = TaskPermissionGate(self.inbox)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                         (5,))
+                         (6,))
         self.assertIs(self.inbox.state(task_id, OWNER), TaskState.RUNNING)
         self.assertEqual(self.inbox._store.delivery(task_id)[1], 1)
         with self.assertRaises(PermissionDenied):

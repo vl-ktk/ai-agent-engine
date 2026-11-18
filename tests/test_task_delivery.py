@@ -172,6 +172,7 @@ class TaskDeliveryTests(unittest.TestCase):
         self.claim(task_id)
         self.inbox.close()
         with sqlite3.connect(self.path) as db:
+            db.execute("DROP TABLE task_provider_audit")
             db.execute("DROP TABLE task_permission_audit")
             db.execute("DROP TABLE task_deliveries")
             db.execute("DROP TABLE task_admission_keys")
@@ -180,7 +181,7 @@ class TaskDeliveryTests(unittest.TestCase):
         self.manager = TaskDeliveryManager(self.inbox)
         self.control = TaskProcessController(self.inbox)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                         (5,))
+                         (6,))
         self.assertIs(self.inbox.state(task_id, OWNER), TaskState.ASSIGNED)
         self.assertTrue(self.reserve(task_id).should_execute)
 
