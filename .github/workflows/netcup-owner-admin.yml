@@ -17,7 +17,7 @@ concurrency:
 jobs:
   admin:
     if: ${{ github.repository == 'vl-ktk/ai-agent-engine' && github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && github.triggering_actor == 'vl-ktk' && github.run_attempt == 1 }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 25
     steps:
       - name: Checkout exact owner request without persisted credentials
@@ -25,6 +25,10 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Use the Python version verified by Linux CI
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
       - name: Validate single request and separately committed script
         id: request
         run: python3 scripts/netcup_admin_request.py --github-output "$GITHUB_OUTPUT"
