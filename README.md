@@ -48,6 +48,8 @@ stage 6.9 below.
 
 **Stage 6.12 [x] (trusted offline bridge):** [Atomic report and artifact transfer](./infra/orchestrator/TASK_ARTIFACT_TRANSFER.md) now copies actual SHA-256-verified workspace files (up to 2 MiB/file, 8 MiB total) and the completed worker report into the private task SQLite schema v9. It rejects traversal/symlinks/hardlinks/FIFO, wrong hashes, an already reassigned workspace and duplicate delivery. Scoped core reads reverify bytes after restart. The transfer is **explicitly called by trusted Python** after GPT/Claude success; their subscription CLIs do not automatically export artifacts or pass files to each other. No live providers or Netcup changes.
 
+**Stage 6.13 [x] (trusted offline Git receipt):** [Source version record and recheck](./infra/orchestrator/TASK_SOURCE_VERSIONS.md) pins each successful task's pre-execution trusted Git baseline SHA, final local commit ID and optional SHA-256 digest for uncommitted tracked diff plus nonignored untracked bytes in private task SQLite v10. It rechecks source around durable write and on later explicit verification, including after SQLite restart. It neither commits nor pushes nor deploys; patch digest is not a reconstructable Git patch or standard git patch-id. 14 offline tests and 614-test Ubuntu/Python 3.12 CI pass. No live providers or Netcup changes.
+
 **Stage 6.9 [x]:** [Crash-safe process ledger and restart cleanup](./infra/orchestrator/TASK_PROCESS_RECOVERY.md)
 record Linux boot identity, PID/group/session and start ticks in private
 SQLite v8. A one-byte launch gate prevents any GPT/Claude worker execution

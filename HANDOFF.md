@@ -1,3 +1,18 @@
+# HANDOFF — 2026-11-18: 6.13 verified Git source version receipts; следующий 6.14
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`, `IMPLEMENTATION_ROADMAP.md`. Исходный main до 6.13/версия отката: `3e07028ad66cafb57c5f8ab2e9c692a8de62ff3b` (6.12). Тестовая ветка `stage-6.13-source-version`, PR #57. Откат только адресным обратным коммитом от актуального main, без force/reset.
+
+## Текущая передача — 6.13: Commit ID и patch checksum после работы
+
+- **Статус 6.13 [x] в offline Linux Git-процессе:** `ai_agent_engine/task_versions.py` / `TaskSourceVersionRecorder`: подтверждённый GPT/Claude `SUCCEEDED` + provider audit + один completed delivery; assigned owner/project/worker/workspace; физический directory flock после выполнения.
+- **Метаданные:** baseline SHA из доверенного контроллера, итоговый локальный `HEAD^{commit}`, optional SHA-256 project-defined binary diff + untracked bytes. Проверка baseline ancestry отвергает переписанную историю; 2 независимых снимка до записи + 1 после. `read_version` и `verify_version` доступны owner-scoped после SQLite restart. Историческая запись неизменяема.
+- **Хранение:** миграция только private task SQLite v9→v10, `task_source_versions` с `PRIMARY KEY(task_id)`. Нет сырого diff в DB или audit, нет Git write/commit/push/сетевых команд, нет автопубликации.
+- **Проверки на исполняемом коммите `c279a7e1609a7279d1172deb51ed4f5e00620cfb`:** GitHub Actions Ubuntu/Python 3.11, 3.12, 3.13 PASS; Ubuntu 3.12 полный регресс **614 unittest OK**, wheel PASS. **14 новых tests** с disposable реальными Git репозиториями и synthetic GPT/Claude subprocess: dirty/clean/fast-forward SHA, untracked changes, force-rewrite, busy workspace, symlink, oversized source, foreign owner, forged outcome, duplicate, storage error, race, corrupt receipt, migrate v9. Windows job всё ещё FAIL из-за старой зависимости `fcntl` в Linux-only task module.
+- **Границы:** `patch_sha256` — checksum идентичности, **не** полноценный Git patch-id и не payload для восстановления; nonignored untracked включены, ignored excluded, submodule/unmerged repo не принимается. Сохраняется только локальный source metadata. После последнего recheck сторонний процесс всё ещё может изменить файлы; перед выкладкой обязательны новая сверка версии и проверки удалённого source/ref. Нет Netcup, расходов, реальных GPT/Claude подписочных вызовов, новой роли/секретов/прав. Следующий **6.14 [ ]** — разрешённый live E2E с версиями и rollback в отдельном тестовом проекте, только после поручения владельца.
+- **Технический протокол:** [6.13](./infra/orchestrator/TASK_SOURCE_VERSIONS.md).
+
+---
+
 # HANDOFF — 2026-11-18: 6.12 verified artifact/report transfer; следующий 6.13
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main` и `IMPLEMENTATION_ROADMAP.md`. До 6.12 исходный/откатный SHA `a71a98a7a0dfd5f2c39458417c2d166304228171` (6.11). Рабочая ветка `stage-6.12-artifact-transfer`, PR #56. Откат новой версии только адресным reverse commit после сверки актуального main, без force/reset.
