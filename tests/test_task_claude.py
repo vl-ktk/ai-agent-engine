@@ -166,7 +166,7 @@ class ClaudeAdapterTests(unittest.TestCase):
         self.assertEqual([e[2] for e in self.inbox._store.provider_history(tid)],
                          ["gpt", "claude"])
         with sqlite3.connect(self.path) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 8)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 9)
 
 
 class ClaudeWorkerTests(unittest.TestCase):

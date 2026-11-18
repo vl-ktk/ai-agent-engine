@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 8  # v8 adds a durable, identity-bound managed process ledger.
+SCHEMA_VERSION = 9  # v9 adds private, atomic report+artifact bytes persistence.
 
 
 class StorageUnavailable(RuntimeError):
@@ -99,9 +99,10 @@ class SQLiteTaskStore:
                 self._create_permission_audit_table(db)
                 self._create_provider_audit_table(db)
                 self._create_process_table(db)
+                self._create_artifact_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -132,6 +133,7 @@ class SQLiteTaskStore:
                         FROM task_provider_audit_v6""")
                     db.execute("DROP TABLE task_provider_audit_v6")
                 self._create_process_table(db)
+                self._create_artifact_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -247,6 +249,79 @@ class SQLiteTaskStore:
                 (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
             stopped_at TEXT
         )""")
+
+
+    @staticmethod
+    def _create_artifact_tables(db: sqlite3.Connection) -> None:
+        """Private v9 bundle: one verified report and immutable byte payloads.
+
+        The artifact bytes are stored *inside* this private SQLite so report
+        admission and all files can commit or roll back together.
+        """
+        db.execute("""CREATE TABLE IF NOT EXISTS task_artifact_reports (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            response_json BLOB NOT NULL,
+            recorded_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_artifact_blobs (
+            task_id TEXT NOT NULL REFERENCES task_artifact_reports(task_id),
+            path TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL CHECK(size_bytes BETWEEN 0 AND 2097152),
+            media_type TEXT NOT NULL,
+            body BLOB NOT NULL,
+            PRIMARY KEY(task_id,path),
+            CHECK(length(body) = size_bytes)
+        )""")
+
+    def write_artifact_bundle(self, task_id: str, response_json: bytes,
+                              blobs: tuple[tuple[str, str, int, str, bytes], ...]) -> None:
+        """Store a verified successful report and byte payloads atomically.
+
+        A second submission is rejected by the task_id primary key. Provider
+        grant/checksum verification belongs to the trusted caller.
+        """
+        try:
+            with self._db() as db:
+                row = db.execute("""SELECT s.state,d.status,d.result
+                    FROM task_states s LEFT JOIN task_deliveries d
+                      ON d.task_id=s.task_id
+                    WHERE s.task_id=?""", (task_id,)).fetchone()
+                if row != ("succeeded", "completed", "success"):
+                    raise StorageUnavailable("task has no completed delivery")
+                db.execute("""INSERT INTO task_artifact_reports
+                    (task_id,response_json) VALUES (?,?)""",
+                    (task_id, response_json))
+                db.executemany("""INSERT INTO task_artifact_blobs
+                    (task_id,path,sha256,size_bytes,media_type,body)
+                    VALUES (?,?,?,?,?,?)""",
+                    ((task_id, path, digest, size, media, body)
+                     for path, digest, size, media, body in blobs))
+        except sqlite3.IntegrityError as exc:
+            raise StorageUnavailable("artifact bundle already exists or is invalid") from exc
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot save verified artifact bundle") from exc
+
+    def read_artifact_bundle(self, task_id: str) -> tuple[bytes, tuple[tuple, ...]] | None:
+        """Read private bytes for an already scope-checked core caller."""
+        try:
+            db = self._db()
+            report = db.execute("""SELECT response_json FROM task_artifact_reports
+                WHERE task_id=?""", (task_id,)).fetchone()
+            if report is None:
+                return None
+            # Guard against accidental large/corrupt private DB content.
+            meta = db.execute("""SELECT COUNT(*),COALESCE(SUM(length(body)),0)
+                FROM task_artifact_blobs WHERE task_id=?""", (task_id,)).fetchone()
+            if meta[0] > 16 or meta[1] > 8_388_608 or len(report[0]) > 131_072:
+                raise StorageUnavailable("stored artifact bundle exceeds limits")
+            rows = db.execute("""SELECT path,sha256,size_bytes,media_type,body
+                FROM task_artifact_blobs WHERE task_id=? ORDER BY path""",
+                (task_id,)).fetchall()
+            return bytes(report[0]), tuple(rows)
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read stored artifact bundle") from exc
 
     def process_record(self, task_id: str) -> tuple | None:
         try:
