@@ -1,8 +1,8 @@
-"""Stages 5.1-5.4: scoped, loopback-only intake and task ordering.
+"""Stages 5.1-5.5: scoped, loopback-only intake and durable task ordering.
 
-Submissions stay in a process-local inbox. Owner identity is bound by trusted
-server configuration, NOT HTTP input. This is not client authentication,
-durable storage, scheduling or model execution.
+Owner identity is bound by trusted server configuration, NOT HTTP input.
+Use --db for SQLite persistence; without it the inbox stays in memory.
+This is not client authentication, execution or worker scheduling.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Type
 from uuid import uuid4
 
 from .task_dag import DependencyCycle, TaskDAG
+from .task_storage import SQLiteTaskStore, StorageUnavailable
 
 
 TASK_PATH = "/v1/tasks"
@@ -205,9 +206,10 @@ def parse_priority_update(data: bytes) -> int:
 
 
 class TaskInbox:
-    """Thread-safe volatile records with scoped access and random task IDs."""
+    """Thread-safe scoped inbox, optionally persisted with synchronous SQLite."""
 
-    def __init__(self, *, max_pending: int = DEFAULT_MAX_PENDING) -> None:
+    def __init__(self, *, max_pending: int = DEFAULT_MAX_PENDING,
+                 store: SQLiteTaskStore | None = None) -> None:
         if type(max_pending) is not int or not 1 <= max_pending <= 4096:
             raise ValueError("invalid inbox capacity")
         self._lock = Lock()
@@ -217,6 +219,65 @@ class TaskInbox:
         self._priorities: dict[str, int] = {}
         self._next_receipt = 1
         self._max_pending = max_pending
+        if store is not None and not isinstance(store, SQLiteTaskStore):
+            raise TypeError("expected SQLiteTaskStore")
+        self._store = store
+        if store is not None:
+            try:
+                self._restore()
+            except Exception:
+                store.close()
+                raise
+
+    def _restore(self) -> None:
+        """Fail closed on invalid persisted owners, edges or cycles."""
+        if self._store is None:
+            return
+        try:
+            rows, edges = self._store.load()
+            for (task_id, receipt, owner_id, project_id, parent_task_id,
+                 title, prompt, submitted_priority, priority) in rows:
+                if (type(task_id) is not str or not _TASK_ID.fullmatch(task_id)
+                        or type(receipt) is not int or receipt < 1
+                        or task_id in self._by_id
+                        or type(priority) is not int or not 0 <= priority <= MAX_PRIORITY):
+                    raise StorageUnavailable("invalid persisted task identity")
+                OwnerScope(owner_id, frozenset({project_id}))
+                payload: dict[str, object] = {
+                    "project_id": project_id, "title": title, "prompt": prompt,
+                    "priority": submitted_priority,
+                }
+                if parent_task_id is not None:
+                    payload["parent_task_id"] = parent_task_id
+                    parent = self._by_id.get(parent_task_id)
+                    if (parent is None or parent.owner_id != owner_id
+                            or parent.project_id != project_id):
+                        raise StorageUnavailable("invalid persisted parent")
+                submission = parse_submission(json.dumps(payload,
+                    ensure_ascii=False).encode("utf-8"))
+                record = TaskRecord(task_id=task_id, receipt=receipt,
+                                    owner_id=owner_id, submission=submission)
+                self._dag.add_task(task_id, receipt)
+                self._pending.append(record)
+                self._by_id[task_id] = record
+                self._priorities[task_id] = priority
+                self._next_receipt = max(self._next_receipt, receipt + 1)
+            grouped: dict[str, list[str]] = {}
+            for task_id, dependency_id in edges:
+                target = self._by_id.get(task_id)
+                dependency = self._by_id.get(dependency_id)
+                if (target is None or dependency is None
+                        or target.owner_id != dependency.owner_id
+                        or target.project_id != dependency.project_id):
+                    raise StorageUnavailable("invalid persisted dependency scope")
+                grouped.setdefault(task_id, []).append(dependency_id)
+            for task_id, dependencies in grouped.items():
+                if len(dependencies) > MAX_DEPENDENCIES:
+                    raise StorageUnavailable("too many persisted dependencies")
+                self._dag.set_dependencies(task_id, tuple(dependencies))
+        except (ValueError, TypeError, UnicodeError, OverflowError,
+                DependencyCycle, InvalidJSON, InvalidTask) as exc:
+            raise StorageUnavailable("invalid persisted task graph") from exc
 
     def accept(self, submission: TaskSubmission, scope: OwnerScope) -> TaskRecord:
         if not isinstance(submission, TaskSubmission):
@@ -236,7 +297,6 @@ class TaskInbox:
             if len(self._pending) >= self._max_pending:
                 raise InboxFull("inbox capacity reached")
             receipt = self._next_receipt
-            self._next_receipt += 1
             prefix = "subtask_" if submission.parent_task_id is not None else "task_"
             task_id = prefix + uuid4().hex
             # UUID4 collisions are astronomically unlikely, but never overwrite.
@@ -244,6 +304,9 @@ class TaskInbox:
                 task_id = prefix + uuid4().hex
             record = TaskRecord(task_id=task_id, owner_id=scope.owner_id,
                                 receipt=receipt, submission=submission)
+            if self._store is not None:
+                self._store.insert_task(record)  # commit before admission response
+            self._next_receipt += 1
             self._pending.append(record)
             self._by_id[task_id] = record
             self._dag.add_task(task_id, receipt)
@@ -299,6 +362,9 @@ class TaskInbox:
                 if (dependency is None or dependency.owner_id != target.owner_id
                         or dependency.project_id != target.project_id):
                     raise DependencyNotFound("prerequisite unavailable in task scope")
+            self._dag.validate_dependencies(task_id, prerequisites)
+            if self._store is not None:
+                self._store.replace_dependencies(task_id, prerequisites)
             self._dag.set_dependencies(task_id, prerequisites)
             return self._dag.dependencies(task_id)
 
@@ -344,8 +410,20 @@ class TaskInbox:
             raise TaskNotFound("invalid task identifier")
         with self._lock:
             self._scoped_record(task_id, scope)
+            if self._store is not None:
+                self._store.update_priority(task_id, priority)
             self._priorities[task_id] = priority
             return priority
+
+    def close(self) -> None:
+        """Release the exclusive SQLite writer lock; never delete stored data."""
+        with self._lock:
+            if self._store is not None:
+                self._store.close()
+
+    @property
+    def durable(self) -> bool:
+        return self._store is not None
 
     def select_next(self, project_id: str, scope: OwnerScope,
                     *, completed_task_ids: tuple[str, ...] = ()) -> TaskChoice | None:
@@ -475,7 +553,11 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             except InboxFull:
                 self._reply(503, "inbox_full")
                 return
-            self._reply(202, "accepted_in_memory", receipt=record.receipt,
+            except StorageUnavailable:
+                self._reply(503, "storage_unavailable")
+                return
+            status = "accepted_durable" if inbox.durable else "accepted_in_memory"
+            self._reply(202, status, receipt=record.receipt,
                         **record.metadata(), priority=record.submission.priority)
 
         def do_GET(self) -> None:
@@ -554,6 +636,9 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                 except TaskNotFound:
                     self._reply(404, "not_found")
                     return
+                except StorageUnavailable:
+                    self._reply(503, "storage_unavailable")
+                    return
                 self._reply(200, "priority_updated", task_id=task_id,
                             priority=priority)
                 return
@@ -576,6 +661,9 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             except DependencyCycle:
                 self._reply(409, "dependency_cycle")
                 return
+            except StorageUnavailable:
+                self._reply(503, "storage_unavailable")
+                return
             self._reply(200, "dependencies_updated", task_id=task_id,
                         depends_on=depends_on)
 
@@ -592,6 +680,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="trusted server-side owner identity")
     parser.add_argument("--project-id", action="append", required=True,
                         help="allowed project ID; repeat for multiple projects")
+    parser.add_argument("--db", help="private SQLite inbox file under a 0700 directory")
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error("port must be 1..65535")
@@ -599,13 +688,26 @@ def main(argv: list[str] | None = None) -> int:
         scope = OwnerScope(args.owner_id, frozenset(args.project_id))
     except ValueError as exc:
         parser.error(str(exc))
-    with ThreadingHTTPServer(("127.0.0.1", args.port),
-                             task_handler(TaskInbox(), scope)) as server:
-        print(f"task intake listening on 127.0.0.1:{args.port} (scoped, volatile, no client auth)")
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
+    store = None
+    try:
+        if args.db is not None:
+            store = SQLiteTaskStore(args.db)
+        inbox = TaskInbox(store=store)
+    except StorageUnavailable as exc:
+        if store is not None:
+            store.close()
+        parser.error(str(exc))
+    try:
+        with ThreadingHTTPServer(("127.0.0.1", args.port),
+                                 task_handler(inbox, scope)) as server:
+            mode = "SQLite durable" if store is not None else "volatile RAM"
+            print(f"task intake listening on 127.0.0.1:{args.port} ({mode}, no client auth)")
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                pass
+    finally:
+        inbox.close()
     return 0
 
 

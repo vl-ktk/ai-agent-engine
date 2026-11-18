@@ -33,6 +33,11 @@ class TaskDAG:
 
     def set_dependencies(self, task_id: str, prerequisites: tuple[str, ...]) -> None:
         """Replace edges atomically; reject any cycle before mutating state."""
+        self.validate_dependencies(task_id, prerequisites)
+        self._requires[task_id] = frozenset(prerequisites)
+
+    def validate_dependencies(self, task_id: str, prerequisites: tuple[str, ...]) -> None:
+        """Preflight without mutation, so durable backends can commit first."""
         if task_id not in self._requires:
             raise KeyError("unknown task")
         if len(prerequisites) != len(set(prerequisites)):
@@ -55,7 +60,6 @@ class TaskDAG:
                 continue
             seen.add(current)
             remaining.extend(self._requires[current])
-        self._requires[task_id] = frozenset(prerequisites)
 
     def topological_order(self, task_ids: tuple[str, ...]) -> tuple[str, ...]:
         """Return each prerequisite before dependents; ties by admission order.
