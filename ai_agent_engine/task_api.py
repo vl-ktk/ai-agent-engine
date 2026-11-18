@@ -1,4 +1,4 @@
-"""Stages 5.1-5.5: scoped, loopback-only intake and durable task ordering.
+"""Stages 5.1-5.6: scoped intake, durable ordering and task assignments.
 
 Owner identity is bound by trusted server configuration, NOT HTTP input.
 Use --db for SQLite persistence; without it the inbox stays in memory.
@@ -16,6 +16,10 @@ from threading import Lock
 from typing import Type
 from uuid import uuid4
 
+from .task_assignment import (
+    AlreadyAssigned, InvalidAssignment, TaskAssignment, WorkspaceRoot,
+    validate_worker, validate_workspace_name,
+)
 from .task_dag import DependencyCycle, TaskDAG
 from .task_storage import SQLiteTaskStore, StorageUnavailable
 
@@ -205,11 +209,23 @@ def parse_priority_update(data: bytes) -> int:
     return priority
 
 
+def parse_assignment_request(data: bytes) -> tuple[str, str]:
+    """Strict local-only worker and workspace identifiers, not arbitrary paths."""
+    payload = _decode_json(data)
+    if not isinstance(payload, dict) or set(payload) != {"worker_id", "workspace_name"}:
+        raise InvalidAssignment("expected worker_id and workspace_name")
+    worker_id, workspace_name = payload["worker_id"], payload["workspace_name"]
+    validate_worker(worker_id)
+    validate_workspace_name(workspace_name)
+    return worker_id, workspace_name
+
+
 class TaskInbox:
     """Thread-safe scoped inbox, optionally persisted with synchronous SQLite."""
 
     def __init__(self, *, max_pending: int = DEFAULT_MAX_PENDING,
-                 store: SQLiteTaskStore | None = None) -> None:
+                 store: SQLiteTaskStore | None = None,
+                 workspace_root: WorkspaceRoot | None = None) -> None:
         if type(max_pending) is not int or not 1 <= max_pending <= 4096:
             raise ValueError("invalid inbox capacity")
         self._lock = Lock()
@@ -217,11 +233,15 @@ class TaskInbox:
         self._by_id: dict[str, TaskRecord] = {}
         self._dag = TaskDAG()
         self._priorities: dict[str, int] = {}
+        self._assignments: dict[str, TaskAssignment] = {}
         self._next_receipt = 1
         self._max_pending = max_pending
         if store is not None and not isinstance(store, SQLiteTaskStore):
             raise TypeError("expected SQLiteTaskStore")
+        if workspace_root is not None and not isinstance(workspace_root, WorkspaceRoot):
+            raise TypeError("expected trusted WorkspaceRoot")
         self._store = store
+        self._workspace_root = workspace_root
         if store is not None:
             try:
                 self._restore()
@@ -234,7 +254,7 @@ class TaskInbox:
         if self._store is None:
             return
         try:
-            rows, edges = self._store.load()
+            rows, edges, claims = self._store.load()
             for (task_id, receipt, owner_id, project_id, parent_task_id,
                  title, prompt, submitted_priority, priority) in rows:
                 if (type(task_id) is not str or not _TASK_ID.fullmatch(task_id)
@@ -275,6 +295,19 @@ class TaskInbox:
                 if len(dependencies) > MAX_DEPENDENCIES:
                     raise StorageUnavailable("too many persisted dependencies")
                 self._dag.set_dependencies(task_id, tuple(dependencies))
+            for task_id, worker_id, workspace_name, workspace_dir in claims:
+                if task_id not in self._by_id or task_id in self._assignments:
+                    raise StorageUnavailable("invalid persisted assignment target")
+                validate_worker(worker_id)
+                validate_workspace_name(workspace_name)
+                if (type(workspace_dir) is not str
+                        or not workspace_dir.startswith("/")
+                        or workspace_dir.rsplit("/", 1)[-1] != workspace_name):
+                    raise StorageUnavailable("invalid persisted workspace path")
+                if self._workspace_root is not None:
+                    self._workspace_root.verify_loaded(workspace_name, workspace_dir)
+                self._assignments[task_id] = TaskAssignment(
+                    task_id, worker_id, workspace_name, workspace_dir)
         except (ValueError, TypeError, UnicodeError, OverflowError,
                 DependencyCycle, InvalidJSON, InvalidTask) as exc:
             raise StorageUnavailable("invalid persisted task graph") from exc
@@ -312,6 +345,41 @@ class TaskInbox:
             self._dag.add_task(task_id, receipt)
             self._priorities[task_id] = submission.priority
             return record
+
+    def claim_task(self, task_id: str, worker_id: str, workspace_name: str,
+                   scope: OwnerScope) -> TaskAssignment:
+        """First writer wins: bind worker AND private directory atomically."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            raise TaskNotFound("invalid task identifier")
+        validate_worker(worker_id)
+        validate_workspace_name(workspace_name)
+        with self._lock:
+            self._scoped_record(task_id, scope)
+            if task_id in self._assignments:
+                raise AlreadyAssigned("task already has a worker and workspace")
+            if self._workspace_root is None:
+                raise InvalidAssignment("trusted workspace root not configured")
+            workspace_dir = self._workspace_root.resolve(workspace_name)
+            assignment = TaskAssignment(task_id, worker_id, workspace_name,
+                                        workspace_dir)
+            if self._store is not None:
+                self._store.insert_assignment(assignment)
+            self._assignments[task_id] = assignment
+            return assignment
+
+    def get_assignment(self, task_id: str, scope: OwnerScope) -> TaskAssignment | None:
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            return None
+        with self._lock:
+            try:
+                self._scoped_record(task_id, scope)
+            except TaskNotFound:
+                return None
+            return self._assignments.get(task_id)
 
     def snapshot(self, scope: OwnerScope) -> tuple[TaskRecord, ...]:
         """Only inspect records belonging to the configured owner/projects."""
@@ -454,6 +522,7 @@ class TaskInbox:
                      if record.owner_id == scope.owner_id
                      and record.project_id == project_id
                      and record.task_id not in completed
+                     and record.task_id not in self._assignments
                      and all(dep in completed
                              for dep in self._dag.dependencies(record.task_id))]
             if not ready:
@@ -528,6 +597,40 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             return data
 
         def do_POST(self) -> None:
+            claim_prefix = TASK_PATH + "/"
+            claim_suffix = "/claim"
+            if self.path.startswith(claim_prefix) and self.path.endswith(claim_suffix):
+                task_id = self.path[len(claim_prefix):-len(claim_suffix)]
+                if not _TASK_ID.fullmatch(task_id):
+                    self._reply(404, "not_found")
+                    return
+                data = self._read_body()
+                if data is None:
+                    return
+                try:
+                    worker_id, workspace_name = parse_assignment_request(data)
+                except InvalidJSON:
+                    self._reply(400, "invalid_json")
+                    return
+                except InvalidAssignment:
+                    self._reply(422, "invalid_assignment")
+                    return
+                try:
+                    assigned = inbox.claim_task(task_id, worker_id, workspace_name, scope)
+                except TaskNotFound:
+                    self._reply(404, "not_found")
+                    return
+                except AlreadyAssigned:
+                    self._reply(409, "already_assigned")
+                    return
+                except InvalidAssignment:
+                    self._reply(422, "invalid_workspace")
+                    return
+                except StorageUnavailable:
+                    self._reply(503, "storage_unavailable")
+                    return
+                self._reply(201, "assigned", **assigned.metadata())
+                return
             if self.path != TASK_PATH:
                 self._reply(404, "not_found")
                 return
@@ -595,6 +698,14 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                 return
             if not self.path.startswith(TASK_PATH + "/"):
                 self._reply(404, "not_found")
+                return
+            if self.path.endswith("/claim"):
+                task_id = self.path[len(TASK_PATH) + 1:-len("/claim")]
+                assignment = inbox.get_assignment(task_id, scope)
+                if assignment is None:
+                    self._reply(404, "not_found")
+                    return
+                self._reply(200, "assigned", **assignment.metadata())
                 return
             task_id = self.path[len(TASK_PATH) + 1:]
             record = inbox.get(task_id, scope)
@@ -681,6 +792,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-id", action="append", required=True,
                         help="allowed project ID; repeat for multiple projects")
     parser.add_argument("--db", help="private SQLite inbox file under a 0700 directory")
+    parser.add_argument("--workspace-root", help="trusted private root of pre-existing workspaces")
     args = parser.parse_args(argv)
     if not 1 <= args.port <= 65535:
         parser.error("port must be 1..65535")
@@ -690,10 +802,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
     store = None
     try:
+        workspace_root = (WorkspaceRoot(args.workspace_root)
+                          if args.workspace_root is not None else None)
         if args.db is not None:
             store = SQLiteTaskStore(args.db)
-        inbox = TaskInbox(store=store)
-    except StorageUnavailable as exc:
+        inbox = TaskInbox(store=store, workspace_root=workspace_root)
+    except (StorageUnavailable, InvalidAssignment) as exc:
         if store is not None:
             store.close()
         parser.error(str(exc))

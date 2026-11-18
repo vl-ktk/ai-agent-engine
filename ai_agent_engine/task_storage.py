@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # v2 adds immutable worker+workspace assignments.
 
 
 class StorageUnavailable(RuntimeError):
@@ -92,7 +92,17 @@ class SQLiteTaskStore:
                     PRIMARY KEY(task_id, prerequisite_id),
                     CHECK(task_id <> prerequisite_id)
                 )""")
+                self._create_claims_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
+                db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
+        elif (app_id, version) == (APPLICATION_ID, 1):
+            # Only migrate our own private v1 database, atomically. No task
+            # rows or dependencies are rewritten or deleted.
+            if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
+                    or db.execute("PRAGMA foreign_key_check").fetchone() is not None):
+                raise StorageUnavailable("cannot migrate damaged task database")
+            with db:
+                self._create_claims_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -104,7 +114,16 @@ class SQLiteTaskStore:
         except sqlite3.Error as exc:
             raise StorageUnavailable("task database integrity check failed") from exc
 
-    def load(self) -> tuple[list[tuple], list[tuple[str, str]]]:
+    @staticmethod
+    def _create_claims_table(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE task_claims (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            worker_id TEXT NOT NULL,
+            workspace_name TEXT NOT NULL,
+            workspace_dir TEXT NOT NULL
+        )""")
+
+    def load(self) -> tuple[list[tuple], list[tuple[str, str]], list[tuple]]:
         """Read committed records/edges; caller validates owner/project/DAG."""
         try:
             db = self._db()
@@ -113,7 +132,9 @@ class SQLiteTaskStore:
                 FROM tasks ORDER BY receipt""").fetchall()
             edges = db.execute("""SELECT task_id, prerequisite_id FROM dependencies
                 ORDER BY task_id, prerequisite_id""").fetchall()
-            return rows, edges
+            claims = db.execute("""SELECT task_id, worker_id, workspace_name,
+                workspace_dir FROM task_claims ORDER BY task_id""").fetchall()
+            return rows, edges, claims
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot load task database") from exc
 
@@ -148,6 +169,18 @@ class SQLiteTaskStore:
                     raise StorageUnavailable("task no longer persisted")
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot persist priority") from exc
+
+    def insert_assignment(self, assignment) -> None:
+        """Exactly one SQLite row per task; commit before HTTP acknowledgment."""
+        try:
+            with self._db() as db:
+                db.execute("""INSERT INTO task_claims
+                    (task_id, worker_id, workspace_name, workspace_dir)
+                    VALUES (?, ?, ?, ?)""",
+                    (assignment.task_id, assignment.worker_id,
+                     assignment.workspace_name, assignment.workspace_dir))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist assignment") from exc
 
     def close(self) -> None:
         if self._connection is not None:
