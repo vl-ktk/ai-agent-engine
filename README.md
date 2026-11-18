@@ -2,6 +2,14 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
+**Current milestone (2026-11-18):** Stage **6.3 [x]** passed one real,
+explicitly owner-triggered Claude Pro task via the scoped SQLite queue and
+the unmodified `claude -p` CLI (`CLAUDE_TASK_6_3_LIVE PASS`). The adapter is
+owner-bound, one-shot and has offline regression coverage (513 unittest OK,
+1 skipped). [Evidence and limitations](./infra/orchestrator/CLAUDE_TASK_ADAPTER.md).
+Unattended/24×7 subscription-based execution on Netcup remains **HOLD**;
+there is no provider production deployment or paid API integration.
+
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.
 > **2026-11-17: one combined live acceptance passed all 12 stages** — GPT `gpt-6.1-sol` reply plus native
@@ -9,7 +17,9 @@ Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 > owner's personal Claude Pro sign-in (no API key). No server deployment or production access exists.
 
 **Phase 1.8 GO/NO-GO (2026-11-17):** [assessment and Stage 2 gates](./PHASE1_GO_NOGO.md).
-Offline architecture work may proceed; unattended VM or Claude Pro operation remains on hold pending live and policy checks.
+Offline architecture work may proceed; unattended VM / Claude Pro operation
+remains on hold pending live and policy checks. This historic phase-1 decision
+does not negate the separately confirmed one-shot, owner-only stage-6.3 test.
 
 **Stage 3.7:** [technical engine audit and release boundaries](./STAGE3_ENGINE_AUDIT.md).
 The Python runtime is suitable for offline experimental development, **not**
