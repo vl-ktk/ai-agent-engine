@@ -1,3 +1,17 @@
+# HANDOFF — 2026-11-18: 6.12 verified artifact/report transfer; следующий 6.13
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main` и `IMPLEMENTATION_ROADMAP.md`. До 6.12 исходный/откатный SHA `a71a98a7a0dfd5f2c39458417c2d166304228171` (6.11). Рабочая ветка `stage-6.12-artifact-transfer`, PR #56. Откат новой версии только адресным reverse commit после сверки актуального main, без force/reset.
+
+## Текущая передача — 6.12: отчёт и настоящие байты файлов в ядро
+
+- **Реализация:** `TaskArtifactTransfer.ingest(runner,outcome,tuple[ArtifactDescriptor,...])` подтверждает один завершённый trust-bound GPT/Claude outcome, provider audit, `delivery.completed/success`, owner/project/task/worker/assignment. Приёмник повторно закрепляет ту же физическую workspace через `flock`; если новый worker занял папку, отказ `workspace_busy` до чтения чужих файлов.
+- **Защита:** pinned directory FD + `openat/O_NOFOLLOW` для каждой папки и файла, `0700`, same UID/device, обычный файл с одним hardlink; traversal, symlink, FIFO блокируются. Фактические bytes сверяются с `size_bytes` и `sha256`; inode/mtime/ctime сверяются до и после чтения; max 16 файлов, 2 МиБ каждый, 8 МиБ всего. Тип MIME синтаксически проверяется, но magic bytes не анализируются. Отказы имеют только обезличенные коды причин.
+- **Хранение:** миграция только собственной private task SQLite v8→v9, две таблицы report+byte blobs; один ACID transaction на текст+все BLOB с rollback при сбое; двойной приём одного task запрещён. `TaskArtifactTransfer.read_bundle` возвращает сохранённый report и bytes с повторной SHA-проверкой независимо от судьбы исходной рабочей папки, после рестарта и только в owner scope.
+- **Проверки:** `tests/test_task_artifacts.py` содержит 10 новых offline тестов с **настоящими локальными child-Popen** GPT/Claude. Первый CI на 600 тестов выявил только два оставшихся старых ожидания `schema==8` в legacy migration tests; исправлены на `v9`. Финальный CI требует подтверждения перед публикацией. Нет живых LLM, Netcup или платных вызовов. Подробности в [протоколе](./infra/orchestrator/TASK_ARTIFACT_TRANSFER.md).
+- **Граница:** полный автономный transfer из сетевого Claude/GPT CLI и выдача артефакта другому агенту через scheduler пока **не подключены**. Мост предназначен для доверенного явного Python-вызова. Нет DLP/MIME-меджик-проверки или межсерверной синхронизации. **Следующий 6.13 [ ]** — точная версия исходника после выполнения и повторная сверка, начинать только после нового указания владельца.
+
+---
+
 # HANDOFF — 2026-11-18: 6.11 exclusive workspace edits; следующий 6.12
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md`. Перед публикацией 6.11 подтверждённый head/откат `39cb815d2cc493facae75c9b8ed46144723a8fd9` (6.10), PR #55, тестовая ветка `stage-6.11-workspace-conflict`. Откат только адресным обратным коммитом от актуального main, без force/reset.

@@ -21,8 +21,7 @@ during stage 6.4.
 **Stage 6.5 [x]:** Both trusted GPT and Claude outcomes now have an
 [offline-verified common terminal response schema and adapter](./infra/orchestrator/TASK_EXECUTION_RESPONSE.md):
 result text, sanitized failure, configured limits and a syntactic artifact
-manifest. Actual file transfer, checksum verification and durable result
-storage are **not** implemented; those are later roadmap items.
+manifest. At stage 6.5 actual file transfer and durable result storage were **not** implemented. Stage 6.12 adds a separate explicitly invoked trusted artifact transfer bridge.
 
 **Stage 6.6 [x]:** Existing file tools now use root-inode-pinned, no-symlink
 POSIX relative opens. A new [task-bound workspace file adapter](./infra/orchestrator/TASK_WORKSPACE_FILES.md)
@@ -46,6 +45,8 @@ are redacted from task output; the GPT/Claude provider subprocess environment
 is reduced to an allowlist. Their networked, credential-bearing CLI processes
 **are not** in the offline OS sandbox. Crash-orphan cleanup is addressed in
 stage 6.9 below.
+
+**Stage 6.12 [x] (trusted offline bridge):** [Atomic report and artifact transfer](./infra/orchestrator/TASK_ARTIFACT_TRANSFER.md) now copies actual SHA-256-verified workspace files (up to 2 MiB/file, 8 MiB total) and the completed worker report into the private task SQLite schema v9. It rejects traversal/symlinks/hardlinks/FIFO, wrong hashes, an already reassigned workspace and duplicate delivery. Scoped core reads reverify bytes after restart. The transfer is **explicitly called by trusted Python** after GPT/Claude success; their subscription CLIs do not automatically export artifacts or pass files to each other. No live providers or Netcup changes.
 
 **Stage 6.9 [x]:** [Crash-safe process ledger and restart cleanup](./infra/orchestrator/TASK_PROCESS_RECOVERY.md)
 record Linux boot identity, PID/group/session and start ticks in private
