@@ -1,8 +1,10 @@
 # Netcup GitOps control: read-only status and owner-approved releases
 
-**Status: SOURCE PREPARED, NOT DEPLOYED.** This is a proposed bridge to the
-existing Netcup VPS, not an assertion that ChatGPT can already control it.
-Do not mark operations 1–3 live PASS until an actual server run succeeds.
+**Status: READ-ONLY STATUS LIVE PASS; PRIVILEGED ACTIVATION NOT DEPLOYED.** The
+scoped GitOps request launched GitHub Actions run 44402946575 on 18 November
+2026. SSH returned three active service/timer states and the live release
+85375103800845eeff696e53f510c66c428408ed. Only the read-only channel
+has been verified; do not mark privileged activation, rollback or 6.14 PASS.
 
 ## Existing starting point
 

@@ -1,3 +1,13 @@
+# HANDOFF — 2026-11-18: GitOps read-only Netcup status LIVE PASS; activation blocked on privileged bootstrap
+
+**Live read-only success:** GitHub Actions [run 44402946575](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44402946575), SSH as `ae-deploy`, GitHub actor `vl-ktk`, exact single-file status request. Three status lines `active`; Netcup controller release `85375103800845eeff696e53f510c66c428408ed` (observed directly 18.11). No server writes/sudo or production changes. Code commit `5f52f4c02ddda50a880edea6ea112c7e3d5ef5fc`, request commit `21a2284d22d4b5c0f64a13de2f325d858dd0b857`; rollback source before work `e5ffc1c15089145ff548c2ecd8bec7804e2343f5`.
+
+**Чего ещё нет:** `owner_release_operator.py` не установлен в root-owned `/usr/local/libexec/ae-release/` на Netcup; ограниченный sudoers не настроен; `netcup-owner-release-activate.yml` существует только как owner-approved manual workflow, не запускался и не может самостоятельно выдать себе root. До проверки этого bootstrap, установки и реального rollback **инфраструктурные пункты 2–3 не закрыты**. Не отправлять `--live` для 6.14 до проверки обеих личных авторизаций; 6.14 остаётся [ ].
+
+**Проверки:** [PR #59](https://github.com/vl-ktk/ai-agent-engine/pull/59) Linux 3.11/3.12/3.13 + wheel PASS; Windows job historical Linux-only `fcntl` FAIL. Live `status` verified on existing VPS. Нет новых платных ресурсов или секретов. Ветка `infra/netcup-safe-control-20261118` опубликована в main fast-forward. Номер релиза контроллера не менялся; его старый SHA пригоден для будущего rollback после подтверждения текущего состояния.
+
+---
+
 # HANDOFF — 2026-11-18: Netcup control hardening, source-only proposal
 
 **Действующий main для отката:** `e5ffc1c15089145ff548c2ecd8bec7804e2343f5`. Работа ведётся в ветке `infra/netcup-safe-control-20261118`; текущий production не менялся. К существующему `6.14 [ ] LIVE BLOCKED` эта работа относится как инфраструктурная предпосылка; закрытие 6.14 без реального GPT/Claude E2E запрещено.
