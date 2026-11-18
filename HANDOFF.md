@@ -1,6 +1,15 @@
-# HANDOFF — 2026-11-18: этап 6 уточнён по уже живому GPT/Claude-пилоту; следующий 6.1
+# HANDOFF — 2026-11-18: 6.1 завершён; следующий 6.2
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 6.1, матрица GPT/Claude разрешённых режимов
+
+- **Статус:** `6.1 [x]` — матрица **8 режимов** проверена 18.11.2026, [протокол](./infra/orchestrator/PROVIDER_ACCESS_MATRIX.md); следующий **6.2 [ ]** — соединить существующий GPT-пилот с новой scoped task очередью/контроллером, **не начинать без новой команды владельца**.
+- **Подтверждённое ранее, не повторять:** 16–17.11 в Codespace ChatGPT OAuth `GRANTED`, ответ GPT, тестовая запись/чтение файла, официальный Claude Code Pro `claude -p`, общий пилот **12/12 PASS по сохранённому отчёту владельца**, см. `PHASE1_GO_NOGO.md` и `CLAUDE_INTEGRATION_REVIEW.md`. Это не новая модельная проверка 6.1 и не доказательство, что GPT/Claude уже выполняют задания очереди 5.x на Netcup.
+- **Матрица:** GPT личный pilot GO; self-hosted open-source SIWC VM CONDITIONAL при сохранённом VM host ID/защищённых creds/refresh; непрерывная task queue на текущем VPS HOLD до живого адаптера/лимитов; billed API fallback NO-GO без согласования. Claude официальный личный Pro CLI GO; unattended runner на VPS HOLD до подтверждения допуска; посредничество OAuth чужих пользователей NO-GO; платный API key не запускать без решения владельца. Уточнены реальные SIWC stream `store=false`/`stream=true`, ошибки квот, credential lifecycle и ограничения tool/policy.
+- **Сверено с официальными источниками 18.11.2026:** OpenAI SIWC quickstart, models/inference, self-hosted VMs, preview limitations, errors/recovery; Anthropic Claude Code legal/compliance и Claude Agent SDK subscription. Прямые URLs — в матрице. Ни новые OAuth, ни модельные вызовы, ни сервер, ни платные ресурсы не запускались.
+- **Проверки:** только GitHub-документация (roadmap, `AGENTS.md`, `HANDOFF.md`, новый протокол); проверить количество подпунктов 169, diff/workflow/public-source и идентичность GitHub дерева перед финальным отчётом. Полный unittest к неизменённому коду не требуется и не заявляется новым PASS.
+- **Версия/откат:** до 6.1 опубликован GitHub `main` `5491dc03811eb1ec2c5ba05e3c91bff755c53bf2` (дерево `8a61ad7298cb47cb85cc5e999c36661bb995f165`). Новый SHA зафиксировать после fast-forward; rollback — адресный обратный коммит 6.1 без force/reset. На Netcup не выкладывать.
 
 ## Актуальная передача — уточнение плана этапа 6 по поручению владельца
 
