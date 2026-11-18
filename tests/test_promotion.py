@@ -146,6 +146,8 @@ class PromotionTests(unittest.TestCase):
             os.umask(previous_umask)
         self.assertFalse((self.root / "current").exists())
         for path in (target, *target.rglob("*")):
+            if path.is_symlink():
+                continue  # venv links to the runner interpreter; it is not a staged file.
             mode = path.stat().st_mode & 0o777
             self.assertFalse(mode & 0o022, str(path))
             if path.is_dir():
