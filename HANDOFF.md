@@ -1,3 +1,14 @@
+# HANDOFF — 19.11.2026: Netcup baseline status verified, admin console BLOCKED
+
+**Источник:** `vl-ktk/ai-agent-engine/main`. Владелец поручил начать пункт 1 [плана полной административной настройки](./infra/deploy/NETCUP_FULL_ADMIN_ACCESS_PLAN.md).
+
+- **LIVE:** GitHub Actions [#44409546477](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44409546477) PASSED, actor `vl-ktk`, pinned SSH host PASS, `ae-controller.service` + `ae-backup.timer` + `ae-host-check.timer` active, Netcup current `releases/85375103800845eeff696e53f510c66c428408ed`. Исходник тестового status commit `fb4c57579f9c076b5b63c50cf3db948a0137557f`.
+- **Блокер пункта 1:** доступна лишь непривилегированная SSH-проверка, нет действующей административной консоли/root в текущей инструментальной сессии. Состояние рабочих данных/backup-интегритет не проверено. Пункт 1 **PARTIAL**, права sudo не выдавались, Netcup не менялся.
+- После административного входа проверить права, текущую версию, данные/бэкапы read-only; только потом пункт 2 (согласованная настройка админ-прав). После завершения пунктов 1–5 вернуться ровно к `6.14 [ ] LIVE BLOCKED` для GPT+Claude E2E.
+- **Откат GitHub:** исходный main до документальной записи `fb4c57579f9c076b5b63c50cf3db948a0137557f`; не сбрасывать `main` силой, использовать адресный revert после повторной сверки HEAD. **Реальной VPS-публикации не было.**
+
+---
+
 # HANDOFF — 19.11.2026: отдельная задача полного админ-доступа Netcup
 
 **Текущее решение владельца:** прежде чем продолжать разработку AI Agent
