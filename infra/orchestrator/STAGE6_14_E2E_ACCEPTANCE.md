@@ -69,3 +69,10 @@ PR #58 (`stage-6.14-live-e2e-acceptance`), `tests/test_stage6_14_acceptance.py`:
   безопасная фиксация результата. Не подменять его offline PASS.
 
 Пункт 6.14 остаётся **[ ] LIVE BLOCKED**, этап 7 не начат.
+
+
+## Обновление 19.11.2026 — подготовка официального Claude CLI на Netcup
+
+Живой [owner job #44424028255](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44424028255) **SUCCESS**. `ae-runtime`: `claude --version` выполнена, CLI установлен, systemd controller и timers здоровы до и после. Repo commits: `e65aabe` (проверенный скрипт), `f4e3164` (запрос). 664 offline unittest + wheel + security/workflow checks PASS на runner до SSH. Текущий release `0e04af0` не менялся, моделей не вызывали.
+
+Обе личные подписочные авторизации пока **не подтверждены**. GPT SIWC уже есть в release, но требует реального OAuth flow с loopback callback; Claude CLI готов к `claude auth login` под `ae-runtime`. Следующий шаг: owner login без копирования секретов в CI, потом единый E2E. **6.14 остаётся [ ] LIVE BLOCKED.**
