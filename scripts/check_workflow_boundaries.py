@@ -74,7 +74,7 @@ def inspect_workflow(name: str, source: str) -> list[str]:
             "on:\n  push:\n    branches: [main]\n    paths:\n      - 'ops/requests/*.json'",
             "github.actor == 'vl-ktk'",
             "python3 scripts/netcup_status_request.py --github-output",
-            "'set -e; systemctl is-active --quiet ae-controller.service; systemctl is-active --quiet ae-backup.timer; systemctl is-active --quiet ae-host-check.timer; printf "all three units active\\n"; readlink /opt/ai-agent-engine/current'",
+            """'set -e; systemctl is-active --quiet ae-controller.service; systemctl is-active --quiet ae-backup.timer; systemctl is-active --quiet ae-host-check.timer; printf "all three units active\\n"; readlink /opt/ai-agent-engine/current'""",
             "SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg",
         )
         for token in required:
