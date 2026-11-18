@@ -3,7 +3,6 @@
 import os
 from pathlib import Path
 import subprocess
-import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -227,7 +226,7 @@ class TaskCommandTests(unittest.TestCase):
         self.start()
         # Only trusted test harness replaces the private allowlist, never
         # a model prompt or HTTP request.
-        large = _CommandSpec((sys.executable, "-c",
+        large = _CommandSpec(("/usr/bin/python3", "-c",
                               f"print('x'*{MAX_OUTPUT_BYTES + 100})"), 2)
         with patch.object(runner, "_commands", {"synthetic": large}):
             with self.assertRaises(CommandFailed):
@@ -236,7 +235,7 @@ class TaskCommandTests(unittest.TestCase):
     def test_timeout_kills_test_process_in_own_group(self):
         runner = self.runner(self.gate(EXEC))
         self.start()
-        sleeper = _CommandSpec((sys.executable, "-c",
+        sleeper = _CommandSpec(("/usr/bin/python3", "-c",
                                 "import time;time.sleep(60)"), 0.1)
         with patch.object(runner, "_commands", {"synthetic": sleeper}):
             with self.assertRaises(CommandFailed):

@@ -99,6 +99,20 @@ class GPTTaskOfflineTests(unittest.TestCase):
         self.assertFalse(runner.execute(task_id, "slot-a").executed)
         self.assertEqual(len(gate.audit_history(task_id, OWNER)), 1)
 
+    def test_provider_result_masks_known_host_secret_without_audit_leak(self):
+        task_id = self.new_task()
+        secret = "fixture-owner-private-session-123456"
+        command = (
+            "import json,sys;sys.stdin.buffer.read();"
+            f"print(json.dumps({{'ok':True,'text':{secret!r}}}),flush=True)"
+        )
+        runner, _gate = self.executor(task_id, command=command)
+        with patch.dict(os.environ, {"SESSION_TOKEN": secret}):
+            result = runner.execute(task_id, "slot-a")
+        self.assertEqual(result.text, "[REDACTED]")
+        self.assertEqual([e.outcome for e in runner.provider_history(task_id)],
+                         ["completed"])
+
     def test_32_duplicate_attempts_issue_one_runnable_process(self):
         task_id = self.new_task()
         runner, gate = self.executor(task_id)

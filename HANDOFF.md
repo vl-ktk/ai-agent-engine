@@ -1,6 +1,16 @@
-# HANDOFF — 2026-11-18: 6.7 точечные task commands; следующий 6.8
+# HANDOFF — 2026-11-18: 6.8 sandbox/redaction; следующий 6.9
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 6.8: OS-изоляция offline команд и секреты
+
+- **Статус:** `6.8 [x]` — новый `OfflineTaskSandbox` обязателен для task commands 6.7; БЕЗ fallback. **13 новых offline-тестов PASS** (12 isolation + 1 GPT redact), весь регресс проверить перед публикацией. **Следующий `6.9 [ ]`** — завершение/восстановление процессов после SIGKILL/crash и невыдача задач повторно, только по новой команде Владислава. [Протокол](./infra/orchestrator/TASK_EXECUTOR_ISOLATION.md).
+- **Источник/откат:** GitHub `vl-ktk/ai-agent-engine/main`, до 6.8 подтверждён `c7b085dc0a567d1fd0cbb8bed53995c5b9a51f9b` (6.7). Новый commit/tree SHA подтвердить после публикации; откат — адресным обратным коммитом на актуальном `main`, без force/reset. Netcup релиз не менялся.
+- **Код:** `ai_agent_engine/task_isolation.py` — Linux Bubblewrap user/PID/IPC/UTS/mount namespaces; из хоста только read-only `/usr/bin`, `/usr/lib`, `/usr/share`, runtime libs и pinned workspace FD (RO по умолчанию, RW unittest с двумя грантами), собственный `/tmp`/`/proc`/`/dev`, пустой `/etc`. libseccomp syscall BPF блокирует socket/network/escape; на этой машине `unshare-net` не работает (`NETLINK_ROUTE EPERM`), **не выдавать блокировку сокетов за network namespace**. Child env фиксированный, stdout маскирует known host credentials; `_worker_environment` GPT/Claude ограничен служебным whitelist, GPT/Claude текст перед возвратом маскируется. Никаких платных API или live provider runs.
+- **Тесты:** `tests/test_task_isolation.py` 12 PASS: реальные host path/external secret read и read-only write — denied, `/usr/local` скрыт, RW только в заданной workspace, network socket `EPERM`, no env inheritance, literal/API token masks, расширенный chmod workspace — denied, отсутствует sandbox/seccomp — fail-closed, provider env whitelist. `tests/test_task_gpt.py` +1 PASS: fake GPT secret returned only redacted. Все 14 прошлых task-command тестов повторно PASS.
+- **Границы:** CLI GPT/Claude требует собственный HOME/OAuth и сеть — только trusted provider environment и redaction, **без Bubblewrap** для этих сетевых workers. Netcup OS, privdrop, external side channels и orphaned grandchildren остаются вне доказанного; 6.9 отдельно решит crash cleanup. Нет изменения прав/секретов/production/серверов/расходов.
+
+## Историческая передача — 6.7: точечные task commands
 
 ## Текущая передача — 6.7: безопасные команды по грантам
 

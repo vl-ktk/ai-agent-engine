@@ -15,7 +15,6 @@ import shutil
 import signal
 import stat
 import subprocess
-import sys
 import time
 from types import MappingProxyType
 from typing import Mapping
@@ -23,6 +22,10 @@ from typing import Mapping
 from .core import Tool
 from .task_api import OwnerScope, TaskInbox
 from .task_assignment import validate_worker
+from .task_isolation import (
+    IsolationUnavailable, OfflineTaskSandbox, redact_text,
+    sensitive_environment_values,
+)
 from .task_permissions import ProtectedAction, TaskPermissionGate
 
 
@@ -67,8 +70,9 @@ class _CommandSpec:
 
 def _trusted_commands() -> dict[str, _CommandSpec]:
     git = shutil.which("git", path="/usr/bin:/bin")
-    if not git:
-        raise CommandDenied("trusted Git executable unavailable")
+    python = shutil.which("python3", path="/usr/bin:/bin")
+    if not git or not python:
+        raise CommandDenied("trusted command executable unavailable")
     base = (git, "--no-pager", "-c", "core.fsmonitor=false",
             "-c", "core.hooksPath=/dev/null")
     return {
@@ -78,11 +82,11 @@ def _trusted_commands() -> dict[str, _CommandSpec]:
             base + ("diff", "--no-ext-diff", "--check", "--"), 10),
         # Compiles syntax into RAM only. No source import or .pyc writes.
         "python_compile_check": _CommandSpec(
-            (sys.executable, "-I", "-B", "-c", _COMPILE_SOURCE), 15),
+            (python, "-I", "-B", "-c", _COMPILE_SOURCE), 15),
         # Test modules can run arbitrary Python and must be preapproved as
         # trusted source; never expose this opt-in through request JSON.
         "python_unit_tests": _CommandSpec(
-            (sys.executable, "-B", "-m", "unittest", "discover",
+            (python, "-B", "-m", "unittest", "discover",
              "-s", "tests", "-q"), 60, requires_test_opt_in=True),
     }
 
@@ -113,6 +117,8 @@ class TaskCommandRunner:
         self._gate = gate
         self._allow_tests = allow_trusted_tests
         self._commands = MappingProxyType(_trusted_commands())
+        self._sandbox = OfflineTaskSandbox()
+        self._sensitive_values = sensitive_environment_values(os.environ)
         try:
             info = os.lstat(assigned.workspace_dir)
         except OSError:
@@ -124,15 +130,8 @@ class TaskCommandRunner:
 
     @staticmethod
     def _environment(workspace: str) -> dict[str, str]:
-        """Minimal, deterministic child environment; never inherit API creds."""
-        return {
-            "PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
-            "HOME": workspace, "PYTHONNOUSERSITE": "1",
-            "PYTHONDONTWRITEBYTECODE": "1", "PYTHONPATH": "",
-            "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-            "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0",
-            "GIT_PAGER": "cat", "PAGER": "cat", "PIP_NO_INDEX": "1",
-        }
+        """Stage-6.7 compatibility: the sandbox owns the actual child env."""
+        return OfflineTaskSandbox.clean_environment()
 
     def _open_workspace(self) -> int:
         if self._inbox.get_assignment(self._task_id, self._scope) != self._assigned:
@@ -145,13 +144,15 @@ class TaskCommandRunner:
             raise CommandDenied("assigned workspace unavailable") from None
         info = os.fstat(fd)
         if ((info.st_dev, info.st_ino) != self._root_identity
-                or not stat.S_ISDIR(info.st_mode)):
+                or not stat.S_ISDIR(info.st_mode)
+                or info.st_uid != os.geteuid()
+                or stat.S_IMODE(info.st_mode) != 0o700):
             os.close(fd)
             raise CommandDenied("workspace root changed")
         return fd
 
     @staticmethod
-    def _kill_child(child: subprocess.Popen) -> None:
+    def _kill_child(child) -> None:
         if child.poll() is None:
             try:
                 if os.getpgid(child.pid) == child.pid:
@@ -167,16 +168,10 @@ class TaskCommandRunner:
         root_fd = self._open_workspace()
         child = None
         try:
-            # /proc/self/fd pins cwd to the checked directory inode, rather
-            # than resolving a raceable pathname at subprocess creation.
-            cwd = f"/proc/self/fd/{root_fd}"
-            child = subprocess.Popen(
-                spec.argv, cwd=cwd, pass_fds=(root_fd,),
-                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, start_new_session=True,
-                env=self._environment(self._assigned.workspace_dir),
-                close_fds=True,
-            )
+            # Bubblewrap mounts this already checked FD as the ONLY writable
+            # host path (and only for the separately granted unit test tool).
+            child = self._sandbox.spawn(root_fd, spec.argv,
+                                        writable=spec.requires_test_opt_in)
             deadline = time.monotonic() + spec.timeout_seconds
             output = bytearray()
             with selectors.DefaultSelector() as selector:
@@ -203,7 +198,12 @@ class TaskCommandRunner:
             result = output.decode("utf-8", errors="replace")
             # Keep printable Git/test facts; no terminal control sequences.
             safe = "".join(c if c.isprintable() or c in "\n\t" else "?" for c in result)
-            return CommandResult(command_id, exit_code, safe)
+            return CommandResult(
+                command_id, exit_code,
+                redact_text(safe, secrets=self._sensitive_values),
+            )
+        except IsolationUnavailable:
+            raise CommandFailed("secure command sandbox unavailable") from None
         except (OSError, UnicodeError):
             raise CommandFailed("trusted command unavailable") from None
         finally:

@@ -20,6 +20,7 @@ from .task_api import OwnerScope, TaskInbox, TaskNotFound
 from .task_assignment import AlreadyAssigned, validate_worker
 from .task_control import TaskControlError, TaskProcessController
 from .task_delivery import TaskDeliveryManager
+from .task_isolation import provider_worker_environment, redact_text, sensitive_environment_values
 from .task_permissions import ProtectedAction, TaskPermissionGate
 from .task_state import TaskState, TransitionRejected
 
@@ -100,14 +101,9 @@ class GPTTaskExecutor:
 
     @staticmethod
     def _worker_environment() -> dict[str, str]:
-        """Do not let inherited paid-API credentials affect the SIWC path."""
-        disallowed = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN")
-        environment = {key: value for key, value in os.environ.items()
-                       if key.upper() not in disallowed
-                       and not key.upper().startswith("AZURE_OPENAI_")}
-        # A trusted package root, not a user workspace or arbitrary PYTHONPATH.
-        environment["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent)
-        return environment
+        """Provider subprocess sees only service essentials and its own login HOME."""
+        return provider_worker_environment(
+            os.environ, str(Path(__file__).resolve().parent.parent))
 
     @staticmethod
     def _stop_unattached(process: subprocess.Popen) -> None:
@@ -255,8 +251,10 @@ class GPTTaskExecutor:
             self.control.finish(task_id, self.scope, success=True)
             self.delivery.report(task_id, self.scope, actor_id=self.worker_id,
                                  token=ticket.token, success=True)
-            return GPTTaskOutcome(task_id, TaskState.SUCCEEDED,
-                                  self.model_id, True, result["text"])
+            return GPTTaskOutcome(
+                task_id, TaskState.SUCCEEDED, self.model_id, True,
+                redact_text(result["text"],
+                            secrets=sensitive_environment_values(os.environ)))
 
         try:
             self.control.complete_failed_attempt(task_id, self.scope)

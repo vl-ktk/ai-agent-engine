@@ -35,8 +35,16 @@ GPT/Claude live workers still have no file tools enabled.
 allows only four fixed Git/syntax-check/unittest command IDs, with exact
 worker/task permissions, sanitized subprocess environment, timeout and output
 bounds; actual unit test execution additionally requires owner-side trusted
-opt-in and a write grant. It is not a general shell/build tool or OS sandbox
-(stage 6.8). No live GPT/Claude or Netcup deployment is included.
+opt-in and a write grant. It is not a general shell/build tool. Its required
+OS sandbox was added in stage 6.8; no Netcup deployment is included.
+
+**Stage 6.8 [x]:** [Offline subprocess isolation](./infra/orchestrator/TASK_EXECUTOR_ISOLATION.md)
+now requires Linux Bubblewrap mount/user/PID namespaces and a libseccomp
+network-socket filter, a pinned task workspace (read-only unless separately
+authorized) and scrubbed environment. Known host secrets and token shapes
+are redacted from task output; the GPT/Claude provider subprocess environment
+is reduced to an allowlist. Their networked, credential-bearing CLI processes
+**are not** in the offline OS sandbox. Crash-orphan cleanup remains stage 6.9.
 
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.

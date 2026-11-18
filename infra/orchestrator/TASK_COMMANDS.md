@@ -19,10 +19,10 @@ The first two Git operations add trusted `--no-pager -c core.fsmonitor=false -c 
 
 The subprocess receives a clean minimal environment (without inherited provider/API/OAuth credentials), no interactive stdin, a checked `0700` directory inode pinned through a POSIX dirfd as its cwd, a new process group and a bounded timeout and **4096-byte stdout**. Failure, timeout or output overflow stops the child and produces a sanitized exception; stderr is not forwarded into a task transcript. SQLite permission audits record the authorized action, not raw command output. Unknown commands are denied before audit or process start.
 
-## Limits: do not confuse this with 6.8
+## Limits and subsequent sandbox in 6.8
 
-- Python **unit tests execute Python code**, which can still write arbitrary files or access the network through OS permissions. `allow_trusted_tests=True` may only be passed by a trusted owner-side coordinator after review of the source; it is never a model-selected option. The extra `WRITE_WORKSPACE` grant is an authorization check, **not** filesystem confinement.
-- This command runner has no container, namespace, seccomp, privilege drop, mount/network confinement or source-integrity proof. A running process can still use the OS identity's privileges and `/proc`, and an orphaned descendant may outlive an exited parent. **6.8** introduces executor environment/secret isolation; **6.9** addresses orphan cleanup. These remaining boundaries are explicit security requirements before untrusted-code execution.
+- Python **unit tests execute Python code**, and `allow_trusted_tests=True` remains an owner-side trust decision. Since **6.8**, this runner **does** require Bubblewrap's filesystem/PID namespace and libseccomp socket/escape filter, with no unsandboxed fallback; the source integrity and full side-channel profile are not proven. See [6.8's measured boundaries](./TASK_EXECUTOR_ISOLATION.md).
+- This sandbox has not been deployed on Netcup; system compatibility and other protections must be separately verified before any live untrusted executor use. An orphaned descendant may outlive an exited supervisor; **6.9** addresses process cleanup after crash. Permissions are still application grants, not a substitute for the OS boundary.
 - Git worktrees and Python sources are read from the assigned workspace. The preexisting task assignment/workspace is trusted; this adapter does not automatically add command tools to the already working GPT/Claude executors.
 - No real provider API was invoked. No Netcup, production database, access rights, secrets, paid APIs or deployed release were changed.
 
