@@ -45,6 +45,20 @@ class DeliveryReservation:
     token: str | None = field(repr=False)
 
 
+@dataclass(frozen=True)
+class TaskRecoveryEntry:
+    """A nonterminal task that must be accounted for after a restart.
+
+    No runnable token or raw task content is exposed. `review_required`
+    deliberately forbids an automatic retry of potentially live work.
+    """
+
+    task_id: str
+    state: TaskState
+    delivery_status: str | None
+    review_required: bool
+
+
 class TaskDeliveryManager:
     """Serializes durable deliveries with TaskInbox's existing state lock.
 
@@ -163,3 +177,36 @@ class TaskDeliveryManager:
                 if row is not None and row[3] in ("active", "retryable"):
                     found.append(self._snapshot(task_id, row))
             return tuple(found)
+
+    def recovery_inventory(self, scope: OwnerScope) -> tuple[TaskRecoveryEntry, ...]:
+        """Enumerate *every* nonterminal task, including missing ledgers.
+
+        `resume_pending` intentionally lists only deliveries; a RUNNING task
+        can exist without a delivery row when attached by trusted code. This
+        offline inventory closes that blind spot, but never assumes an
+        orphaned process was stopped or reissues an unknown active ticket.
+        After an unclean restart, a trusted operator must independently
+        verify worker/process outcomes before transitioning such tasks.
+        """
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected trusted OwnerScope")
+        with self.inbox._lock:
+            entries = []
+            for task_id, record in self.inbox._by_id.items():
+                if (record.owner_id != scope.owner_id
+                        or record.project_id not in scope.project_ids):
+                    continue
+                state = self.inbox._states[task_id]
+                if state in TERMINAL_STATES:
+                    continue
+                row = self.inbox._store.delivery(task_id)
+                delivery_status = None if row is None else row[3]
+                # A claimed workspace may contain work even without a
+                # delivery ledger. Only an unclaimed QUEUED task is safe
+                # to consider for normal dispatch after a clean restart.
+                review_required = (state is not TaskState.QUEUED
+                                   or delivery_status is not None)
+                entries.append(TaskRecoveryEntry(task_id, state,
+                                                 delivery_status,
+                                                 review_required))
+            return tuple(entries)

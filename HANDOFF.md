@@ -1,6 +1,15 @@
-# HANDOFF — 2026-11-18: 5.13 завершён; следующий 5.14
+# HANDOFF — 2026-11-18: 5.14 завершён; следующий 6.1
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 5.14, финальная offline-интеграция этапа 5
+
+- **Статус:** `5.14 [x]` — **13 новых PASS**, полный регресс **485 unittest OK (1 skipped)**; следующий **6.1 [ ]** — матрица доступных GPT/Claude провайдеров и разрешённых методов, **только после новой команды владельца**. [Протокол](./infra/orchestrator/STAGE5_INTEGRATION.md).
+- **Код:** `TaskDeliveryManager.recovery_inventory(scope)` с полным owner-scoped списком всех `QUEUED/ASSIGNED/RUNNING`, включая RUNNING без delivery ledger. `review_required=True` для каждого claim/running/unknown; при SQLite-сбое отказ вместо неполного списка. Прежний контракт `resume_pending()` не меняли. **SQLite schema v5 без миграций**.
+- **Интеграционные проверки:** `tests/test_stage5_integration.py`: 8 одновременных реальных процессов, 16 конкурирующих claim, retries, process-group cancel/timeout, SQL failure, localhost HTTP→ticket→gate→audit→restart, изолированное восстановление test SQLite, scoped inventory и реальный `SIGKILL` отдельного supervisor. После аварии child действительно оставался жив: учёт `RUNNING/active` восстановлен, повторная выдача запрещена, тестовый оператор остановил процесс, проверил состояние и закрыл задачу `FAILED`. В отдельном сценарии RUNNING без delivery row теперь обязательно виден.
+- **Проверки:** compileall/workflow/public-source/diff PASS. На новой версии regression **485 OK (1 skipped)**. GitHub CI не объявлять PASS, если нет отдельного зелёного статуса.
+- **Границы:** после неконтролируемого `SIGKILL` процесс может остаться жив и потребовать доверенного ручного восстановления — это учтённое, но не автоматически убранное состояние; настоящая OS-зачистка при crash входит в 6.9. Никаких живых GPT/Claude, production Netcup, его БД, ОС, сетевых портов, секретов или другого проекта; расходов нет.
+- **Версия/откат:** источник до работы 5.14: GitHub `main` `af355f7d341e4e92cf30da8e291a00b73d057e79` (дерево `b7172f72d3189fda77951397c815be3b1e163361`). Изменения 5.14 выпустить отдельным fast-forward коммитом, SHA сверить и записать в эту передачу после публикации; откат — адресный обратный коммит 5.14 от текущего `main`, без force/reset. Netcup не выкладывался.
 
 ## Текущая передача — 5.13, гранты и обезличенный аудит 18.11.2026
 
