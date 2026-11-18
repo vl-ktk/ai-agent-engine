@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vl-ktk/ai-agent-engine/schemas/task_execution_request.v1.schema.json",
+  "title": "AI Agent Engine trusted task execution request v1",
+  "description": "Internal coordinator-to-worker metadata. Identity, role and required_actions in a JSON document are not authorization. Bind against trusted TaskInbox and TaskPermissionGate.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task", "context", "role", "permissions"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "project_id", "title", "prompt", "parent_task_id", "priority"],
+      "properties": {
+        "task_id": {"type": "string", "pattern": "^(task|subtask)_[0-9a-f]{32}$"},
+        "project_id": {"$ref": "#/$defs/scoped_id"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "prompt": {"type": "string", "minLength": 1, "maxLength": 32768},
+        "parent_task_id": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "string", "pattern": "^(task|subtask)_[0-9a-f]{32}$"}
+          ]
+        },
+        "priority": {"type": "integer", "minimum": 0, "maximum": 100}
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_id", "workspace_name", "summary"],
+      "properties": {
+        "owner_id": {"$ref": "#/$defs/scoped_id"},
+        "workspace_name": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"},
+        "summary": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["worker_id", "kind", "instructions"],
+      "properties": {
+        "worker_id": {"$ref": "#/$defs/scoped_id"},
+        "kind": {"type": "string", "enum": ["executor", "supervisor"]},
+        "instructions": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_actions"],
+      "properties": {
+        "required_actions": {
+          "type": "array", "maxItems": 5, "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["read_secret", "write_workspace", "execute_tool", "external_request", "delete_artifact"]
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "scoped_id": {
+      "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    }
+  }
+}

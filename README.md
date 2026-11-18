@@ -2,13 +2,20 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
-**Current milestone (2026-11-18):** Stage **6.3 [x]** passed one real,
+**Provider milestone (2026-11-18):** Stage **6.3 [x]** passed one real,
 explicitly owner-triggered Claude Pro task via the scoped SQLite queue and
 the unmodified `claude -p` CLI (`CLAUDE_TASK_6_3_LIVE PASS`). The adapter is
 owner-bound, one-shot and has offline regression coverage (513 unittest OK,
 1 skipped). [Evidence and limitations](./infra/orchestrator/CLAUDE_TASK_ADAPTER.md).
 Unattended/24×7 subscription-based execution on Netcup remains **HOLD**;
 there is no provider production deployment or paid API integration.
+
+**Stage 6.4 [x]:** The provider-neutral task/context/role/required-actions
+request v1 now has a [JSON schema, strict validator, owner-bound builder and
+offline fixture](./infra/orchestrator/TASK_EXECUTION_REQUEST.md). This
+internal contract does not modify either provider's live invocation or
+grant permissions by including them in JSON. The next stage is 6.5 (response
+contract); no new GPT/Claude network calls or Netcup deployment.
 
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.

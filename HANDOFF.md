@@ -1,8 +1,17 @@
-# HANDOFF — 2026-11-18: 6.3 Claude Pro owner-only LIVE PASS; следующий 6.4
+# HANDOFF — 2026-11-18: 6.4 запрос GPT/Claude v1; следующий 6.5
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
 
-## Текущая передача — 6.3: один реальный Claude Pro task→result PASS
+## Текущая передача — 6.4: схема, валидатор и fixture единого запроса
+
+- **Статус:** `6.4 [x]` — внутренний provider-neutral request v1 с точными полями задачи, контекста, роли и **запрошенных**, но не выданных, действий. **Следующий `6.5 [ ]`** — формат результата, артефактов, ошибок и лимитов, начать только по новой явной команде Владислава. [Контракт 6.4](./infra/orchestrator/TASK_EXECUTION_REQUEST.md).
+- **Источник/версия:** GitHub `vl-ktk/ai-agent-engine`, `main`. До 6.4 опубликован `1c06f77307537aea0c120f272903f3895956d2f4` (документы 6.3; код Claude `e46b751`). Коммит текущего 6.4 подтвердить по GitHub после публикации; Netcup release не меняется. Откат — только адресным обратным коммитом от **актуального** `main`, без force/reset/серверного отката.
+- **Реализовано:** `ai_agent_engine/task_request.py` (`parse_task_request`, `build_task_request`, `verify_bound_task_request`, immutable `TaskExecutionRequest`), `schemas/task_execution_request.v1.schema.json` Draft 2020-12, `tests/fixtures/task_execution_request.valid.json`, `tests/test_task_request.py`; полная спецификация и пример в документации. Builder читает **существующие** `TaskRecord` и `TaskAssignment` из доверенного `TaskInbox` с `OwnerScope`; verifier отклоняет любое расхождение owner/project/task/prompt/priority/worker/workspace/role/instructions/required-actions. Схема не открывает новых HTTP-полей и не заменяет бинарные payload GPT/Claude.
+- **Безопасность:** JSON не наделяет ролью/правами; реальные `ActionGrant` и TTL/статус проверяет `TaskPermissionGate` **до** любого побочного действия. Синтетические fixtures, строгий UTF-8, отсутствие unknown/duplicate fields, несанкционированных `admin`/action/path, размер до 64 KiB. Никаких API-key, OAuth, текста модели в аудите или новых платных услуг.
+- **Проверки:** 10 новых тестов 6.4 PASS, полный регресс **523 unittest OK (1 skipped)**, включая настоящую одноразовую SQLite, owner/project spoofing и отказ запрошенного действия без гранта. Compileall, workflow/source/diff и Git-tree сверить/зафиксировать при публикации. **Без live-вызовов GPT/Claude**: критерию 6.4 нужны схема/валидатор/fixture, а не повторная проверка провайдеров. Netcup/production/базы/секреты/права не менялись.
+- **Границы:** пока **контракт для доверенного координатора**, а не новая публичная API-ручка и не автоматическое распределение заданий между провайдерами. 6.5 отдельно создаст контракт ответа; 6.6–6.12 — sandbox/права/артефакты. Личный Claude одноразовый PASS 6.3 остаётся подтверждён, его unattended/24×7 Netcup-режим остаётся HOLD.
+
+## Историческая передача — 6.3: один реальный Claude Pro task→result PASS
 
 - **Статус:** `6.3 [x]` — **реальный личный owner-only адаптер** готов и проверен в одном явном live-вызове. Следующий `6.4 [ ]`: контракт запроса/контекста/ролей/прав, начать **только после следующего поручения Владислава**. [Протокол](./infra/orchestrator/CLAUDE_TASK_ADAPTER.md).
 - **Источник/версия:** GitHub `vl-ktk/ai-agent-engine`, `main`. Изменения кода 6.3 опубликованы коммитом `e46b751c3090408d30fa3abce5f1c3958660f8e2` (дерево `0e21194fad644a6337f085f4d2f0079023c08dc5`); непосредственно перед кодом был `24285bee11009bd780781d3ceedd88ccf69d5757`. Текущая документационная фиксация публикуется **отдельным следующим коммитом**, точный SHA подтвердить после операции. Netcup/production не менялись, серверный откат не нужен.

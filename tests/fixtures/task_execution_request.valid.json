@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "task": {
+    "task_id": "task_11111111111111111111111111111111",
+    "project_id": "private-test",
+    "title": "Составить краткий план",
+    "prompt": "Предложи три шага выполнения задачи.",
+    "parent_task_id": null,
+    "priority": 10
+  },
+  "context": {
+    "owner_id": "owner-a",
+    "workspace_name": "slot-a",
+    "summary": "Контекст передаёт координатор, это не права доступа."
+  },
+  "role": {
+    "worker_id": "worker-a",
+    "kind": "executor",
+    "instructions": "Подготовь ответ без файловых операций."
+  },
+  "permissions": {
+    "required_actions": ["external_request"]
+  }
+}
