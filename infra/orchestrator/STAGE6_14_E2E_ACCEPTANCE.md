@@ -46,3 +46,26 @@ PR #58 (`stage-6.14-live-e2e-acceptance`), `tests/test_stage6_14_acceptance.py`:
 - При неуспехе живого вызова нет fallback и автоматического повтора. Наличие когда-то успешных 6.2/6.3 не заменяет текущий 6.14 live E2E.
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`, baseline до работы `df7799146373db47a3fcc386c23e641a9fe535ea`. Откат любых публикаций скрипта: адресные обратные коммиты после сверки актуального main, без force/reset. На Netcup откат не требуется, он не затронут.
+
+
+## Обновление 19.11.2026 — фактический preflight Netcup
+
+Принятый владельцем запрос 6.14 инициировал read-only проверку
+`ops/admin-scripts/stage6_14_preflight.py` через существующий owner channel:
+[GitHub Actions #44421225951](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44421225951).
+Задача успешно подключилась к текущему серверу и исполнилась, Python 3.12
+прошёл **664 offline tests**, но результат авторизаций **`AUTH_NOT_READY`**.
+
+- `ae-runtime`: GPT SIWC session **нет**, Claude CLI **нет**.
+- `ae-deploy`: GPT SIWC session **нет**, Claude CLI **нет**.
+- Результат: ни одной реальной модели не вызывали; пользовательские
+  OAuth-токены/секреты/почта не выводились; рабочий контроллер, SQLite
+  и текущий релиз не менялись.
+- Запуск 6.14 `--live` был **отложен по проверяемой причине**.
+  Серверные root/sudo права не являются личной авторизацией GPT/Claude.
+- Следующий шаг: оба личных подписочных входа в одной owner-authorized
+  Linux-среде, предпочтительно уже авторизованном Codespace, затем
+  один явный E2E `--live --owner-approved --provider both` и
+  безопасная фиксация результата. Не подменять его offline PASS.
+
+Пункт 6.14 остаётся **[ ] LIVE BLOCKED**, этап 7 не начат.

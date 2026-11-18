@@ -1,3 +1,18 @@
+# HANDOFF — 19.11.2026: Stage 6.14 LIVE provider auth preflight BLOCKED
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`; административный канал Netcup уже работоспособен. Владелец поручил продолжить **именно 6.14**. Сам live E2E обеих моделей **НЕ выполнялся** и пункт остаётся [ ].
+
+- Подготовлен безопасный `ops/admin-scripts/stage6_14_preflight.py`, тесты в `tests/test_stage6_14_netcup_preflight.py`; PR #61. Linux CI Python 3.11/3.12/3.13, isolated wheel PASS, Python 3.12 **664 unittest OK**. Windows CI прежний FAIL (`fcntl`).
+- **Живой Netcup preflight:** [GitHub Actions #44421225951](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44421225951) **SUCCESS как выполнение административной диагностической задачи**, но результат провайдеров **`AUTH_NOT_READY`**: у `ae-runtime` и `ae-deploy` нет сохранённого личного GPT SIWC входа и `claude` CLI отсутствует. Подписка Claude не обнаружена. Токены/учётные данные в логи не выводились; **models_invoked=false**. Рабочие сервисы/SQLite/публикация не менялись.
+- **Netcup release до и после проверки:** по контролю CAS ожидаемый `0e04af007375d82daf8f7d3b36c71abb0c784e0b`. Его механизм проверки сверил; точную текущую рабочую версию перед следующей выкладкой перепроверить. Предыдущий работающий rollback release: `85375103800845eeff696e53f510c66c428408ed`.
+- **Следующее действие:** владельческий live E2E на **одной авторизованной Linux-машине с обоими входами GPT и Claude** (ранее Codespace `laughing disco` имел отдельные индивидуальные LIVE PASS; доступ к его shell из данного подключения не подтверждён). При необходимости настроить личные входы в подходящей owner среде через обычную интерактивную авторизацию, **без передачи токенов** и **без платных API**. Когда обе авторизации подтверждены, запустить ровно один `python3 -m ai_agent_engine.task_stage6_14_acceptance --live --owner-approved --provider both`, проверить два реальных ответа/аудит/SQLite/Git rollback. Если нет обеих, сохранить 6.14 [ ] BLOCKED; 7.1 не начинать.
+- Не запускать live с root или неавторизованной VPS-учётной записью и не считать localhost mock настоящим GPT/Claude. Никаких повторов модельных запросов при отказе.
+- **Исходный GitHub main до этой документальной записи:** `92934d560e64c5d448f50155be5e849b82230aaf`, откат только адресным revert после новой сверки HEAD. Нового release deploy на Netcup не было.
+
+[Технический протокол](./infra/orchestrator/STAGE6_14_E2E_ACCEPTANCE.md).
+
+---
+
 # HANDOFF — 19.11.2026: Netcup full admin setup LIVE PASS (all 5 points)
 
 **STOP:** the owner's five-point administrative task is complete. Do not start
