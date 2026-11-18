@@ -42,3 +42,12 @@ Run `python3 -m ai_agent_engine.secret_store audit` **only as `ae-runtime`** fro
 - Test only artificial bytes. Keep `ae-controller.service` untouched; service is already protected by `ProtectSystem=strict`, `User=ae-runtime`, `Group=ae-runtime` and `UMask=0077`.
 - A repository rollback does **not** remove a secret directory or revoke real secrets; GitHub code rollback is a compatible new commit. Do not delete any credential file as a routine rollback action. An empty store can remain ready for the next stage; removal only by owner decision after checking emptiness.
 - Verification must record: source/CI version, actual directory stats, runtime access, `ae-deploy` denial, service health, absence of real secrets/paid operations, and known gaps.
+
+## Verified live result — 18 November 2026
+
+- Netcup VPS `v2202611460959561466`: both paths were absent before provisioning. Created **only empty directories**, using root console after owner approval.
+- `ls -ld` confirmed `/etc/ai-agent-engine` as `root:root` / `0755` (`drwxr-xr-x`) and `/etc/ai-agent-engine/secrets` as `root:ae-runtime` / `0750` (`drwxr-x---`).
+- `runuser -u ae-runtime -- ls -a /etc/ai-agent-engine/secrets` returned only `.` and `..`: readable and **empty**. `runuser -u ae-deploy -- ls /etc/ai-agent-engine/secrets` returned `Permission denied`.
+- `systemctl is-active ae-controller.service` returned `active` **after** provisioning. No service restart/release promote; the installed controller remains `0.3.8a0` (`85375103800845eeff696e53f510c66c428408ed`).
+- Source-only credential reader version `0.3.10a0` committed as `23ff633a7eec5c7dfadf91ea67ac0b60bf9284f5`; local 234 unit tests PASS (1 skipped), synthetic smoke PASS, wheel build PASS, public-source secret scan PASS, [offline CI #44259072118](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44259072118) SUCCESS. Reader **not installed** into the existing controller release: do not imply a live secret-read integration; runtime/OS access was checked live, file semantics were verified on synthetic test data.
+- Nothing sensitive was entered, moved, printed, backed up, added to GitHub or rotated. A future administrator must authorize, install and validate each real credential separately. No new paid services.
