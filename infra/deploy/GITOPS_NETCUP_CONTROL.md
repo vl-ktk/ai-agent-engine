@@ -1,6 +1,6 @@
 # Netcup GitOps control: read-only status and owner-approved releases
 
-**Status: READ-ONLY STATUS LIVE PASS; PRIVILEGED ACTIVATION NOT DEPLOYED.** The
+**Status: READ-ONLY STATUS LIVE PASS; SIGNED RELEASE ACTIVATION PREPARED ONLY.** The
 scoped GitOps request launched GitHub Actions run 44402946575 on 18 November
 2026. SSH returned three active service/timer states and the live release
 85375103800845eeff696e53f510c66c428408ed. Only the read-only channel
@@ -50,39 +50,74 @@ workflow. Unlike historical manual-only jobs, every eligible main push with
 one valid request can invoke the non-root read-only SSH command. Only the
 fixed target host identity may receive the key authentication.
 
-## 2. Restricted root-installed release operator (not installed)
+## 2. Root-installed release operator and signed release intent
 
-The operator source is `infra/deploy/owner_release_operator.py`. It:
-- accepts only `activate` or `rollback`, exact 40-hex source/old versions,
-  an independently supplied SHA-256 and a fixed confirmation token;
-- checks the actual `current` release against the expected old SHA;
-- for activation, uses the **already existing** trusted `promotion.py`
-  to verify the owner-reviewed wheel and stage an immutable release;
-- atomically switches only `/opt/ai-agent-engine/current`;
-- restarts **only** `ae-controller.service`, checks systemd and owner-scoped
-  `ae-runtime` controller health;
-- on health failure attempts one return to the previous release, then reports
-  an error. No automatic retries or arbitrary shell execution.
+The source `infra/deploy/owner_release_operator.py` provides restricted
+activation of one immutable release. It is **not installed on Netcup**.
 
-**One-time admin/bootstrap required:** an authorised Netcup root operator must
-independently verify and install both source files under
-`/usr/local/libexec/ae-release/`, owned by root, not writable by ae-deploy,
-plus an exact sudoers rule allowing **only**:
+Security hardening after reviewing the earlier source-only draft: knowing
+a wheel's SHA-256 and having `ae-deploy` SSH access **must not confer root
+permission to execute that wheel**. Otherwise a compromised deploy account
+could supply its own wheel and checksum, then get root to run it during
+`stage_release`. The operator now requires a **separately signed, short-lived
+intent** matching the exact operation, source SHA, current SHA, and wheel digest.
+The root-owned signers file is at
+`/etc/ai-agent-engine/release-signers`. Its principal is
+`ai-agent-engine-owner` and signature namespace
+`ai-agent-engine-release@vl-ktk`. The signature uses OpenSSH
+`ssh-keygen -Y sign/-Y verify`; it is independent of the SSH deploy key.
+
+The root operator:
+- rejects unsigned, forged, mismatched and expired intents; accepts
+  no shell commands, arbitrary paths or alternate services;
+- reads incoming files using bounded `O_NOFOLLOW` regular-file checks,
+  rejects symlinks/hardlinks and snapshots wheel bytes into a **root-controlled
+  temporary directory** before any pip install or import, closing the
+  validate-then-swap race against writable incoming directories;
+- compares wheel bytes to the **signed independent SHA-256** before the
+  trusted root-owned `promotion.py` stages them;
+- compares actual `/opt/ai-agent-engine/current` to the expected SHA,
+  atomically switches to the staged release, restarts **only**
+  `ae-controller.service` and checks its health under `ae-runtime`;
+- on failed health attempts exactly one return to the previous release;
+  a double failure blocks and requires manual recovery;
+- requires a separate valid owner signature for an explicit rollback,
+  but its own automatic health-failure rollback is part of the original
+  approved activation.
+
+**One-time admin/bootstrap remains mandatory** and needs specific
+owner authorization because it changes privileged rights. Independently
+review the exact source version, then install the operator and matching
+`promotion.py` into `/usr/local/libexec/ae-release/` as immutable
+root-owned files. Install the owner's dedicated **public** Ed25519 signing
+key into the root-owned allowed-signers file in the format:
+
+```text
+ai-agent-engine-owner ssh-ed25519 <owner-release-signing-public-key>
+```
+
+Install a minimal sudoers rule limited to this exact root-installed
+program (no generic root shell), validate via `visudo -cf`, and audit the
+permissions on every ancestor and installed Python file:
 
 ```text
 /usr/bin/python3 -I /usr/local/libexec/ae-release/owner_release_operator.py *
 ```
 
-for `ae-deploy` as root, with `NOPASSWD`. The trailing wildcard still
-allows *arguments* but not changing the executable; Python rejects unknown
-flags, commands, paths, and values. Use `visudo -cf` and validate real ACLs.
-This is a change to privileged access and must be separately confirmed
-before installation, not performed by this source patch. Root-owned operator
-updates need the same review. Do not copy a GitHub-controlled script to a
-root-executable path through an untrusted shortcut.
+This wildcard permits arguments to the **fixed program only**. The fixed
+program validates all options, exact SHA, current release and the signed
+intent before any mutation.
 
-The helper cannot stop an arbitrary service, modify firewall, read private
-secrets through an API, or select different deployment directories.
+Provision a **separate dedicated signing private key** into the
+GitHub Actions secret `AE_RELEASE_SIGNING_PRIVATE_KEY`, using owner-only
+GitHub settings. Do not reuse `AE_DEPLOY_PRIVATE_KEY`. Never paste signing
+keys, OAuth tokens or private SSH keys into ChatGPT/GitHub source/logs.
+Until both the root public key and the Actions private key exist,
+activation must fail closed.
+
+This proposal does **not** install sudoers, signers, change GitHub secrets,
+or perform privileged commands on Netcup. It is not proof of a working release
+path.
 
 ## 3. Owner-gated activation and rollback
 
@@ -98,9 +133,14 @@ Sequence for a new release:
    this only copies the verified wheel/manifest into `ae-deploy` incoming.
 3. After the privileged helper is installed and live old SHA recorded, run
    `netcup-owner-release-activate.yml` with owner approval.
-4. Recheck `main`, pinned SSH identity, actual VPS old SHA, stage/promote and
-   health. If health fails, the helper attempts rollback.
-5. For an explicit rollback, choose `rollback` and an existing staged SHA.
+4. After independent owner validation, the workflow signs a bounded intent
+   using the dedicated release key (15-minute expiration), transfers only
+   that signed intent over the existing pinned-host SSH channel, rechecks
+   `main` and invokes the root-installed restricted operator.
+5. The operator checks the public signing key, signature, exact request
+   identity, real old SHA and signed digest, then stages/promotes and checks
+   health. On failure it attempts rollback.
+6. For an explicit rollback, choose `rollback` and an existing staged SHA.
    It cannot roll back an uninstalled artifact.
 
 **Not yet autonomous deployment:** preparing and transferring artifacts still
@@ -114,8 +154,18 @@ authorization is a separate security decision, not part of this source patch.
   `python scripts/check_workflow_boundaries.py`, full Linux suite.
 - Live: one new scoped status request on `main`; GitHub Actions status job
   must complete with a real SSH result. Confirm actual workflow actor.
-- Live release: one-time root installation and review; owner-dispatched
-  immutable release promotion, controller health and rollback. Existing
+- Live release: one-time root installation, public signing key and distinct
+  GitHub Actions signing secret **after separate owner approval**; then
+  owner-dispatched signed immutable release promotion, health and rollback. Existing
   runtime/project SQLite must remain unchanged.
 - No secrets stored in repository or chat, no new paid API or VPS, no Netcup
   changes made while preparing these sources.
+
+## Security boundary and verification status
+
+- Read-only status transport: **LIVE PASS**, GitHub Actions
+  [run 44402946575](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44402946575)
+  confirmed actual Netcup SHA and all three active units on 18.11.2026.
+- Privileged signed activation: **SOURCE ONLY**; requires secret/bootstrap
+  setup and separate live acceptance. No root rights granted by this commit.
+- Subscription-based GPT/Claude E2E 6.14: still **LIVE BLOCKED**.

@@ -93,6 +93,35 @@ jobs:
           test -s "$RUNNER_TEMP/host-key-pinned"
           actual_fp="$(ssh-keygen -lf "$RUNNER_TEMP/host-key-pinned" | awk 'NR==1 {print $2}')"
           test "$actual_fp" = 'SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg'
+      - name: Sign exact owner-approved release intent with separate key
+        shell: bash
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.AE_RELEASE_SIGNING_PRIVATE_KEY }}
+          OPERATION: ${{ inputs.operation }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_OLD: ${{ inputs.expected_current_sha }}
+          WHEEL_SHA: ${{ inputs.expected_wheel_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$RELEASE_SIGNING_KEY"
+          umask 077
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/ae-release-signing-key"
+          chmod 0600 "$RUNNER_TEMP/ae-release-signing-key"
+          python3 - <<'PY'
+          import json, os, pathlib, time
+          now = int(time.time())
+          intent = {"schema": 1, "operation": os.environ["OPERATION"],
+                    "source_sha": os.environ["SOURCE_SHA"],
+                    "expected_current": os.environ["EXPECTED_OLD"],
+                    "wheel_sha256": os.environ["WHEEL_SHA"],
+                    "issued_at": now, "expires_at": now + 900}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "release-intent.json").write_text(
+              json.dumps(intent, sort_keys=True, separators=(",", ":")) + "\n")
+          PY
+          ssh-keygen -Y sign -f "$RUNNER_TEMP/ae-release-signing-key" \
+            -n ai-agent-engine-release@vl-ktk "$RUNNER_TEMP/release-intent.json" >/dev/null 2>&1
+          test -s "$RUNNER_TEMP/release-intent.json.sig"
+          echo "PASS: signed release intent with 15-minute validity"
       - name: Recheck main and call only root-installed scoped release operator
         shell: bash
         env:
@@ -106,8 +135,14 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
-          ssh -T -i "$RUNNER_TEMP/ae-deploy-key" \
-            -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" \
-            -o ConnectTimeout=15 "ae-deploy@$SERVER_IP" \
+          ssh_options=( -i "$RUNNER_TEMP/ae-deploy-key" -o IdentitiesOnly=yes \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" -o ConnectTimeout=15 )
+          destination="/home/ae-deploy/ae-incoming/$SOURCE_SHA"
+          ssh -T "${ssh_options[@]}" "ae-deploy@$SERVER_IP" \
+            "install -d -m 0700 '$destination'"
+          scp "${ssh_options[@]}" "$RUNNER_TEMP/release-intent.json" \
+            "$RUNNER_TEMP/release-intent.json.sig" "ae-deploy@$SERVER_IP:$destination/"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+          ssh -T "${ssh_options[@]}" "ae-deploy@$SERVER_IP" \
             "sudo -n /usr/bin/python3 -I /usr/local/libexec/ae-release/owner_release_operator.py --operation '$OPERATION' --source-sha '$SOURCE_SHA' --expected-current '$EXPECTED_OLD' --wheel-sha256 '$WHEEL_SHA' --confirmation OWNER_APPROVED_RELEASE_OPERATION"

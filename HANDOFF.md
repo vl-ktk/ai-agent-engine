@@ -1,3 +1,16 @@
+# HANDOFF — 2026-11-18: signed owner release authorization hardening (SOURCE ONLY)
+
+**Источник:** `vl-ktk/ai-agent-engine/main` — исходная версия этой ветки `2dd423073835912f2941ef59c1a2988fda797d91`. Рабочая ветка `infra/netcup-release-auth-hardening-20261118`. На Netcup последняя ЖИВО проверенная версия контроллера `85375103800845eeff696e53f510c66c428408ed`, GitOps SSH status PASS [run #44402946575](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44402946575).
+
+- Существующий `ae-deploy` **не** должен иметь право активировать произвольный wheel только по известному SHA. Добавлена дополнительная подпись намерения владельца отдельным ключом, проверка корневого `allowed_signers`, срок 15 минут, сверка операции/old/new/digest и атомарный снимок wheel в root-owned staging перед `pip install`.
+- Workflow активации остаётся owner-only `workflow_dispatch`, подписывает и передаёт точный intent через существующий pinned SSH. Контроль статуса Netcup ужесточён: теперь отсутствие активности хотя бы одной проверяемой службы должно давать FAIL, а не ложный PASS.
+- **НЕ НАСТРОЕНО:** выделенный GitHub Actions signing secret `AE_RELEASE_SIGNING_PRIVATE_KEY`, доверенный публичный signer на Netcup, root-owned установка оператора/подписанный live release. Их создание и изменение привилегий требуют отдельного согласия владельца. До этого активация правильно должна отказывать.
+- **Проверки:** после подготовки кода нужна CI/pytest-подтверждённая проверка, затем root setup и настоящий activation+rollback; 6.14 остаётся LIVE BLOCKED. Не заявлять что разработанная логика уже работает на VPS. Другие проекты/production данные не трогать.
+
+[Документация](./infra/deploy/GITOPS_NETCUP_CONTROL.md).
+
+---
+
 # HANDOFF — 2026-11-18: GitOps read-only Netcup status LIVE PASS; activation blocked on privileged bootstrap
 
 **Live read-only success:** GitHub Actions [run 44402946575](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44402946575), SSH as `ae-deploy`, GitHub actor `vl-ktk`, exact single-file status request. Three status lines `active`; Netcup controller release `85375103800845eeff696e53f510c66c428408ed` (observed directly 18.11). No server writes/sudo or production changes. Code commit `5f52f4c02ddda50a880edea6ea112c7e3d5ef5fc`, request commit `21a2284d22d4b5c0f64a13de2f325d858dd0b857`; rollback source before work `e5ffc1c15089145ff548c2ecd8bec7804e2343f5`.

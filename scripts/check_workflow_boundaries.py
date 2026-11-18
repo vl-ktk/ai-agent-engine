@@ -74,7 +74,7 @@ def inspect_workflow(name: str, source: str) -> list[str]:
             "on:\n  push:\n    branches: [main]\n    paths:\n      - 'ops/requests/*.json'",
             "github.actor == 'vl-ktk'",
             "python3 scripts/netcup_status_request.py --github-output",
-            "'systemctl is-active ae-controller.service ae-backup.timer ae-host-check.timer; readlink /opt/ai-agent-engine/current'",
+            "'set -e; systemctl is-active --quiet ae-controller.service; systemctl is-active --quiet ae-backup.timer; systemctl is-active --quiet ae-host-check.timer; printf "all three units active\\n"; readlink /opt/ai-agent-engine/current'",
             "SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg",
         )
         for token in required:
@@ -104,6 +104,19 @@ def inspect_workflow(name: str, source: str) -> list[str]:
             ):
                 if required not in condition:
                     errors.append(f"manual secret job condition missing {required}")
+
+    if name == "netcup-owner-release-activate.yml":
+        # Remote sudo activation must always be gated by an independent
+        # owner signing identity, not merely by a caller-supplied digest.
+        for marker in (
+            "secrets.AE_RELEASE_SIGNING_PRIVATE_KEY",
+            "ssh-keygen -Y sign",
+            "ai-agent-engine-release@vl-ktk",
+            "release-intent.json.sig",
+            "owner_release_operator.py",
+        ):
+            if marker not in source:
+                errors.append("release signing boundary missing: " + marker)
 
     if name == "release-preparation.yml":
         if SECRET_REFERENCE.search(source):
