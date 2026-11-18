@@ -1,3 +1,16 @@
+# HANDOFF — 2026-11-18: 6.14 PARTIAL / live E2E blocked
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`, `IMPLEMENTATION_ROADMAP.md`. Стартовый main/откатный SHA `df7799146373db47a3fcc386c23e641a9fe535ea` (6.13). Рабочая ветка `stage-6.14-live-e2e-acceptance`, PR #58. Не публиковать в production, не запускать платные API и не трогать Netcup. При откате GitHub исходников: адресный revert после сверки актуального main, без force/reset.
+
+- **Пункт 6.14 остаётся [ ] PARTIAL / LIVE BLOCKED.** Добавлен доверенный одноразовый E2E acceptance `ai_agent_engine/task_stage6_14_acceptance.py`, 4 offline теста, полный маршрут через оба task runners, grants, аудит, ACK, bytes artifact, Git version recheck, test-only rollback и SQLite reload. Живой путь явно включается только флагами `--live --owner-approved` и требует обе подписочные авторизации на одной Linux-машине. В CI модельные запросы никогда не выполняются.
+- **Проверки:** первый PR CI (код 9933c68) Ubuntu Python 3.11/3.12/3.13 PASS, wheel PASS, на Python 3.12 **618 unittest OK**; Windows CI FAIL из-за исторического Linux-only `fcntl`. В отдельном коммите локальные Git subprocess harden: отключены глобальные конфиги, hooks, наследованные Git env; финальный CI перепроверить и записать. Не считать test worker доказательством реальной модели.
+- **Блокер:** нет доступа к выполнению shell внутри старого лично авторизованного GitHub Codespace через текущий GitHub plugin / browser context. Текущий контейнер не содержит CLI `claude` и личного входа; не добавлять секреты/копировать OAuth. Без действительного `python3 -m ai_agent_engine.task_stage6_14_acceptance --live --owner-approved --provider both` с двумя реальными маркерами, аудитом и rollback нельзя закрыть 6.14. Одноразовый CLI инструмент не делает автоматических retry.
+- **Следующий шаг:** доступ из инструментального сеанса к уже авторизованному owner Codespace или безопасный live-прогон в этом owner-сеансе. Проверить реальное наличие входов и single-shot результаты. Зафиксировать факт в протоколе, план [x] только после реального PASS. Пока **6.15 не начинать**.
+
+[Протокол 6.14](./infra/orchestrator/STAGE6_14_E2E_ACCEPTANCE.md).
+
+---
+
 # HANDOFF — 2026-11-18: 6.13 verified Git source version receipts; следующий 6.14
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`, `IMPLEMENTATION_ROADMAP.md`. Исходный main до 6.13/версия отката: `3e07028ad66cafb57c5f8ab2e9c692a8de62ff3b` (6.12). Тестовая ветка `stage-6.13-source-version`, PR #57. Откат только адресным обратным коммитом от актуального main, без force/reset.
