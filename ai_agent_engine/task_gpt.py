@@ -63,6 +63,8 @@ class GPTTaskExecutor:
     default never executes user-provided shell/CLI strings.
     """
 
+    _provider = "gpt"
+
     def __init__(self, inbox: TaskInbox, scope: OwnerScope, *,
                  worker_id: str, model_id: str,
                  permission_gate: TaskPermissionGate,
@@ -132,7 +134,7 @@ class GPTTaskExecutor:
         with self.inbox._lock:
             self.inbox._scoped_record(task_id, self.scope)
             self.inbox._store.write_provider_audit(task_id, self.model_id,
-                                                    outcome)
+                                                    outcome, provider=self._provider)
 
     def provider_history(self, task_id: str) -> tuple[GPTProviderEvent, ...]:
         """Scoped, private SQLite evidence: no payloads or model responses."""

@@ -169,7 +169,7 @@ class GPTTaskOfflineTests(unittest.TestCase):
         self.assertEqual(runner.provider_history(task_id)[0].outcome, "quota")
         self.assertEqual(runner.delivery.snapshot(task_id, OWNER).status, "exhausted")
 
-    def test_private_v5_task_database_migrates_to_provider_audit_v6(self):
+    def test_private_v5_task_database_migrates_to_provider_audit_v7(self):
         self.inbox.close()
         with sqlite3.connect(self.db_path) as db:
             db.execute("DROP TABLE task_provider_audit")
@@ -177,7 +177,7 @@ class GPTTaskOfflineTests(unittest.TestCase):
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.db_path),
                                workspace_root=self.root)
         with sqlite3.connect(self.db_path) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 6)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 7)
             self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master "
                                             "WHERE name='task_provider_audit'").fetchone())
 
