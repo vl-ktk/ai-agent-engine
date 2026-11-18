@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 2  # v2 adds immutable worker+workspace assignments.
+SCHEMA_VERSION = 3  # v3 adds durable lifecycle and metadata-only audit.
 
 
 class StorageUnavailable(RuntimeError):
@@ -74,6 +74,7 @@ class SQLiteTaskStore:
             tables = db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
             if tables:
                 raise StorageUnavailable("unrecognized existing database")
+            db.execute("BEGIN IMMEDIATE")
             with db:
                 db.execute("""CREATE TABLE tasks (
                     task_id TEXT PRIMARY KEY,
@@ -93,16 +94,20 @@ class SQLiteTaskStore:
                     CHECK(task_id <> prerequisite_id)
                 )""")
                 self._create_claims_table(db)
+                self._create_lifecycle_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif (app_id, version) == (APPLICATION_ID, 1):
-            # Only migrate our own private v1 database, atomically. No task
-            # rows or dependencies are rewritten or deleted.
+        elif app_id == APPLICATION_ID and version in (1, 2):
+            # Migrate only our own private database. Explicit BEGIN makes DDL
+            # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
                     or db.execute("PRAGMA foreign_key_check").fetchone() is not None):
                 raise StorageUnavailable("cannot migrate damaged task database")
+            db.execute("BEGIN IMMEDIATE")
             with db:
-                self._create_claims_table(db)
+                if version == 1:
+                    self._create_claims_table(db)
+                self._create_lifecycle_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -123,8 +128,33 @@ class SQLiteTaskStore:
             workspace_dir TEXT NOT NULL
         )""")
 
-    def load(self) -> tuple[list[tuple], list[tuple[str, str]], list[tuple]]:
-        """Read committed records/edges; caller validates owner/project/DAG."""
+    @staticmethod
+    def _create_lifecycle_tables(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE task_states (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            state TEXT NOT NULL CHECK(state IN
+                ('queued','assigned','running','succeeded','failed','cancelled','timed_out'))
+        )""")
+        # Existing v1/v2 admissions and immutable claims determine their
+        # factual state; no RUNNING or terminal progress is fabricated.
+        db.execute("""INSERT INTO task_states (task_id,state)
+            SELECT t.task_id, CASE WHEN c.task_id IS NULL THEN 'queued'
+                ELSE 'assigned' END
+            FROM tasks t LEFT JOIN task_claims c ON c.task_id=t.task_id""")
+        db.execute("""CREATE TABLE task_transition_audit (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            from_state TEXT NOT NULL,
+            to_state TEXT NOT NULL,
+            actor_id TEXT NOT NULL,
+            accepted INTEGER NOT NULL CHECK(accepted IN (0,1)),
+            reason_code TEXT NOT NULL,
+            occurred_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+
+    def load(self) -> tuple[list[tuple], list[tuple[str, str]], list[tuple], list[tuple]]:
+        """Read committed records/edges/claims/states; caller validates scope."""
         try:
             db = self._db()
             rows = db.execute("""SELECT task_id, receipt, owner_id, project_id,
@@ -134,7 +164,9 @@ class SQLiteTaskStore:
                 ORDER BY task_id, prerequisite_id""").fetchall()
             claims = db.execute("""SELECT task_id, worker_id, workspace_name,
                 workspace_dir FROM task_claims ORDER BY task_id""").fetchall()
-            return rows, edges, claims
+            states = db.execute("""SELECT task_id, state FROM task_states
+                ORDER BY task_id""").fetchall()
+            return rows, edges, claims, states
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot load task database") from exc
 
@@ -148,6 +180,8 @@ class SQLiteTaskStore:
                      record.project_id, record.parent_task_id,
                      record.submission.title, record.submission.prompt,
                      record.submission.priority, record.submission.priority))
+                db.execute("INSERT INTO task_states (task_id,state) VALUES (?, 'queued')",
+                           (record.task_id,))
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot persist task") from exc
 
@@ -171,7 +205,7 @@ class SQLiteTaskStore:
             raise StorageUnavailable("cannot persist priority") from exc
 
     def insert_assignment(self, assignment) -> None:
-        """Exactly one SQLite row per task; commit before HTTP acknowledgment."""
+        """Commit claim, status change and audit together, before HTTP ACK."""
         try:
             with self._db() as db:
                 db.execute("""INSERT INTO task_claims
@@ -179,8 +213,58 @@ class SQLiteTaskStore:
                     VALUES (?, ?, ?, ?)""",
                     (assignment.task_id, assignment.worker_id,
                      assignment.workspace_name, assignment.workspace_dir))
+                cursor = db.execute("""UPDATE task_states SET state='assigned'
+                    WHERE task_id=? AND state='queued'""", (assignment.task_id,))
+                if cursor.rowcount != 1:
+                    raise StorageUnavailable("task cannot be assigned from current state")
+                self._append_audit(db, assignment.task_id, "queued", "assigned",
+                                   assignment.worker_id, True, "claim")
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot persist assignment") from exc
+
+    @staticmethod
+    def _append_audit(db: sqlite3.Connection, task_id: str, previous: str,
+                      requested: str, actor_id: str, accepted: bool,
+                      reason_code: str) -> None:
+        db.execute("""INSERT INTO task_transition_audit
+            (task_id,from_state,to_state,actor_id,accepted,reason_code)
+            VALUES (?,?,?,?,?,?)""",
+            (task_id, previous, requested, actor_id, int(accepted), reason_code))
+
+    def write_transition(self, task_id: str, previous: str, requested: str,
+                         actor_id: str) -> None:
+        """Compare-and-swap state and accepted audit in one transaction."""
+        try:
+            with self._db() as db:
+                cursor = db.execute("""UPDATE task_states SET state=?
+                    WHERE task_id=? AND state=?""", (requested, task_id, previous))
+                if cursor.rowcount != 1:
+                    raise StorageUnavailable("task state changed unexpectedly")
+                self._append_audit(db, task_id, previous, requested,
+                                   actor_id, True, "transition")
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist state transition") from exc
+
+    def record_rejected_transition(self, task_id: str, previous: str,
+                                   requested: str, actor_id: str,
+                                   reason_code: str) -> None:
+        """Rejected attempts are committed even when no state changes."""
+        try:
+            with self._db() as db:
+                self._append_audit(db, task_id, previous, requested,
+                                   actor_id, False, reason_code)
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist rejected transition") from exc
+
+    def transition_history(self, task_id: str) -> list[tuple]:
+        """Metadata only, ordered persistently by local monotonic event ID."""
+        try:
+            return self._db().execute("""SELECT event_id,task_id,from_state,
+                to_state,actor_id,accepted,reason_code,occurred_at
+                FROM task_transition_audit WHERE task_id=? ORDER BY event_id""",
+                (task_id,)).fetchall()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read transition audit") from exc
 
     def close(self) -> None:
         if self._connection is not None:

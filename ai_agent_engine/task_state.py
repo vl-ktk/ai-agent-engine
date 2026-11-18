@@ -1,12 +1,12 @@
-"""Stage 5.7: authoritative task lifecycle vocabulary and transition graph.
+"""Stages 5.7-5.8: task lifecycle vocabulary and audited transitions.
 
-Only QUEUED and ASSIGNED are observable in the 5.7 inbox. Other states are
-reserved for trusted execution/cancellation steps; defining an edge does not
-authorize an HTTP client to perform it.
+Transition requests remain internal and trusted, never exposed as HTTP writes.
+The graph does not authorize an HTTP client or launch any real worker.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
 
@@ -21,6 +21,28 @@ class TaskState(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
+
+
+class TransitionRejected(RuntimeError):
+    """A well-formed transition was rejected; its safe reason was audited."""
+
+    def __init__(self, reason_code: str) -> None:
+        self.reason_code = reason_code
+        super().__init__(reason_code)
+
+
+@dataclass(frozen=True)
+class TaskTransitionEvent:
+    """Metadata-only audit event; no prompt, workspace path or credentials."""
+
+    event_id: int
+    task_id: str
+    from_state: TaskState
+    to_state: TaskState
+    actor_id: str
+    accepted: bool
+    reason_code: str
+    occurred_at: str
 
 
 TERMINAL_STATES = frozenset({

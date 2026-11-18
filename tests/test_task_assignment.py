@@ -194,6 +194,8 @@ class AssignmentInboxTests(unittest.TestCase):
         store = SQLiteTaskStore(self.path)
         db = store._db()
         with db:
+            db.execute("DROP TABLE task_transition_audit")
+            db.execute("DROP TABLE task_states")
             db.execute("DROP TABLE task_claims")
             db.execute("PRAGMA user_version=1")
         store.close()
@@ -204,7 +206,7 @@ class AssignmentInboxTests(unittest.TestCase):
         self.reopen()
         self.assertEqual(self.inbox.get_assignment(task.task_id, OWNER_A), assigned)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                         (2,))
+                         (3,))
 
     def test_tampered_persisted_workspace_fails_closed(self):
         task = self.create()
@@ -293,6 +295,9 @@ class ClaimHTTPTests(unittest.TestCase):
             "worker_id": "worker-b", "workspace_name": "slot-1",
         }), (409, {"status": "already_assigned"}))
         self.assertEqual(self.request("GET", path), (200, result))
+        events = self.inbox.transition_history(task_id, OWNER_A)
+        self.assertEqual([(e.accepted, e.reason_code) for e in events],
+                         [(True, "claim"), (False, "already_assigned")])
 
     def test_http_concurrent_claims_only_one_201(self):
         task_id = self.create()
@@ -306,6 +311,10 @@ class ClaimHTTPTests(unittest.TestCase):
         self.assertEqual([status for status, _ in results].count(201), 1)
         self.assertEqual([status for status, _ in results].count(409), 15)
         self.assertEqual(self.request("GET", path)[0], 200)
+        events = self.inbox.transition_history(task_id, OWNER_A)
+        self.assertEqual(len(events), 16)
+        self.assertEqual(sum(event.accepted for event in events), 1)
+        self.assertEqual(sum(not event.accepted for event in events), 15)
 
     def test_http_invalid_claims_and_foreign_scope(self):
         task_id = self.create()

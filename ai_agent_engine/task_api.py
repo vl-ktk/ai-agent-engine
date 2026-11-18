@@ -1,4 +1,4 @@
-"""Stages 5.1-5.7: scoped intake, durable ordering and task lifecycle.
+"""Stages 5.1-5.8: scoped intake, durable ordering and audited task lifecycle.
 
 Owner identity is bound by trusted server configuration, NOT HTTP input.
 Use --db for SQLite persistence; without it the inbox stays in memory.
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import re
@@ -21,7 +22,9 @@ from .task_assignment import (
     validate_worker, validate_workspace_name,
 )
 from .task_dag import DependencyCycle, TaskDAG
-from .task_state import TaskState
+from .task_state import (
+    TaskState, TaskTransitionEvent, TransitionRejected, can_transition,
+)
 from .task_storage import SQLiteTaskStore, StorageUnavailable
 
 
@@ -235,6 +238,8 @@ class TaskInbox:
         self._dag = TaskDAG()
         self._priorities: dict[str, int] = {}
         self._assignments: dict[str, TaskAssignment] = {}
+        self._states: dict[str, TaskState] = {}
+        self._events: list[TaskTransitionEvent] = []  # RAM-only audit without SQLite
         self._next_receipt = 1
         self._max_pending = max_pending
         if store is not None and not isinstance(store, SQLiteTaskStore):
@@ -255,7 +260,7 @@ class TaskInbox:
         if self._store is None:
             return
         try:
-            rows, edges, claims = self._store.load()
+            rows, edges, claims, states = self._store.load()
             for (task_id, receipt, owner_id, project_id, parent_task_id,
                  title, prompt, submitted_priority, priority) in rows:
                 if (type(task_id) is not str or not _TASK_ID.fullmatch(task_id)
@@ -309,6 +314,18 @@ class TaskInbox:
                     self._workspace_root.verify_loaded(workspace_name, workspace_dir)
                 self._assignments[task_id] = TaskAssignment(
                     task_id, worker_id, workspace_name, workspace_dir)
+            for task_id, stored_state in states:
+                if task_id not in self._by_id or task_id in self._states:
+                    raise StorageUnavailable("invalid persisted task state target")
+                self._states[task_id] = TaskState(stored_state)
+            if set(self._states) != set(self._by_id):
+                raise StorageUnavailable("missing persisted task state")
+            for task_id, state in self._states.items():
+                has_claim = task_id in self._assignments
+                if ((state is TaskState.QUEUED and has_claim)
+                        or (state not in (TaskState.QUEUED, TaskState.CANCELLED)
+                            and not has_claim)):
+                    raise StorageUnavailable("persisted claim and task state disagree")
         except (ValueError, TypeError, UnicodeError, OverflowError,
                 DependencyCycle, InvalidJSON, InvalidTask) as exc:
             raise StorageUnavailable("invalid persisted task graph") from exc
@@ -345,6 +362,7 @@ class TaskInbox:
             self._by_id[task_id] = record
             self._dag.add_task(task_id, receipt)
             self._priorities[task_id] = submission.priority
+            self._states[task_id] = TaskState.QUEUED
             return record
 
     def claim_task(self, task_id: str, worker_id: str, workspace_name: str,
@@ -359,7 +377,14 @@ class TaskInbox:
         with self._lock:
             self._scoped_record(task_id, scope)
             if task_id in self._assignments:
+                self._reject_transition(task_id, self._states[task_id],
+                                        TaskState.ASSIGNED, worker_id,
+                                        "already_assigned")
                 raise AlreadyAssigned("task already has a worker and workspace")
+            if self._states[task_id] is not TaskState.QUEUED:
+                self._reject_transition(task_id, self._states[task_id],
+                                        TaskState.ASSIGNED, worker_id, "not_queued")
+                raise TransitionRejected("not_queued")
             if self._workspace_root is None:
                 raise InvalidAssignment("trusted workspace root not configured")
             workspace_dir = self._workspace_root.resolve(workspace_name)
@@ -368,6 +393,10 @@ class TaskInbox:
             if self._store is not None:
                 self._store.insert_assignment(assignment)
             self._assignments[task_id] = assignment
+            self._states[task_id] = TaskState.ASSIGNED
+            if self._store is None:
+                self._record_volatile(task_id, TaskState.QUEUED,
+                                      TaskState.ASSIGNED, worker_id, True, "claim")
             return assignment
 
     def get_assignment(self, task_id: str, scope: OwnerScope) -> TaskAssignment | None:
@@ -383,11 +412,7 @@ class TaskInbox:
             return self._assignments.get(task_id)
 
     def state(self, task_id: str, scope: OwnerScope) -> TaskState | None:
-        """Actual 5.7 state, derived from durable admission/immutable claim.
-
-        No RUNNING or terminal state is fabricated before a trusted execution
-        transition API and its durable audit are implemented in later stages.
-        """
+        """Read committed lifecycle state without exposing another owner."""
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected a trusted OwnerScope")
         if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
@@ -397,8 +422,84 @@ class TaskInbox:
                 self._scoped_record(task_id, scope)
             except TaskNotFound:
                 return None
-            return (TaskState.ASSIGNED if task_id in self._assignments
-                    else TaskState.QUEUED)
+            return self._states[task_id]
+
+    def _record_volatile(self, task_id: str, previous: TaskState,
+                         requested: TaskState, actor_id: str, accepted: bool,
+                         reason_code: str) -> None:
+        """Call with inbox lock; memory-only audit when --db is omitted."""
+        self._events.append(TaskTransitionEvent(
+            len(self._events) + 1, task_id, previous, requested, actor_id,
+            accepted, reason_code, datetime.now(timezone.utc).isoformat()))
+
+    def _reject_transition(self, task_id: str, previous: TaskState,
+                           requested: TaskState, actor_id: str,
+                           reason_code: str) -> None:
+        """Commit denial evidence before returning a transition rejection."""
+        if self._store is not None:
+            self._store.record_rejected_transition(
+                task_id, previous.value, requested.value, actor_id, reason_code)
+        else:
+            self._record_volatile(task_id, previous, requested, actor_id,
+                                  False, reason_code)
+
+    def transition_state(self, task_id: str, target: TaskState, scope: OwnerScope,
+                         *, actor_id: str) -> TaskState:
+        """Trusted internal transition; never callable from HTTP.
+
+        The state update and sanitized audit commit atomically in SQLite.
+        This does not start or stop a worker; execution is a later stage.
+        """
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if not isinstance(target, TaskState):
+            raise TypeError("expected TaskState")
+        validate_worker(actor_id)
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            raise TaskNotFound("invalid task identifier")
+        with self._lock:
+            self._scoped_record(task_id, scope)
+            previous = self._states[task_id]
+            if not can_transition(previous, target):
+                reason_code = "invalid_edge"
+            elif target is TaskState.ASSIGNED:
+                # Generic state writes may not bypass the immutable claim.
+                reason_code = "claim_required"
+            elif (target in (TaskState.RUNNING, TaskState.SUCCEEDED, TaskState.FAILED)
+                  and task_id in self._assignments
+                  and self._assignments[task_id].worker_id != actor_id):
+                reason_code = "worker_mismatch"
+            else:
+                reason_code = ""
+            if reason_code:
+                self._reject_transition(task_id, previous, target, actor_id,
+                                        reason_code)
+                raise TransitionRejected(reason_code)
+            if self._store is not None:
+                self._store.write_transition(task_id, previous.value,
+                                             target.value, actor_id)
+            self._states[task_id] = target
+            if self._store is None:
+                self._record_volatile(task_id, previous, target, actor_id,
+                                      True, "transition")
+            return target
+
+    def transition_history(self, task_id: str, scope: OwnerScope) -> tuple[TaskTransitionEvent, ...]:
+        """Trusted scoped read of metadata-only accepted and denied attempts."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            raise TaskNotFound("invalid task identifier")
+        with self._lock:
+            self._scoped_record(task_id, scope)
+            if self._store is None:
+                return tuple(event for event in self._events if event.task_id == task_id)
+            return tuple(TaskTransitionEvent(
+                event_id, saved_task_id, TaskState(previous), TaskState(target),
+                actor_id, bool(accepted), reason_code, occurred_at)
+                for (event_id, saved_task_id, previous, target, actor_id,
+                     accepted, reason_code, occurred_at)
+                in self._store.transition_history(task_id))
 
     def snapshot(self, scope: OwnerScope) -> tuple[TaskRecord, ...]:
         """Only inspect records belonging to the configured owner/projects."""
@@ -516,9 +617,9 @@ class TaskInbox:
                     *, completed_task_ids: tuple[str, ...] = ()) -> TaskChoice | None:
         """Pure selection: eligible unfinished task with highest priority.
 
-        A trusted scheduler may supply completed IDs once the state machine
-        exists (5.7). HTTP never accepts client-claimed completion. Selection
-        does not reserve, transition, execute or remove any task.
+        A trusted scheduler may still supply completed IDs. Persisted
+        SUCCEEDED states also unblock prerequisites. HTTP never accepts
+        client-claimed completion. Selection is observation, not reservation.
         """
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected a trusted OwnerScope")
@@ -537,11 +638,13 @@ class TaskInbox:
                 if record.project_id != project_id:
                     raise TaskNotFound("completed task outside requested project")
             completed = set(completed_task_ids)
+            completed.update(task_id for task_id, state in self._states.items()
+                             if state is TaskState.SUCCEEDED)
             ready = [record for record in self._pending
                      if record.owner_id == scope.owner_id
                      and record.project_id == project_id
                      and record.task_id not in completed
-                     and record.task_id not in self._assignments
+                     and self._states[record.task_id] is TaskState.QUEUED
                      and all(dep in completed
                              for dep in self._dag.dependencies(record.task_id))]
             if not ready:
@@ -641,6 +744,9 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                     return
                 except AlreadyAssigned:
                     self._reply(409, "already_assigned")
+                    return
+                except TransitionRejected:
+                    self._reply(409, "task_not_claimable")
                     return
                 except InvalidAssignment:
                     self._reply(422, "invalid_workspace")
