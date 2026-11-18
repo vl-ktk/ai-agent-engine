@@ -1,8 +1,16 @@
-# HANDOFF — 2026-11-18: 6.5 единый ответ GPT/Claude v1; следующий 6.6
+# HANDOFF — 2026-11-18: 6.6 безопасные workspace file tools; следующий 6.7
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
 
-## Текущая передача — 6.5: схема и адаптер терминального ответа
+## Текущая передача — 6.6: ограниченные файловые операции
+
+- **Статус:** `6.6 [x]` — файлы читаются/создаются только через доверенные инструменты внутри назначенной task workspace; **16 новых негативных и положительных Linux-тестов PASS**, полный регресс **549 unittest OK (1 skipped)**. Следующий `6.7 [ ]` — shell/Git/build/test по точным грантам; начать только по явной команде Владислава. [Технический протокол](./infra/orchestrator/TASK_WORKSPACE_FILES.md).
+- **Исходник/откат:** `vl-ktk/ai-agent-engine`, `main`. До 6.6 опубликован `c960b4483f711b4d133335826152865de9d5bce4` (код и документы 6.5); SHA текущего коммита подтвердить после публикации. При необходимости после сверки `main` адресный обратный коммит без force/reset; Netcup release не менялся и не требует отката.
+- **Код:** усиленный `ai_agent_engine/tools.py` — безопасное открытие относительно root FD (`openat` + `O_NOFOLLOW`) с проверкой `st_dev/st_ino` исходного каталога, без symlink/hardlink/FIFO/traversal, чтение регулярного UTF-8 и только новые файлы `0600`, bounded size. Новый `ai_agent_engine/task_workspace_files.py`: доверенный `TaskInbox`+`OwnerScope`+`TaskAssignment`+`TaskPermissionGate` без выбора root/worker через модель; чтение требует `EXECUTE_TOOL`, запись — **обоих** `EXECUTE_TOOL` и `WRITE_WORKSPACE`, зафиксированных в SQLite до I/O. На платформе без безопасного POSIX dirfd task adapter отказывается работать.
+- **Тесты:** `tests/test_task_workspace_files.py`, 16 PASS, включая реальные `../` и absolute path, Windows/URL path, symlink до внешней директории/файла, hardlink/FIFO, корень после замены симлинком или другим inode, вложенную symlink-замену между проверкой/открытием, bad UTF-8, foreign owner/worker, отсутствие grant/state RUNNING, границу двух разных workspace, пробный `Agent` tool-cycle. Все тесты в `TemporaryDirectory`, без модельных/внешних запросов. Полный регресс **549 OK (1 skipped)**; compileall/workflow/source/staged diff/tree проверить перед публикацией.
+- **Границы:** это **изоляция файловых API**, а не OS sandbox произвольного shell/Claude/GPT процесса. Отдельные пункты **6.7** shell/Git и **6.8** process/secret isolation; текущие реальные GPT/Claude worker вызовы **не** получили файлы автоматически. Не реализованы чтение/выпуск реальных артефактов в ядро (6.12), серверные изменения, платные API, новые права или секреты. Нет live Netcup/production изменений, нет новых расходов.
+
+## Историческая передача — 6.5: схема и адаптер терминального ответа
 
 - **Статус:** `6.5 [x]` — единый provider-neutral контракт ответа v1: итог, структурный список артефактов, обезличенный код ошибки и честные лимиты. **Следующий `6.6 [ ]`** — файловые операции в разрешённой рабочей области, только по новой команде Владислава. [Спецификация 6.5](./infra/orchestrator/TASK_EXECUTION_RESPONSE.md).
 - **Источник/версия:** GitHub `vl-ktk/ai-agent-engine`, `main`. Непосредственно **до 6.5** опубликован `32390ef583ef2c54dac187215b83bb59d8ca5890` (код 6.4). Новый SHA проверять после публикации; откат 6.5 — адресный обратный коммит после сверки актуального `main`, без force-push/reset. Netcup не выкладывался, серверного отката не требуется.

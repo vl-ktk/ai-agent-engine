@@ -24,6 +24,13 @@ result text, sanitized failure, configured limits and a syntactic artifact
 manifest. Actual file transfer, checksum verification and durable result
 storage are **not** implemented; those are later roadmap items.
 
+**Stage 6.6 [x]:** Existing file tools now use root-inode-pinned, no-symlink
+POSIX relative opens. A new [task-bound workspace file adapter](./infra/orchestrator/TASK_WORKSPACE_FILES.md)
+requires the assigned SQLite task, exact worker, running state and explicit
+read/write grants; traversal, symlink, hardlink and path-swap attacks are
+covered offline. This is **file-tool confinement**, not a process OS sandbox;
+GPT/Claude live workers still have no file tools enabled.
+
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.
 > **2026-11-17: one combined live acceptance passed all 12 stages** — GPT `gpt-6.1-sol` reply plus native
