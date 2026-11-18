@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 7  # v7 supports GPT and Claude in the private provider audit.
+SCHEMA_VERSION = 8  # v8 adds a durable, identity-bound managed process ledger.
 
 
 class StorageUnavailable(RuntimeError):
@@ -98,9 +98,10 @@ class SQLiteTaskStore:
                 self._create_delivery_tables(db)
                 self._create_permission_audit_table(db)
                 self._create_provider_audit_table(db)
+                self._create_process_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -118,7 +119,7 @@ class SQLiteTaskStore:
                     self._create_permission_audit_table(db)
                 if version <= 5:
                     self._create_provider_audit_table(db)
-                else:
+                elif version == 6:
                     # SQLite cannot ALTER a CHECK constraint. Rebuild only
                     # our private audit table, retaining its event IDs and
                     # timestamps. All DDL and copying roll back together.
@@ -130,6 +131,7 @@ class SQLiteTaskStore:
                         SELECT event_id,task_id,provider,model_id,outcome,occurred_at
                         FROM task_provider_audit_v6""")
                     db.execute("DROP TABLE task_provider_audit_v6")
+                self._create_process_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -228,6 +230,69 @@ class SQLiteTaskStore:
             occurred_at TEXT NOT NULL DEFAULT
                 (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         )""")
+
+    @staticmethod
+    def _create_process_table(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE IF NOT EXISTS task_process_runs (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            worker_id TEXT NOT NULL,
+            pid INTEGER NOT NULL CHECK(pid > 1),
+            pgid INTEGER NOT NULL CHECK(pgid > 1),
+            sid INTEGER NOT NULL CHECK(sid > 1),
+            start_ticks INTEGER NOT NULL CHECK(start_ticks > 0),
+            boot_id TEXT NOT NULL,
+            launch_kind TEXT NOT NULL CHECK(launch_kind IN ('direct','gated')),
+            status TEXT NOT NULL CHECK(status IN ('active','stopped')),
+            recorded_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            stopped_at TEXT
+        )""")
+
+    def process_record(self, task_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT worker_id,pid,pgid,sid,
+                start_ticks,boot_id,launch_kind,status FROM task_process_runs
+                WHERE task_id=?""", (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect process ledger") from exc
+
+    def register_process(self, task_id: str, worker_id: str, *, pid: int,
+                         pgid: int, sid: int, start_ticks: int,
+                         boot_id: str, launch_kind: str) -> None:
+        """Commit process identity before allowing a gated worker to run."""
+        try:
+            with self._db() as db:
+                old = self.process_record(task_id)
+                if old is not None and old[-1] != "stopped":
+                    raise StorageUnavailable("previous process is not confirmed stopped")
+                db.execute("""INSERT INTO task_process_runs
+                    (task_id,worker_id,pid,pgid,sid,start_ticks,boot_id,
+                     launch_kind,status) VALUES (?,?,?,?,?,?,?,?,'active')
+                    ON CONFLICT(task_id) DO UPDATE SET
+                    worker_id=excluded.worker_id,pid=excluded.pid,
+                    pgid=excluded.pgid,sid=excluded.sid,
+                    start_ticks=excluded.start_ticks,boot_id=excluded.boot_id,
+                    launch_kind=excluded.launch_kind,status='active',
+                    recorded_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+                    stopped_at=NULL""",
+                    (task_id, worker_id, pid, pgid, sid, start_ticks,
+                     boot_id, launch_kind))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot record managed process") from exc
+
+    def mark_process_stopped(self, task_id: str, pid: int,
+                             start_ticks: int, boot_id: str) -> None:
+        try:
+            with self._db() as db:
+                result = db.execute("""UPDATE task_process_runs SET
+                    status='stopped',stopped_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                    WHERE task_id=? AND pid=? AND start_ticks=?
+                      AND boot_id=? AND status='active'""",
+                    (task_id, pid, start_ticks, boot_id))
+                if result.rowcount != 1:
+                    raise StorageUnavailable("process identity was not active")
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot settle process ledger") from exc
 
     def load(self) -> tuple[list[tuple], list[tuple[str, str]], list[tuple], list[tuple]]:
         """Read committed records/edges/claims/states; caller validates scope."""

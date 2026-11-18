@@ -178,26 +178,21 @@ class GPTTaskExecutor:
             return GPTTaskOutcome(task_id, state, self.model_id, False)
         assignment = self.inbox.get_assignment(task_id, self.scope)
         try:
-            process = subprocess.Popen(self.worker_argv, start_new_session=True,
-                                       cwd=assignment.workspace_dir,
-                                       env=self._worker_environment(),
-                                       stdin=subprocess.PIPE,
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.DEVNULL)
-        except OSError as exc:
-            self.delivery.report(task_id, self.scope, actor_id=self.worker_id,
-                                 token=ticket.token, success=False)
-            self._audit(task_id, "worker_failure")
-            self.inbox.transition_state(task_id, TaskState.FAILED, self.scope,
-                                        actor_id=self.worker_id)
+            # Stage 6.9: a private one-byte gate keeps the real worker from
+            # executing until its PID identity is committed in SQLite.
+            process = self.control.launch_gated(
+                task_id, self.scope, actor_id=self.worker_id,
+                worker_argv=self.worker_argv, cwd=assignment.workspace_dir,
+                environment=self._worker_environment(),
+                timeout_seconds=self.timeout_seconds)
+        except (OSError, TaskControlError):
+            if self.inbox.state(task_id, self.scope) is TaskState.ASSIGNED:
+                self.delivery.report(task_id, self.scope, actor_id=self.worker_id,
+                                     token=ticket.token, success=False)
+                self._audit(task_id, "worker_failure")
+                self.inbox.transition_state(task_id, TaskState.FAILED, self.scope,
+                                            actor_id=self.worker_id)
             raise GPTTaskError("trusted GPT worker cannot start") from None
-        try:
-            self.control.attach(task_id, process, self.scope,
-                                actor_id=self.worker_id,
-                                timeout_seconds=self.timeout_seconds)
-        except BaseException:
-            self._stop_unattached(process)
-            raise
 
         try:
             def send_private_request() -> None:

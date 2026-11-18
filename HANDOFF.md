@@ -1,6 +1,16 @@
-# HANDOFF — 2026-11-18: 6.8 sandbox/redaction; следующий 6.9
+# HANDOFF — 2026-11-18: 6.9 crash-safe process recovery; следующий 6.10
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 6.9: durable PID/PGID и рестарт
+
+- **Статус:** `6.9 [x]` — закрыт обнаруженный в 5.14 пробел для живых исходных process groups после `SIGKILL` контроллера; **11 новых настоящих Linux-тестов PASS**, полный регресс **587 unittest OK (1 skipped)**. Следующий `6.10 [ ]`: параллельные независимые сессии, только после новой команды Владислава. [Технический протокол](./infra/orchestrator/TASK_PROCESS_RECOVERY.md).
+- **Исходник/откат:** `vl-ktk/ai-agent-engine`, `main`, до 6.9 `4af9ac441ef6e143742ff8e3a2fd89fa79f9d303` (6.8); новый SHA подтвердить после публикации. Откат — адресным обратным коммитом на актуальном `main` без force/reset. Netcup релиз и production DB не менялись.
+- **Реализовано:** private task SQLite schema **v8**, таблица `task_process_runs` с `pid/pgid/sid/start_ticks/boot_id`, worker/launch_kind/active/stopped и атомарной миграцией v7→v8; `TaskProcessController.launch_gated` запускает только waiting Python gate, записывает доверенный PID в SQLite и `RUNNING` до GO. GPT/Claude executors используют этот gate для одного offline/личного запуска; команды/PID не передаются через модель. `TaskProcessRecovery.recover()` в новом доверенном владельцем процессе сверяет identity+pidfd, посылает сигнал только исходной группе, проверяет `/proc` и при подтверждении переводит в `CANCELLED`, освобождая workspace. Неизвестный, чужой или перезапущенный PID остаётся HOLD.
+- **Проверки:** `tests/test_task_process_recovery.py` 11 PASS: настоящий SIGKILL отдельного Python supervisor, живой orphan, SQLite restart→kill group→workspace reuse, grandchild group, подтверждённый pidfd и starttime, злонамеренно изменённый start_ticks (no kill), отсутствие ledger у RUNNING, foreign owner, pre-exec gate EOF без side effects, зарегистрированный и потерянный gate, миграция v7. Ранее существовавшие тесты timeout/cancel/retry и настоящих fake GPT/Claude subprocess повторно PASS; compileall, workflow, source, staged tree проверить перед публикацией.
+- **Границы:** нельзя объявлять итог неизвестного внешнего запроса успешным или повторять его; `CANCELLED` после recovery не доказывает отсутствия side effect. Доверенный bootstrap recovery требуется вызвать явно. Работающие потомки, вышедшие из исходной process group через злонамеренный `setsid`, не доказаны очищенными (дополнительный cgroup/OS sandbox нужен отдельно); нет live Netcup/production/секретов/расходов/платных API.
+
+## Историческая передача — 6.8: sandbox/redaction
 
 ## Текущая передача — 6.8: OS-изоляция offline команд и секреты
 

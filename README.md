@@ -44,7 +44,16 @@ network-socket filter, a pinned task workspace (read-only unless separately
 authorized) and scrubbed environment. Known host secrets and token shapes
 are redacted from task output; the GPT/Claude provider subprocess environment
 is reduced to an allowlist. Their networked, credential-bearing CLI processes
-**are not** in the offline OS sandbox. Crash-orphan cleanup remains stage 6.9.
+**are not** in the offline OS sandbox. Crash-orphan cleanup is addressed in
+stage 6.9 below.
+
+**Stage 6.9 [x]:** [Crash-safe process ledger and restart cleanup](./infra/orchestrator/TASK_PROCESS_RECOVERY.md)
+record Linux boot identity, PID/group/session and start ticks in private
+SQLite v8. A one-byte launch gate prevents any GPT/Claude worker execution
+before durable registration. On restart a trusted scope-bound recovery checks
+the original PID with pidfd, stops the whole verified group, releases its
+workspace and never automatically retries unknown model work. A real
+SIGKILL-supervisor/orphan-process test passed locally; no Netcup deployment.
 
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.

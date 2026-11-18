@@ -12,12 +12,17 @@ from dataclasses import dataclass, field
 import os
 import signal
 import subprocess
+import sys
 from threading import Event, Lock, Thread, current_thread
 import time
 from typing import Callable, TypeVar
 
 from .task_api import OwnerScope, TaskInbox, TaskNotFound
 from .task_permissions import PermissionUnavailable, ProtectedAction, TaskPermissionGate
+from .task_process_identity import (
+    ProcessIdentity, ProcessIdentityUnavailable, capture_private_leader,
+    matches_leader,
+)
 from .task_state import TaskState, TransitionRejected
 
 
@@ -35,6 +40,7 @@ class _ManagedRun:
     pgid: int
     scope: OwnerScope
     worker_id: str
+    identity: ProcessIdentity | None
     deadline: float | None
     lock: Lock = field(default_factory=Lock)
     done: bool = False
@@ -89,7 +95,8 @@ class TaskProcessController:
         return pgid
 
     def attach(self, task_id: str, process: subprocess.Popen, scope: OwnerScope,
-               *, actor_id: str, timeout_seconds: float | None = None) -> None:
+               *, actor_id: str, timeout_seconds: float | None = None,
+               _launch_kind: str = "direct") -> None:
         """Attach an existing isolated child and begin a trusted RUNNING state.
 
         The caller retains ownership of an invalid/unattached process and
@@ -99,6 +106,8 @@ class TaskProcessController:
                                              or not 0.01 <= timeout_seconds <= 86400):
             raise ValueError("invalid timeout")
         pgid = self._validate_process(process)
+        if _launch_kind not in ("direct", "gated"):
+            raise TaskControlError("invalid trusted process launch kind")
         with self._mutex:
             if self._closed:
                 raise TaskControlError("task controller is closed")
@@ -113,16 +122,94 @@ class TaskProcessController:
                 raise TaskControlError("worker does not own assigned task")
             if self.inbox.state(task_id, scope) is not TaskState.ASSIGNED:
                 raise TaskControlError("task is not waiting for a worker")
+            identity = None
+            if self.inbox._store is not None:
+                try:
+                    identity = capture_private_leader(process.pid)
+                except ProcessIdentityUnavailable:
+                    raise TaskControlError("cannot establish process identity") from None
+                with self.inbox._lock:
+                    self.inbox._store.register_process(
+                        task_id, actor_id, pid=identity.pid, pgid=identity.pgid,
+                        sid=identity.sid, start_ticks=identity.start_ticks,
+                        boot_id=identity.boot_id, launch_kind=_launch_kind)
             self.inbox.transition_state(task_id, TaskState.RUNNING, scope,
                                         actor_id=actor_id)
             deadline = (time.monotonic() + timeout_seconds
                         if timeout_seconds is not None else None)
             self._runs[task_id] = _ManagedRun(task_id, process, pgid, scope,
-                                               actor_id, deadline)
+                                               actor_id, identity, deadline)
             if deadline is not None and self._watchdog is None:
                 self._watchdog = Thread(target=self._watch, daemon=True,
                                         name="ae-task-timeouts")
                 self._watchdog.start()
+
+    def launch_gated(self, task_id: str, scope: OwnerScope, *, actor_id: str,
+                     worker_argv: tuple[str, ...], cwd: str,
+                     environment: dict[str, str],
+                     timeout_seconds: float | None = None) -> subprocess.Popen:
+        """Start a dormant child; commit its identity before releasing exec.
+
+        A pre-attach SIGKILL of this supervisor closes the one-byte pipe.
+        The child then exits without ever executing the provider worker.
+        """
+        if self.inbox._store is None:
+            raise TaskControlError("gated launch requires durable task database")
+        if (type(worker_argv) is not tuple or not worker_argv
+                or any(type(item) is not str or not item or "\x00" in item
+                       for item in worker_argv)
+                or type(cwd) is not str or not cwd.startswith("/")
+                or not isinstance(environment, dict)):
+            raise TaskControlError("invalid trusted worker launch")
+        assignment = self.inbox.get_assignment(task_id, scope)
+        if (assignment is None or assignment.worker_id != actor_id
+                or assignment.workspace_dir != cwd):
+            raise TaskControlError("trusted workspace assignment required")
+        read_fd, write_fd = os.pipe2(os.O_CLOEXEC)
+        process = None
+        attached = False
+        try:
+            argv = (sys.executable, "-m", "ai_agent_engine.task_launch_gate",
+                    str(read_fd), *worker_argv)
+            process = subprocess.Popen(
+                argv, cwd=cwd, env=environment,
+                pass_fds=(read_fd,), close_fds=True,
+                start_new_session=True, stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            os.close(read_fd)
+            read_fd = -1
+            self.attach(task_id, process, scope, actor_id=actor_id,
+                        timeout_seconds=timeout_seconds,
+                        _launch_kind="gated")
+            attached = True
+            if os.write(write_fd, b"G") != 1:
+                raise TaskControlError("gated worker did not start")
+            return process
+        except BaseException:
+            if attached:
+                try:
+                    self.cancel(task_id, scope)
+                except Exception:
+                    pass  # original attach/launch exception remains primary
+            if process is not None:
+                try:
+                    if process.poll() is None:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    process.wait(timeout=2)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            raise
+        finally:
+            if read_fd != -1:
+                os.close(read_fd)
+            os.close(write_fd)
+
+    def _mark_stopped(self, run: _ManagedRun) -> None:
+        if self.inbox._store is not None and run.identity is not None:
+            with self.inbox._lock:
+                self.inbox._store.mark_process_stopped(
+                    run.task_id, run.identity.pid, run.identity.start_ticks,
+                    run.identity.boot_id)
 
     @staticmethod
     def _group_running(pgid: int) -> bool:
@@ -152,6 +239,9 @@ class TaskProcessController:
 
     def _terminate_group(self, run: _ManagedRun) -> None:
         """TERM whole private group, escalate to KILL, reap direct child."""
+        if (run.process.poll() is None and run.identity is not None
+                and not matches_leader(run.identity)):
+            raise TaskControlError("managed process identity changed")
         if run.process.poll() is None:
             try:
                 os.killpg(run.pgid, signal.SIGTERM)
@@ -189,6 +279,7 @@ class TaskProcessController:
             self.inbox.transition_state(run.task_id, target, run.scope,
                                         actor_id="orchestrator")
             run.done = True
+            self._mark_stopped(run)
             return target
 
     def cancel(self, task_id: str, scope: OwnerScope) -> TaskState:
@@ -241,6 +332,7 @@ class TaskProcessController:
             self.inbox.transition_state(task_id, target, scope,
                                         actor_id=run.worker_id)
             run.done = True
+            self._mark_stopped(run)
             return target
 
     def complete_failed_attempt(self, task_id: str, scope: OwnerScope) -> int:
@@ -266,6 +358,7 @@ class TaskProcessController:
                 raise TaskControlError("successful process is not a failed attempt")
             run.process.wait(timeout=0)
             run.done = True
+            self._mark_stopped(run)
             return code
 
     def attach_retry(self, task_id: str, process: subprocess.Popen,
@@ -300,10 +393,21 @@ class TaskProcessController:
             if (row is None or row[1] < 2 or row[2] != delivery_token
                     or row[3] != "active"):
                 raise TaskControlError("retry ticket is not active")
+            identity = None
+            if self.inbox._store is not None:
+                try:
+                    identity = capture_private_leader(process.pid)
+                except ProcessIdentityUnavailable:
+                    raise TaskControlError("cannot establish retry identity") from None
+                with self.inbox._lock:
+                    self.inbox._store.register_process(
+                        task_id, actor_id, pid=identity.pid, pgid=identity.pgid,
+                        sid=identity.sid, start_ticks=identity.start_ticks,
+                        boot_id=identity.boot_id, launch_kind="direct")
             deadline = (time.monotonic() + timeout_seconds
                         if timeout_seconds is not None else None)
             self._runs[task_id] = _ManagedRun(task_id, process, pgid, scope,
-                                               actor_id, deadline)
+                                               actor_id, identity, deadline)
             if deadline is not None and self._watchdog is None:
                 self._watchdog = Thread(target=self._watch, daemon=True,
                                         name="ae-task-timeouts")
