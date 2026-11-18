@@ -1,5 +1,12 @@
 # Netcup GitOps control: read-only status and owner-approved releases
 
+**Superseded for full administration on 19 November 2026:** the owner explicitly
+chose full sudo through the existing deploy identity. The active channel and
+LIVE PASS evidence are in [NETCUP_OWNER_ADMIN.md](./NETCUP_OWNER_ADMIN.md) and
+[NETCUP_FULL_ADMIN_ACCESS_RESULT.md](./NETCUP_FULL_ADMIN_ACCESS_RESULT.md).
+The signed/restricted activation design below is historical/prepared and is not
+the installed full-admin path. Its separate signing secret was not created.
+
 **Status: READ-ONLY STATUS LIVE PASS; SIGNED RELEASE ACTIVATION PREPARED ONLY.** The
 initial scoped status run 44402946575 and **strict status re-test 44406398637**
 both succeeded on 18 November 2026. Strict check verified all three units

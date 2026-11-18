@@ -1,5 +1,12 @@
 # Existing Netcup owner administrative channel
 
+**LIVE PASS, 19 November 2026:** all five points completed. See
+[the evidence report](./NETCUP_FULL_ADMIN_ACCESS_RESULT.md) and
+[successful hosted run 44416162976](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44416162976).
+Installed package 0.3.11a0, release `0e04af007375d82daf8f7d3b36c71abb0c784e0b`;
+previous `85375103800845eeff696e53f510c66c428408ed` was actually restored and
+health-checked before final reactivation. The full LIVE scenario passed.
+
 Owner authorization: 19 November 2026, five-point full administrative setup.
 This supersedes the earlier restricted-sudo proposal for this task. The existing
 `ae-deploy` account now has `ALL=(ALL:ALL) NOPASSWD: ALL`; this is equivalent to
@@ -39,7 +46,7 @@ pinned host identity, all three units active, same original release.
    | `script` | previously committed `ops/admin-scripts/<name>.py` |
    | `script_sha256` | SHA-256 of that exact script's bytes |
 
-3. `netcup-owner-admin.yml` runs on GitHub-hosted Ubuntu. Read the run, jobs and
+3. `netcup-owner-admin.yml` runs on GitHub-hosted Ubuntu 26.04/Python 3.12. Read the run, jobs and
    decoded logs through connected GitHub tools. The baseline status workflow
    remains available through its own `ops/requests/` channel.
 4. Do not commit new requests/docs while an admin job is running: it rejects a
