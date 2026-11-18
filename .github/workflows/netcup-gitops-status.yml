@@ -1,0 +1,62 @@
+name: Netcup read-only status from a scoped GitOps request
+
+# Sole reviewed push-trigger exception for the EXISTING non-root SSH key.
+# This workflow cannot invoke sudo, install, stage, promote, restart, or write.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/requests/*.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcup-gitops-status
+  cancel-in-progress: false
+
+jobs:
+  status:
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact triggering commit without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate single read-only GitOps request
+        id: request
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/netcup_status_request.py --github-output "$GITHUB_OUTPUT"
+      - name: Validate pinned Netcup host and existing deploy SSH key
+        shell: bash
+        env:
+          SERVER_IP: ${{ steps.request.outputs.server_ipv4 }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$DEPLOY_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$RUNNER_TEMP/ae-deploy-key"
+          chmod 0600 "$RUNNER_TEMP/ae-deploy-key"
+          ssh-keygen -y -f "$RUNNER_TEMP/ae-deploy-key" >/dev/null
+          ssh-keyscan -T 10 -p 22 -t ed25519 "$SERVER_IP" 2>/dev/null > "$RUNNER_TEMP/host-key-pinned"
+          test -s "$RUNNER_TEMP/host-key-pinned"
+          actual_fp="$(ssh-keygen -lf "$RUNNER_TEMP/host-key-pinned" | awk 'NR==1 {print $2}')"
+          test "$actual_fp" = 'SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg'
+      - name: Run fixed read-only host status, no arbitrary commands
+        shell: bash
+        env:
+          SERVER_IP: ${{ steps.request.outputs.server_ipv4 }}
+        run: |
+          set -Eeuo pipefail
+          ssh -T -i "$RUNNER_TEMP/ae-deploy-key" \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" \
+            -o ConnectTimeout=15 "ae-deploy@$SERVER_IP" \
+            'systemctl is-active ae-controller.service ae-backup.timer ae-host-check.timer; readlink /opt/ai-agent-engine/current'
+          echo 'PASS: fixed read-only server inspection completed'

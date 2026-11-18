@@ -1,3 +1,14 @@
+# HANDOFF — 2026-11-18: Netcup control hardening, source-only proposal
+
+**Действующий main для отката:** `e5ffc1c15089145ff548c2ecd8bec7804e2343f5`. Работа ведётся в ветке `infra/netcup-safe-control-20261118`; текущий production не менялся. К существующему `6.14 [ ] LIVE BLOCKED` эта работа относится как инфраструктурная предпосылка; закрытие 6.14 без реального GPT/Claude E2E запрещено.
+
+- Добавляется безопасный GitHub push-trigger **только для чтения статуса** Netcup с проверкой единственного добавленного JSON-файла, actor `vl-ktk`, pinned SSH host key, без sudo; нужен живой тест triggering actor / GitHub Actions / SSH на имеющемся VPS. Это осознанное точечное исключение из первоначального manual-only правила доступа к SSH секрету.
+- Готовится ограниченный root-installed оператор для immutable release stage/promote, health и автоматического возврата прежней версии на ошибке, плюс отдельный ручной owner-only GitHub workflow. Исходный код и офлайн-тесты **не дают право root**. Требуется отдельно удостоверить установленный доверенный root-owned код, sudoers, версию работающего контроллера и безопасный bootstrap. В чате такого доступа нет.
+- **Не заявлять LIVE PASS или готовность автономной публикации** пока не пройдены CI, реальный status и owner-approved activation/rollback на Netcup. Нельзя обходить запреты, поднимать root bootstrap из GitHub workflows, сохранять секреты в repo/логах или запускать платные API.
+- Описание и условия: `infra/deploy/GITOPS_NETCUP_CONTROL.md`. Этапы 7–11 не начинались. После проверки live протоколов обновить roadmap и только затем планировать 6.14 в окружении с обеими подписочными авторизациями.
+
+---
+
 # HANDOFF — 2026-11-18: 6.14 PARTIAL / live E2E blocked
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`, `IMPLEMENTATION_ROADMAP.md`. Стартовый main/откатный SHA `df7799146373db47a3fcc386c23e641a9fe535ea` (6.13). Рабочая ветка `stage-6.14-live-e2e-acceptance`, PR #58. Не публиковать в production, не запускать платные API и не трогать Netcup. При откате GitHub исходников: адресный revert после сверки актуального main, без force/reset.

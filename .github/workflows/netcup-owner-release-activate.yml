@@ -1,0 +1,113 @@
+name: Netcup owner-approved verified release activation or rollback
+
+# Never activated by push/PR or an AI-provided status request.
+# The owner must manually dispatch; the server must already have a
+# separately root-installed restricted operator. No sudoers installation here.
+on:
+  workflow_dispatch:
+    inputs:
+      server_ipv4:
+        description: "Netcup public IPv4"
+        required: true
+        type: string
+      operation:
+        description: "activate or rollback"
+        required: true
+        type: choice
+        options: [activate, rollback]
+      selected_source_sha:
+        description: "Previously verified immutable release SHA"
+        required: true
+        type: string
+      expected_current_sha:
+        description: "Live controller release SHA before the operation"
+        required: true
+        type: string
+      expected_wheel_sha256:
+        description: "Independently verified prepared wheel digest (rollback: 64 zeros)"
+        required: true
+        type: string
+      expected_main_sha:
+        description: "Expected exact GitHub main SHA"
+        required: true
+        type: string
+      confirmation:
+        description: "Type ACTIVATE_VERIFIED_RELEASE to approve server modification"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcup-owner-release-activate
+  cancel-in-progress: false
+
+jobs:
+  activation:
+    if: ${{ github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && inputs.confirmation == 'ACTIVATE_VERIFIED_RELEASE' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted workflow revision without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact owner-approved inputs and unchanged main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          OPERATION: ${{ inputs.operation }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_OLD: ${{ inputs.expected_current_sha }}
+          WHEEL_SHA: ${{ inputs.expected_wheel_sha256 }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -Eeuo pipefail
+          python3 -c 'import ipaddress,os; ip=ipaddress.IPv4Address(os.environ["SERVER_IP"]); assert ip.is_global and str(ip)==os.environ["SERVER_IP"]'
+          [[ "$OPERATION" == activate || "$OPERATION" == rollback ]]
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_OLD" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$WHEEL_SHA" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]]
+          test "$SOURCE_SHA" != "$EXPECTED_OLD"
+          current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$current" = "$EXPECTED_MAIN"
+          test "$GITHUB_SHA" = "$EXPECTED_MAIN"
+          git merge-base --is-ancestor "$SOURCE_SHA" "$EXPECTED_MAIN"
+      - name: Verify existing deploy key and pinned SSH host identity
+        shell: bash
+        env:
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$DEPLOY_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$RUNNER_TEMP/ae-deploy-key"
+          chmod 0600 "$RUNNER_TEMP/ae-deploy-key"
+          ssh-keygen -y -f "$RUNNER_TEMP/ae-deploy-key" >/dev/null
+          ssh-keyscan -T 10 -p 22 -t ed25519 "$SERVER_IP" 2>/dev/null > "$RUNNER_TEMP/host-key-pinned"
+          test -s "$RUNNER_TEMP/host-key-pinned"
+          actual_fp="$(ssh-keygen -lf "$RUNNER_TEMP/host-key-pinned" | awk 'NR==1 {print $2}')"
+          test "$actual_fp" = 'SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg'
+      - name: Recheck main and call only root-installed scoped release operator
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SERVER_IP: ${{ inputs.server_ipv4 }}
+          OPERATION: ${{ inputs.operation }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_OLD: ${{ inputs.expected_current_sha }}
+          WHEEL_SHA: ${{ inputs.expected_wheel_sha256 }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+          ssh -T -i "$RUNNER_TEMP/ae-deploy-key" \
+            -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" \
+            -o ConnectTimeout=15 "ae-deploy@$SERVER_IP" \
+            "sudo -n /usr/bin/python3 -I /usr/local/libexec/ae-release/owner_release_operator.py --operation '$OPERATION' --source-sha '$SOURCE_SHA' --expected-current '$EXPECTED_OLD' --wheel-sha256 '$WHEEL_SHA' --confirmation OWNER_APPROVED_RELEASE_OPERATION"

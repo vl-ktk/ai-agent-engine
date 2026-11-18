@@ -22,8 +22,11 @@ APPROVED_WORKFLOWS = {
     "vps-automation-checks.yml",
     "release-preparation.yml",
     "netcup-owner-release-transfer.yml",
+    "netcup-owner-release-activate.yml",
+    "netcup-gitops-status.yml",
 }
 RETIRED_BOOTSTRAP = "netcup-one-time-bootstrap.yml"
+PUSH_STATUS = "netcup-gitops-status.yml"  # sole approved automatic SSH exception
 PRIVILEGED_TRIGGERS = ("pull_request_target", "workflow_run", "repository_dispatch", "schedule")
 NONMANUAL_TRIGGERS = ("push", "pull_request", *PRIVILEGED_TRIGGERS)
 SECRET_REFERENCE = re.compile(r"\$\{\{\s*secrets\.", re.IGNORECASE)
@@ -35,6 +38,7 @@ MANUAL_CONFIRMATIONS = {
     "netcup-readonly-ansible-ping.yml": "VERIFY",
     "netcup-readonly-system-audit.yml": "SYSTEM_AUDIT",
     "netcup-owner-release-transfer.yml": "TRANSFER_PREPARED_RELEASE",
+    "netcup-owner-release-activate.yml": "ACTIVATE_VERIFIED_RELEASE",
 }
 
 
@@ -62,7 +66,27 @@ def inspect_workflow(name: str, source: str) -> list[str]:
         if re.search(rf"(?m)^  {trigger}\s*:", source):
             errors.append(f"unexpected trigger: {trigger}")
 
-    if SECRET_REFERENCE.search(source):
+    # A tightly scoped push-triggered workflow may use the existing non-root
+    # SSH key only for a fixed read-only status command. Never use this
+    # exemption for privileged deployment, command execution, or other files.
+    if name == PUSH_STATUS:
+        required = (
+            "on:\n  push:\n    branches: [main]\n    paths:\n      - 'ops/requests/*.json'",
+            "github.actor == 'vl-ktk'",
+            "python3 scripts/netcup_status_request.py --github-output",
+            "'systemctl is-active ae-controller.service ae-backup.timer ae-host-check.timer; readlink /opt/ai-agent-engine/current'",
+            "SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg",
+        )
+        for token in required:
+            if token not in source:
+                errors.append("GitOps status safety boundary missing: " + token[:48])
+        for trigger in ("pull_request", *PRIVILEGED_TRIGGERS, "workflow_dispatch"):
+            if re.search(rf"(?m)^  {trigger}\s*:", source):
+                errors.append(f"unexpected status trigger: {trigger}")
+        if "sudo " in source or "systemctl restart" in source or "systemctl start" in source:
+            errors.append("GitOps status must never elevate privileges or modify services")
+
+    if SECRET_REFERENCE.search(source) and name != PUSH_STATUS:
         if not re.search(r"(?m)^  workflow_dispatch\s*:", source):
             errors.append("secret-bearing workflow must require manual dispatch")
         for trigger in NONMANUAL_TRIGGERS:
