@@ -1,8 +1,9 @@
-"""Stage 5.6: immutable worker+workspace binding, without worker execution."""
+"""Stages 5.6 and 5.9: immutable assignment and private workspace exclusion."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import fcntl
 import os
 from pathlib import Path
 import re
@@ -19,6 +20,23 @@ class InvalidAssignment(ValueError):
 
 class AlreadyAssigned(RuntimeError):
     """The task has an existing immutable worker+workspace binding."""
+
+
+class WorkspaceBusy(RuntimeError):
+    """Another active task/process holds this workspace directory."""
+
+
+class WorkspaceLease:
+    """OS-level exclusive flock on a directory FD; creates no lock files."""
+
+    def __init__(self, directory: str, fd: int) -> None:
+        self.directory = directory
+        self._fd: int | None = fd
+
+    def close(self) -> None:
+        if self._fd is not None:
+            fd, self._fd = self._fd, None
+            os.close(fd)  # closing releases flock, including on exceptions
 
 
 @dataclass(frozen=True)
@@ -68,6 +86,43 @@ class WorkspaceRoot:
         candidate = self.path / name
         self._check_private_dir(candidate)  # lstat rejects symlinks
         return str(candidate)
+
+    def acquire(self, name: str) -> WorkspaceLease:
+        """Reserve the existing directory across threads and OS processes.
+
+        Locking the directory inode itself avoids extra files, permissions
+        changes and cleanup. This requires POSIX directory flock (Linux).
+        """
+        directory = self.resolve(name)
+        try:
+            expected = os.lstat(directory)
+        except OSError as exc:
+            raise InvalidAssignment("workspace directory disappeared") from exc
+        flags = (os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+                 | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0))
+        try:
+            fd = os.open(directory, flags)
+        except OSError as exc:
+            raise InvalidAssignment("workspace directory cannot be opened") from exc
+        try:
+            actual = os.fstat(fd)
+            self._check_private_dir(self.path)
+            if (not stat.S_ISDIR(actual.st_mode)
+                    or actual.st_uid != os.geteuid()
+                    or stat.S_IMODE(actual.st_mode) != 0o700
+                    or (actual.st_dev, actual.st_ino) !=
+                       (expected.st_dev, expected.st_ino)):
+                raise InvalidAssignment("workspace directory changed during claim")
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as exc:
+                raise WorkspaceBusy("workspace already reserved") from exc
+            except OSError as exc:
+                raise InvalidAssignment("workspace filesystem cannot be locked") from exc
+            return WorkspaceLease(directory, fd)
+        except BaseException:
+            os.close(fd)
+            raise
 
     def verify_loaded(self, name: str, directory: str) -> None:
         """Do not silently rebind a saved assignment to a different root."""

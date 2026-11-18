@@ -18,12 +18,14 @@ from typing import Type
 from uuid import uuid4
 
 from .task_assignment import (
-    AlreadyAssigned, InvalidAssignment, TaskAssignment, WorkspaceRoot,
+    AlreadyAssigned, InvalidAssignment, TaskAssignment, WorkspaceBusy,
+    WorkspaceLease, WorkspaceRoot,
     validate_worker, validate_workspace_name,
 )
 from .task_dag import DependencyCycle, TaskDAG
 from .task_state import (
-    TaskState, TaskTransitionEvent, TransitionRejected, can_transition,
+    TERMINAL_STATES, TaskState, TaskTransitionEvent, TransitionRejected,
+    can_transition,
 )
 from .task_storage import SQLiteTaskStore, StorageUnavailable
 
@@ -238,6 +240,7 @@ class TaskInbox:
         self._dag = TaskDAG()
         self._priorities: dict[str, int] = {}
         self._assignments: dict[str, TaskAssignment] = {}
+        self._leases: dict[str, WorkspaceLease] = {}
         self._states: dict[str, TaskState] = {}
         self._events: list[TaskTransitionEvent] = []  # RAM-only audit without SQLite
         self._next_receipt = 1
@@ -252,8 +255,15 @@ class TaskInbox:
             try:
                 self._restore()
             except Exception:
+                self._release_leases()
                 store.close()
                 raise
+
+    def _release_leases(self) -> None:
+        """Call only under inbox lock or before the inbox is published."""
+        for lease in self._leases.values():
+            lease.close()
+        self._leases.clear()
 
     def _restore(self) -> None:
         """Fail closed on invalid persisted owners, edges or cycles."""
@@ -326,6 +336,19 @@ class TaskInbox:
                         or (state not in (TaskState.QUEUED, TaskState.CANCELLED)
                             and not has_claim)):
                     raise StorageUnavailable("persisted claim and task state disagree")
+            for task_id, assignment in self._assignments.items():
+                if self._states[task_id] in TERMINAL_STATES:
+                    continue  # finished workspaces can be claimed by other tasks
+                if self._workspace_root is None:
+                    raise StorageUnavailable("active assignments need workspace root")
+                try:
+                    lease = self._workspace_root.acquire(assignment.workspace_name)
+                except (WorkspaceBusy, InvalidAssignment) as exc:
+                    raise StorageUnavailable("persisted workspace unavailable") from exc
+                if lease.directory != assignment.workspace_dir:
+                    lease.close()
+                    raise StorageUnavailable("persisted workspace changed")
+                self._leases[task_id] = lease
         except (ValueError, TypeError, UnicodeError, OverflowError,
                 DependencyCycle, InvalidJSON, InvalidTask) as exc:
             raise StorageUnavailable("invalid persisted task graph") from exc
@@ -387,12 +410,24 @@ class TaskInbox:
                 raise TransitionRejected("not_queued")
             if self._workspace_root is None:
                 raise InvalidAssignment("trusted workspace root not configured")
-            workspace_dir = self._workspace_root.resolve(workspace_name)
+            try:
+                lease = self._workspace_root.acquire(workspace_name)
+            except WorkspaceBusy:
+                self._reject_transition(task_id, self._states[task_id],
+                                        TaskState.ASSIGNED, worker_id,
+                                        "workspace_busy")
+                raise
+            workspace_dir = lease.directory
             assignment = TaskAssignment(task_id, worker_id, workspace_name,
                                         workspace_dir)
-            if self._store is not None:
-                self._store.insert_assignment(assignment)
+            try:
+                if self._store is not None:
+                    self._store.insert_assignment(assignment)
+            except BaseException:
+                lease.close()
+                raise
             self._assignments[task_id] = assignment
+            self._leases[task_id] = lease
             self._states[task_id] = TaskState.ASSIGNED
             if self._store is None:
                 self._record_volatile(task_id, TaskState.QUEUED,
@@ -482,6 +517,10 @@ class TaskInbox:
             if self._store is None:
                 self._record_volatile(task_id, previous, target, actor_id,
                                       True, "transition")
+            if target in TERMINAL_STATES:
+                lease = self._leases.pop(task_id, None)
+                if lease is not None:
+                    lease.close()
             return target
 
     def transition_history(self, task_id: str, scope: OwnerScope) -> tuple[TaskTransitionEvent, ...]:
@@ -604,10 +643,13 @@ class TaskInbox:
             return priority
 
     def close(self) -> None:
-        """Release the exclusive SQLite writer lock; never delete stored data."""
+        """Release workspace and DB locks; never delete stored data."""
         with self._lock:
-            if self._store is not None:
-                self._store.close()
+            try:
+                if self._store is not None:
+                    self._store.close()
+            finally:
+                self._release_leases()
 
     @property
     def durable(self) -> bool:
@@ -744,6 +786,9 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                     return
                 except AlreadyAssigned:
                     self._reply(409, "already_assigned")
+                    return
+                except WorkspaceBusy:
+                    self._reply(409, "workspace_busy")
                     return
                 except TransitionRejected:
                     self._reply(409, "task_not_claimable")

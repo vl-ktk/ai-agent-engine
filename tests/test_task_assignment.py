@@ -22,8 +22,10 @@ from ai_agent_engine.task_api import (
     parse_submission, task_handler,
 )
 from ai_agent_engine.task_assignment import (
-    AlreadyAssigned, InvalidAssignment, TaskAssignment, WorkspaceRoot,
+    AlreadyAssigned, InvalidAssignment, TaskAssignment, WorkspaceBusy,
+    WorkspaceRoot,
 )
+from ai_agent_engine.task_state import TaskState
 from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
 
 
@@ -219,10 +221,16 @@ class AssignmentInboxTests(unittest.TestCase):
         with self.assertRaises(StorageUnavailable):
             TaskInbox(store=SQLiteTaskStore(self.path), workspace_root=self.root)
 
-    def test_same_workspace_across_different_tasks_not_yet_guarded(self):
+    def test_same_workspace_across_different_tasks_is_exclusive(self):
         a, b = self.create(), self.create()
         self.inbox.claim_task(a.task_id, "worker-a", "slot-0", OWNER_A)
-        # Stage 5.9 implements a shared-workspace lock, not stage 5.6.
+        with self.assertRaises(WorkspaceBusy):
+            self.inbox.claim_task(b.task_id, "worker-b", "slot-0", OWNER_A)
+        self.assertIsNone(self.inbox.get_assignment(b.task_id, OWNER_A))
+        self.assertEqual(self.inbox.transition_history(b.task_id, OWNER_A)[0].reason_code,
+                         "workspace_busy")
+        self.inbox.transition_state(a.task_id, TaskState.CANCELLED, OWNER_A,
+                                    actor_id="worker-a")
         self.inbox.claim_task(b.task_id, "worker-b", "slot-0", OWNER_A)
         self.assertEqual(self.inbox.get_assignment(a.task_id, OWNER_A).workspace_dir,
                          self.inbox.get_assignment(b.task_id, OWNER_A).workspace_dir)
