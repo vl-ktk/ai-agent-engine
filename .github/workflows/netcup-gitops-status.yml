@@ -58,5 +58,5 @@ jobs:
             -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" \
             -o ConnectTimeout=15 "ae-deploy@$SERVER_IP" \
-            'set -e; systemctl is-active --quiet ae-controller.service; systemctl is-active --quiet ae-backup.timer; systemctl is-active --quiet ae-host-check.timer; printf "all three units active\\n"; readlink /opt/ai-agent-engine/current'
+            'set -e; systemctl is-active --quiet ae-controller.service; systemctl is-active --quiet ae-backup.timer; systemctl is-active --quiet ae-host-check.timer; echo "all three units active"; readlink /opt/ai-agent-engine/current'
           echo 'PASS: fixed read-only server inspection completed'
