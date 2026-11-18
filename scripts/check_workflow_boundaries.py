@@ -24,9 +24,11 @@ APPROVED_WORKFLOWS = {
     "netcup-owner-release-transfer.yml",
     "netcup-owner-release-activate.yml",
     "netcup-gitops-status.yml",
+    "netcup-owner-admin.yml",
 }
 RETIRED_BOOTSTRAP = "netcup-one-time-bootstrap.yml"
 PUSH_STATUS = "netcup-gitops-status.yml"  # sole approved automatic SSH exception
+OWNER_ADMIN = "netcup-owner-admin.yml"  # explicitly authorized 2026-11-19
 PRIVILEGED_TRIGGERS = ("pull_request_target", "workflow_run", "repository_dispatch", "schedule")
 NONMANUAL_TRIGGERS = ("push", "pull_request", *PRIVILEGED_TRIGGERS)
 SECRET_REFERENCE = re.compile(r"\$\{\{\s*secrets\.", re.IGNORECASE)
@@ -86,7 +88,26 @@ def inspect_workflow(name: str, source: str) -> list[str]:
         if "sudo " in source or "systemctl restart" in source or "systemctl start" in source:
             errors.append("GitOps status must never elevate privileges or modify services")
 
-    if SECRET_REFERENCE.search(source) and name != PUSH_STATUS:
+    if name == OWNER_ADMIN:
+        for marker in (
+            "on:\n  push:\n    branches: [main]\n    paths:\n      - 'ops/admin-requests/*.json'",
+            "github.repository == 'vl-ktk/ai-agent-engine'",
+            "github.ref == 'refs/heads/main'", "github.actor == 'vl-ktk'",
+            "github.triggering_actor == 'vl-ktk'", "github.run_attempt == 1",
+            "python3 scripts/netcup_admin_request.py --github-output",
+            "persist-credentials: false", "python3 -m unittest discover -s tests -q",
+            "scripts/netcup_admin_remote.py", "--expected-current",
+            "--script-sha256", "--payload-sha",
+            "SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg",
+            "StrictHostKeyChecking=yes", 'test "$(gh api',
+        ):
+            if marker not in source:
+                errors.append("owner admin boundary missing: " + marker[:60])
+        for trigger in ("pull_request", "workflow_dispatch", *PRIVILEGED_TRIGGERS):
+            if re.search(rf"(?m)^  {trigger}\s*:", source):
+                errors.append("unexpected owner admin trigger: " + trigger)
+
+    if SECRET_REFERENCE.search(source) and name not in (PUSH_STATUS, OWNER_ADMIN):
         if not re.search(r"(?m)^  workflow_dispatch\s*:", source):
             errors.append("secret-bearing workflow must require manual dispatch")
         for trigger in NONMANUAL_TRIGGERS:

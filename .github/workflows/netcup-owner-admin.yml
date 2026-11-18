@@ -1,0 +1,76 @@
+name: Netcup owner committed administrative job
+
+# Owner-authorized cloud channel. JSON selects previously reviewed code only.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ops/admin-requests/*.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcup-owner-admin
+  cancel-in-progress: false
+
+jobs:
+  admin:
+    if: ${{ github.repository == 'vl-ktk/ai-agent-engine' && github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && github.triggering_actor == 'vl-ktk' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout exact owner request without persisted credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate single request and separately committed script
+        id: request
+        run: python3 scripts/netcup_admin_request.py --github-output "$GITHUB_OUTPUT"
+      - name: Check reviewed source before any privileged connection
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/check_public_source.py
+          python3 scripts/check_workflow_boundaries.py
+          python3 -m compileall -q ai_agent_engine scripts ops/admin-scripts
+          python3 -m pip install --disable-pip-version-check -q -r requirements-siwc.txt
+          python3 -m unittest discover -s tests -q
+      - name: Prepare immutable source and wheel on GitHub hosted runner
+        env:
+          SOURCE_SHA: ${{ steps.request.outputs.source_sha }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p "$RUNNER_TEMP/payload/bundle"
+          git archive "$SOURCE_SHA" | tar -xf - -C "$RUNNER_TEMP/payload"
+          python3 -m pip wheel --no-deps --wheel-dir "$RUNNER_TEMP/payload/bundle" "$RUNNER_TEMP/payload"
+          wheel=("$RUNNER_TEMP"/payload/bundle/*.whl)
+          test "${#wheel[@]}" -eq 1
+          python3 -m scripts.release_preflight manifest --release-dir "$RUNNER_TEMP/payload/bundle" --wheel "${wheel[0]}" --commit "$SOURCE_SHA" --selected-ref "$SOURCE_SHA" --expected-main "$GITHUB_SHA"
+          tar -cf "$RUNNER_TEMP/payload.tar" -C "$RUNNER_TEMP/payload" .
+      - name: Recheck main, pinned SSH identity and run exact reviewed job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+          REQUEST_ID: ${{ steps.request.outputs.request_id }}
+          SOURCE_SHA: ${{ steps.request.outputs.source_sha }}
+          EXPECTED_CURRENT: ${{ steps.request.outputs.expected_current }}
+          ADMIN_SCRIPT: ${{ steps.request.outputs.script }}
+          SCRIPT_SHA: ${{ steps.request.outputs.script_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$GITHUB_SHA"
+          umask 077
+          keyfile="$RUNNER_TEMP/ae-admin-key"
+          trap 'rm -f "$keyfile"' EXIT
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$keyfile"
+          unset DEPLOY_PRIVATE_KEY
+          ssh-keygen -y -f "$keyfile" >/dev/null
+          ssh-keyscan -T 10 -t ed25519 62.83.131.128 2>/dev/null > "$RUNNER_TEMP/host-key-pinned"
+          test "$(ssh-keygen -lf "$RUNNER_TEMP/host-key-pinned" | awk 'NR==1 {print $2}')" = 'SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg'
+          options=( -i "$keyfile" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" -o ConnectTimeout=15 )
+          ssh -T "${options[@]}" ae-deploy@62.83.131.128 'install -d -m 0700 /home/ae-deploy/ae-admin-incoming; sudo -n /usr/bin/id'
+          scp "${options[@]}" "$RUNNER_TEMP/payload.tar" "ae-deploy@62.83.131.128:/home/ae-deploy/ae-admin-incoming/$REQUEST_ID.tar"
+          payload_sha="$(sha256sum "$RUNNER_TEMP/payload.tar" | cut -d ' ' -f 1)"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$GITHUB_SHA"
+          ssh -T "${options[@]}" ae-deploy@62.83.131.128 "sudo -n /usr/bin/python3 -I - --request-id '$REQUEST_ID' --request-sha '$GITHUB_SHA' --source-sha '$SOURCE_SHA' --expected-current '$EXPECTED_CURRENT' --payload-sha '$payload_sha' --script '$ADMIN_SCRIPT' --script-sha256 '$SCRIPT_SHA'" < scripts/netcup_admin_remote.py
