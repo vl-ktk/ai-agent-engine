@@ -27,6 +27,7 @@ RETIRED_BOOTSTRAP = "netcup-one-time-bootstrap.yml"
 PRIVILEGED_TRIGGERS = ("pull_request_target", "workflow_run", "repository_dispatch", "schedule")
 NONMANUAL_TRIGGERS = ("push", "pull_request", *PRIVILEGED_TRIGGERS)
 SECRET_REFERENCE = re.compile(r"\$\{\{\s*secrets\.", re.IGNORECASE)
+ACTION_REFERENCE = re.compile(r"(?m)^\s*(?:-\s*)?uses:\s*([^\s#]+)")
 MANUAL_CONFIRMATIONS = {
     "netcup-debian13-user-baseline.yml": "BASELINE",
     "netcup-one-time-bootstrap.yml": "BOOTSTRAP",
@@ -39,6 +40,13 @@ MANUAL_CONFIRMATIONS = {
 
 def inspect_workflow(name: str, source: str) -> list[str]:
     errors: list[str] = []
+    # The repository admin setting requires full-length immutable action SHAs.
+    # Keep the same guarantee in local CI so a policy toggle is not a bypass.
+    for action in ACTION_REFERENCE.findall(source):
+        if action.startswith("./"):
+            continue
+        if "@" not in action or not re.fullmatch(r"[0-9a-f]{40}", action.rsplit("@", 1)[1]):
+            errors.append(f"action must be pinned to a full 40-hex commit SHA: {action}")
     # Existing workflows use a multiline top-level permissions mapping.
     matches = re.findall(r"(?m)^permissions:\s*\n((?:  [^\n]*\n)+)", source)
     expected_permissions = ["  contents: read"]
@@ -120,4 +128,4 @@ if __name__ == "__main__":
         print(f"FAIL: {problem}", file=sys.stderr)
     if problems:
         sys.exit(1)
-    print("PASS: workflow sources have reviewed read-only token and manual secret boundaries")
+    print("PASS: workflow sources have SHA-pinned actions, read-only token and manual secret boundaries")

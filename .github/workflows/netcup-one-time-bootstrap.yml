@@ -37,7 +37,7 @@ jobs:
       DEPLOY_PUBLIC_KEY: ${{ inputs.deploy_public_key }}
     steps:
       - name: Fetch reviewed bootstrap source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Validate inputs and pinned host fingerprint
         shell: bash

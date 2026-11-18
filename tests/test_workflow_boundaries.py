@@ -8,6 +8,18 @@ class WorkflowBoundaryTests(unittest.TestCase):
     def test_live_repository_policy(self):
         self.assertEqual(inspect_repository(), [])
 
+    def test_reject_mutable_action_tags(self):
+        source = "permissions:\n  contents: read\nsteps:\n  - uses: actions/checkout@v6\n"
+        findings = inspect_workflow("ci.yml", source)
+        self.assertTrue(any("full 40-hex commit SHA" in issue for issue in findings))
+
+    def test_accept_full_sha_action(self):
+        source = (
+            "permissions:\n  contents: read\nsteps:\n"
+            "  - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803\n"
+        )
+        self.assertEqual(inspect_workflow("ci.yml", source), [])
+
     def test_reject_token_write(self):
         self.assertTrue(
             inspect_workflow("ci.yml", "permissions:\n  contents: write\n")
