@@ -1,0 +1,28 @@
+[Unit]
+Description=AI Agent Engine local verified database and file backup
+ConditionPathExists=/var/lib/ai-agent-engine/projects/engine.sqlite3
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=ae-runtime
+Group=ae-runtime
+UMask=0077
+ExecStart=/usr/bin/python3 /usr/local/libexec/ae-backup.py create
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/var/lib/ai-agent-engine
+ReadWritePaths=/var/backups/ai-agent-engine
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+CapabilityBoundingSet=
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
