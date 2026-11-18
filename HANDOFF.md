@@ -1,6 +1,14 @@
-# HANDOFF — 2026-11-18: 5.10 завершён; следующий 5.11
+# HANDOFF — 2026-11-18: 5.11 завершён; следующий 5.12
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 5.11, отмена и таймауты 18.11.2026
+
+- **Статус:** `5.11 [x]` — реальный локальный дочерний процесс (и его живые потомки) останавливаются до записи `CANCELLED` или `TIMED_OUT` в SQLite и до освобождения workspace. Следующий **5.12 [ ]** — ограниченные повторы, идемпотентность и resume, **не начинать без следующей команды владельца**. [Контракт](./infra/orchestrator/TASK_CANCELLATION.md).
+- **Код:** новый `ai_agent_engine/task_control.py`: доверенный `TaskProcessController` прикрепляет только уже созданный изолированный `Popen`, сверяет worker/owner/assignment, ставит `RUNNING`; вручную отменяет queued/assigned или останавливает группу `SIGTERM`→`SIGKILL` для running, проверяет отсутствие живых процессов Linux `/proc`, ждёт прямой процесс. Watchdog проверяет deadline по монотонным часам. Гонка cancel/timeout сериализована per-task; success/failure сверяется с реальным exit code. При SQLite failure статус не выдумывается и workspace удерживается до повторной записи. HTTP/process launcher и SQLite schema не изменены.
+- **Проверки:** `tests/test_task_control.py`: **20 новых PASS** (TERM-игнорирование, принудительный KILL, живой потомок после завершения родителя, timeout/watchdog, race, duplicate process, late success, owner/scope, workspace, reboot SQLite, сбой commit и retry), полный регресс **415 unittest OK (1 skipped)**; compileall/workflow/source/diff checks — перед публикацией. Официальный GitHub CI PASS **не утверждать без подтверждения**.
+- **Ограничения:** пока нет реального адаптера GPT/Claude, публичной auth или HTTP-cancel; контроллер видит только доверенные прикреплённые **тестовые** процессы в памяти одного экземпляра. После аварийного падения процессы/deadline автоматически не восстанавливаются — это 5.12/5.14. Netcup production, серверный controller, порты, systemd, секреты, чужие проекты **не меняли**, расходов нет.
+- **Версия/откат:** GitHub `main` **до 5.11** `c5670ee5f4efaf398ef44442201f249bb5c003af`. Откат — адресный обратный коммит от актуального `main` без force/reset; Netcup не развёртывался.
 
 ## Текущая передача — 5.10, параллельные независимые задачи 18.11.2026
 
