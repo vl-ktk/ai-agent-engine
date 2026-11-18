@@ -1,3 +1,17 @@
+# HANDOFF — 19.11.2026: Stage 6.14 Netcup Claude CLI PREP PASS / E2E BLOCKED
+
+**Источник:** `vl-ktk/ai-agent-engine/main`. Владелец поручил готовить Netcup под новый личный вход GPT/Claude без переноса старых OAuth токенов. Смена действующего Netcup release и запуск моделей не требовались.
+
+- **LIVE PASS:** [owner workflow #44424028255](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44424028255), result `STAGE6_14_CLAUDE_PREP`: `CLI_READY_FOR_OWNER_LOGIN`, `installed_now=true`, `claude_cli_usable=true`, `models_invoked=false`, `release_unchanged=true`, `services_healthy=true`.
+- Установлен **официальный Claude Code CLI** под непривилегированным `ae-runtime`, системный entrypoint `/usr/local/bin/claude` ссылается на пользовательский `~/.local/bin/claude`; версия CLI проверена реальным запуском. Личные авторизации не трогались.
+- Backend уже содержит `ai_agent_engine.auth` для GPT SIWC. **GPT OAuth не проводился**, Claude Pro login тоже **не проводился**. Для GPT текущий код использует `127.0.0.1` + динамический порт; открыть ссылку напрямую с iPhone нельзя. Нужны либо браузер на VM/правильное локальное туннелирование, либо официальный локальный SIWC-вход с защищённым переносом сессии на VM с отдельным host ID.
+- Проверка перед привилегированным SSH: **664 Python unittest**, source scan, workflow scan, wheel manifest PASS. Сервис `ae-controller` и оба timer проверены до и после установки. **Production engine deploy отсутствует**, release `0e04af007375d82daf8f7d3b36c71abb0c784e0b` не менялся; прежний rollback release `85375103800845eeff696e53f510c66c428408ed`. Новый script commit `e65aabeacb869241a5b5a514486b2465bad0782c`, owner request commit `f4e3164d91c7a5c53b77f3e951edf14da85e5cee`.
+- **Следующий шаг:** личная интерактивная авторизация обоих провайдеров под одной и той же VPS учётной записью `ae-runtime` (без вывода токенов в Actions/чат/GitHub); затем один `python3 -m ai_agent_engine.task_stage6_14_acceptance --live --owner-approved --provider both` под этой учётной записью, только при явной готовности двух сессий. После проверки status/audit/SQLite/Git отметить 6.14 PASS или оставить BLOCKED.
+- Граница: этот успех **не доказывает** права на круглосуточное фоновое использование подписок. API/ключи/платные услуги не создавались. Временная авторизация для CI/Actions недопустима.
+- Для отката установки (если понадобится) нужен отдельный адресный owner script: снять только наш симлинк `/usr/local/bin/claude` после проверки target, затем управлять пользовательской установкой отдельно; не удалять новые файлы/сессии владельца без разрешения. Исходники откатывать адресным revert после проверки нового main; не force-push.
+
+---
+
 # HANDOFF — 19.11.2026: Stage 6.14 LIVE provider auth preflight BLOCKED
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`; административный канал Netcup уже работоспособен. Владелец поручил продолжить **именно 6.14**. Сам live E2E обеих моделей **НЕ выполнялся** и пункт остаётся [ ].
