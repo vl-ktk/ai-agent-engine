@@ -332,7 +332,7 @@ class TaskHTTPTests(unittest.TestCase):
         self.assertEqual(response.getheader("Cache-Control"), "no-store")
         self.assertEqual(metadata, {"status": "found", **{
             key: child[key] for key in ("task_id", "owner_id", "project_id",
-                                    "parent_task_id", "kind")}})
+                                    "parent_task_id", "kind")}, "depends_on": []})
         self.assertNotIn("SECRET", json.dumps(metadata))
         self.assertNotIn("Subtask", json.dumps(metadata))
         self.assertEqual(self.exchange(b"", method="GET",

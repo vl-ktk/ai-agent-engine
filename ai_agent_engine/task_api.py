@@ -1,4 +1,4 @@
-"""Stage 5.2: scoped task and subtask identities on loopback.
+"""Stages 5.1-5.3: scoped, loopback-only task admission and dependencies.
 
 Submissions stay in a process-local inbox. Owner identity is bound by trusted
 server configuration, NOT HTTP input. This is not client authentication,
@@ -16,12 +16,15 @@ from threading import Lock
 from typing import Type
 from uuid import uuid4
 
+from .task_dag import DependencyCycle, TaskDAG
+
 
 TASK_PATH = "/v1/tasks"
 MAX_BODY_BYTES = 49_152
 MAX_TITLE_CHARS = 1_024
 MAX_PROMPT_CHARS = 32_768
 DEFAULT_MAX_PENDING = 128
+MAX_DEPENDENCIES = 64
 _PROJECT_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
 _REQUIRED_FIELDS = frozenset({"project_id", "title", "prompt"})
 _OPTIONAL_FIELDS = frozenset({"parent_task_id"})
@@ -46,6 +49,14 @@ class ProjectForbidden(PermissionError):
 
 class ParentNotFound(LookupError):
     """Parent is absent or belongs to a different owner/project."""
+
+
+class TaskNotFound(LookupError):
+    """Target task is absent or outside the owner's scope."""
+
+
+class DependencyNotFound(LookupError):
+    """A prerequisite is absent or outside the target task's scope."""
 
 
 @dataclass(frozen=True)
@@ -111,16 +122,19 @@ def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def parse_submission(data: bytes) -> TaskSubmission:
-    """Validate exact fields, types and UTF-8; never execute input."""
+def _decode_json(data: bytes) -> object:
     if not isinstance(data, bytes) or not 0 < len(data) <= MAX_BODY_BYTES:
         raise InvalidJSON("invalid JSON body size")
     try:
-        payload = json.loads(
-            data.decode("utf-8", errors="strict"), object_pairs_hook=_unique_object,
-        )
+        return json.loads(data.decode("utf-8", errors="strict"),
+                          object_pairs_hook=_unique_object)
     except (ValueError, UnicodeError, RecursionError) as exc:
         raise InvalidJSON("invalid JSON request") from exc
+
+
+def parse_submission(data: bytes) -> TaskSubmission:
+    """Validate exact fields, types and UTF-8; never execute input."""
+    payload = _decode_json(data)
     if (not isinstance(payload, dict)
             or not _REQUIRED_FIELDS <= set(payload)
             or not set(payload) <= _REQUIRED_FIELDS | _OPTIONAL_FIELDS):
@@ -150,6 +164,20 @@ def parse_submission(data: bytes) -> TaskSubmission:
                           parent_task_id=parent_task_id)
 
 
+def parse_dependency_update(data: bytes) -> tuple[str, ...]:
+    """Accept exactly {'depends_on': [canonical task IDs]}, up to 64 edges."""
+    payload = _decode_json(data)
+    if not isinstance(payload, dict) or set(payload) != {"depends_on"}:
+        raise InvalidTask("expected depends_on field")
+    identifiers = payload["depends_on"]
+    if (type(identifiers) is not list or len(identifiers) > MAX_DEPENDENCIES
+            or any(type(identifier) is not str or not _TASK_ID.fullmatch(identifier)
+                   for identifier in identifiers)
+            or len(identifiers) != len(set(identifiers))):
+        raise InvalidTask("invalid dependency identifiers")
+    return tuple(identifiers)
+
+
 class TaskInbox:
     """Thread-safe volatile records with scoped access and random task IDs."""
 
@@ -159,6 +187,7 @@ class TaskInbox:
         self._lock = Lock()
         self._pending: list[TaskRecord] = []
         self._by_id: dict[str, TaskRecord] = {}
+        self._dag = TaskDAG()
         self._next_receipt = 1
         self._max_pending = max_pending
 
@@ -188,6 +217,7 @@ class TaskInbox:
                                 receipt=receipt, submission=submission)
             self._pending.append(record)
             self._by_id[task_id] = record
+            self._dag.add_task(task_id, receipt)
             return record
 
     def snapshot(self, scope: OwnerScope) -> tuple[TaskRecord, ...]:
@@ -211,6 +241,61 @@ class TaskInbox:
                     or record.project_id not in scope.project_ids):
                 return None
             return record
+
+    def _scoped_record(self, task_id: str, scope: OwnerScope) -> TaskRecord:
+        """Call only with the inbox lock held."""
+        record = self._by_id.get(task_id)
+        if (record is None or record.owner_id != scope.owner_id
+                or record.project_id not in scope.project_ids):
+            raise TaskNotFound("task unavailable in owner scope")
+        return record
+
+    def set_dependencies(self, task_id: str, prerequisites: tuple[str, ...],
+                         scope: OwnerScope) -> tuple[str, ...]:
+        """Validate scope, cross-project edges and cycles under one lock."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            raise TaskNotFound("invalid task identifier")
+        if (type(prerequisites) is not tuple or len(prerequisites) > MAX_DEPENDENCIES
+                or any(type(dep) is not str or not _TASK_ID.fullmatch(dep)
+                       for dep in prerequisites)
+                or len(prerequisites) != len(set(prerequisites))):
+            raise InvalidTask("invalid prerequisite list")
+        with self._lock:
+            target = self._scoped_record(task_id, scope)
+            for dependency_id in prerequisites:
+                dependency = self._by_id.get(dependency_id)
+                if (dependency is None or dependency.owner_id != target.owner_id
+                        or dependency.project_id != target.project_id):
+                    raise DependencyNotFound("prerequisite unavailable in task scope")
+            self._dag.set_dependencies(task_id, prerequisites)
+            return self._dag.dependencies(task_id)
+
+    def dependencies(self, task_id: str, scope: OwnerScope) -> tuple[str, ...]:
+        """Return prerequisites only for an owned task."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        with self._lock:
+            self._scoped_record(task_id, scope)
+            return self._dag.dependencies(task_id)
+
+    def topological_order(self, project_id: str, scope: OwnerScope) -> tuple[str, ...]:
+        """Return project tasks with all prerequisites before dependents.
+
+        Stable admission-order tie breaking is deliberately not prioritization.
+        """
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(project_id) is not str or not _PROJECT_ID.fullmatch(project_id):
+            raise ValueError("invalid project identifier")
+        if project_id not in scope.project_ids:
+            raise ProjectForbidden("project outside configured scope")
+        with self._lock:
+            ids = tuple(record.task_id for record in self._pending
+                        if record.owner_id == scope.owner_id
+                        and record.project_id == project_id)
+            return self._dag.topological_order(ids)
 
 
 def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHandler]:
@@ -238,42 +323,49 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             self.end_headers()
             self.wfile.write(body)
 
-        def do_POST(self) -> None:
-            if self.path != TASK_PATH:
-                self._reply(404, "not_found")
-                return
+        def _read_body(self) -> bytes | None:
+            """Shared bounded HTTP body parsing for POST and PUT."""
             if self.headers.get("Transfer-Encoding") is not None:
                 self._reply(400, "invalid_length")
-                return
+                return None
             lengths = self.headers.get_all("Content-Length") or []
             if not lengths:
                 self._reply(411, "length_required")
-                return
+                return None
             if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit():
                 self._reply(400, "invalid_length")
-                return
+                return None
             if len(lengths[0]) > 5:
                 self._reply(413, "body_too_large")
-                return
+                return None
             length = int(lengths[0])
             if length > MAX_BODY_BYTES:
                 self._reply(413, "body_too_large")
-                return
+                return None
             if length == 0:
                 self._reply(400, "invalid_json")
-                return
+                return None
             media_type = self.headers.get("Content-Type", "").lower().replace(" ", "")
             if media_type not in ("application/json", "application/json;charset=utf-8"):
                 self._reply(415, "unsupported_media_type")
-                return
+                return None
             try:
                 self.connection.settimeout(5)
                 data = self.rfile.read(length)
             except OSError:
                 self.close_connection = True
-                return
+                return None
             if len(data) != length:
                 self._reply(400, "incomplete_body")
+                return None
+            return data
+
+        def do_POST(self) -> None:
+            if self.path != TASK_PATH:
+                self._reply(404, "not_found")
+                return
+            data = self._read_body()
+            if data is None:
                 return
             try:
                 submission = parse_submission(data)
@@ -301,6 +393,18 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             if self.path == TASK_PATH:
                 self._reply(405, "method_not_allowed")
                 return
+            if self.path.startswith("/v1/projects/") and self.path.endswith("/task-order"):
+                project_id = self.path[len("/v1/projects/"):-len("/task-order")]
+                if not _PROJECT_ID.fullmatch(project_id):
+                    self._reply(404, "not_found")
+                    return
+                try:
+                    ordered = inbox.topological_order(project_id, scope)
+                except ProjectForbidden:
+                    self._reply(403, "project_forbidden")
+                    return
+                self._reply(200, "ordered", project_id=project_id, task_ids=ordered)
+                return
             if not self.path.startswith(TASK_PATH + "/"):
                 self._reply(404, "not_found")
                 return
@@ -309,10 +413,43 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
             if record is None:
                 self._reply(404, "not_found")
                 return
-            self._reply(200, "found", **record.metadata())
+            self._reply(200, "found", **record.metadata(),
+                        depends_on=inbox.dependencies(task_id, scope))
 
         def do_PUT(self) -> None:
-            self._reply(405, "method_not_allowed")
+            prefix = TASK_PATH + "/"
+            suffix = "/dependencies"
+            if not self.path.startswith(prefix) or not self.path.endswith(suffix):
+                self._reply(405, "method_not_allowed")
+                return
+            task_id = self.path[len(prefix):-len(suffix)]
+            if not _TASK_ID.fullmatch(task_id):
+                self._reply(404, "not_found")
+                return
+            data = self._read_body()
+            if data is None:
+                return
+            try:
+                prerequisites = parse_dependency_update(data)
+            except InvalidJSON:
+                self._reply(400, "invalid_json")
+                return
+            except InvalidTask:
+                self._reply(422, "invalid_dependencies")
+                return
+            try:
+                depends_on = inbox.set_dependencies(task_id, prerequisites, scope)
+            except TaskNotFound:
+                self._reply(404, "not_found")
+                return
+            except DependencyNotFound:
+                self._reply(404, "dependency_not_found")
+                return
+            except DependencyCycle:
+                self._reply(409, "dependency_cycle")
+                return
+            self._reply(200, "dependencies_updated", task_id=task_id,
+                        depends_on=depends_on)
 
         def do_DELETE(self) -> None:
             self._reply(405, "method_not_allowed")
