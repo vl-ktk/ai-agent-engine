@@ -144,7 +144,14 @@ def stage_release(
         # Installer/import subprocesses use 022 even when the admin job uses 077.
         # TemporaryDirectory defaults to 0700; the non-root service must read
         # root-owned release code, while never being able to modify it.
-        os.chmod(staging, 0o755)
+        # venv may copy template modes from its host interpreter. Normalize only
+        # files inside this verified release, never interpreter/lib64 symlinks.
+        for directory, _, files in os.walk(staging, followlinks=False):
+            os.chmod(directory, 0o755)
+            for name in files:
+                path = Path(directory) / name
+                if not path.is_symlink():
+                    os.chmod(path, 0o755 if path.stat().st_mode & 0o111 else 0o644)
         # Atomic within the same filesystem; no current symlink or service touched.
         if target.exists() or target.is_symlink():
             raise PromotionError("Release appeared concurrently; refusing overwrite")
