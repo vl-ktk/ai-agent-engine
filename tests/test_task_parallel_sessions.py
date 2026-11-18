@@ -153,8 +153,8 @@ class ParallelProviderSessionsTests(unittest.TestCase):
             self.assertFalse(runner.execute(task_id, "gpt-slot" if provider == "gpt"
                                                   else "claude-slot").executed)
             self.assertEqual(len(runner.provider_history(task_id)), 1)
-        self.assertEqual(gpt.control.watchdog_errors(), ())
-        self.assertEqual(claude.control.watchdog_errors(), ())
+        self.assertEqual(gpt.control.watchdog_errors, ())
+        self.assertEqual(claude.control.watchdog_errors, ())
 
         # New SQLite owner can see both results; no re-dispatch on restart.
         for runner in self.runners:
