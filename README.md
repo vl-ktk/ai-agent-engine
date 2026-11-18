@@ -31,6 +31,13 @@ read/write grants; traversal, symlink, hardlink and path-swap attacks are
 covered offline. This is **file-tool confinement**, not a process OS sandbox;
 GPT/Claude live workers still have no file tools enabled.
 
+**Stage 6.7 [x]:** A [task-bound command runner](./infra/orchestrator/TASK_COMMANDS.md)
+allows only four fixed Git/syntax-check/unittest command IDs, with exact
+worker/task permissions, sanitized subprocess environment, timeout and output
+bounds; actual unit test execution additionally requires owner-side trusted
+opt-in and a write grant. It is not a general shell/build tool or OS sandbox
+(stage 6.8). No live GPT/Claude or Netcup deployment is included.
+
 > **Status: offline agent demo + real ChatGPT OAuth login verified on 2026-11-16.**
 > A real ChatGPT Plus GPT-6.1-sol reply **was verified by the owner** on 2026-11-16.
 > **2026-11-17: one combined live acceptance passed all 12 stages** — GPT `gpt-6.1-sol` reply plus native

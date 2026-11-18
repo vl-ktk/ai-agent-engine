@@ -1,6 +1,16 @@
-# HANDOFF — 2026-11-18: 6.6 безопасные workspace file tools; следующий 6.7
+# HANDOFF — 2026-11-18: 6.7 точечные task commands; следующий 6.8
 
 **Источник истины:** `vl-ktk/ai-agent-engine`, `main`, `IMPLEMENTATION_ROADMAP.md` (11 этапов / 169 прямых подпунктов).
+
+## Текущая передача — 6.7: безопасные команды по грантам
+
+- **Статус:** `6.7 [x]` — четыре фиксированные операции Git/status, Git/diff-check, Python syntax-check и unittest связаны с task/worker/`RUNNING`/грантами. **14 новых offline-тестов PASS**; полный регресс, скрипты проверки и SHA фиксации сверить перед публикацией. **Следующий `6.8 [ ]`** — OS-изоляция среды исполнителя и защита секретов, только после новой команды Владислава. [Протокол](./infra/orchestrator/TASK_COMMANDS.md).
+- **Исходник/откат:** `vl-ktk/ai-agent-engine`, `main`. До 6.7 подтверждён `c4af65fd983d15353a48cec298e0292d57e8cb03` (6.6). Новый SHA проверяется после публикации; откат — адресным revert commit на актуальном `main`, **не** force/reset. Netcup release не менялся.
+- **Код:** новый `ai_agent_engine/task_commands.py` — `TaskCommandRunner`, allowlist из точных команд без user argv; trusted SQLite assignment и root inode, приватный cwd FD, `TaskPermissionGate`, очищенный environment, Git fsmonitor/hooks отключены, no stdin, stdout до 4096 байт, deadlines 10/15/60 s и kill дочерней process group. Все требуют `EXECUTE_TOOL`; unittest также `WRITE_WORKSPACE` и trusted constructor opt-in. Интеграция с `Agent` через `allowed_tools()` только `run_vetted_command(command_id)`; не добавлено в реальные GPT/Claude adapters.
+- **Тесты:** `tests/test_task_commands.py` — 14 реальных изолированных Linux-тестов: старт/отказ по grants, owner, worker, `RUNNING`, TTL, injection, fake model Action, опасная локальная Git fsmonitor config, чужие API env, подмена workspace symlink, реальный syntax/pytest-free unittest, diff check failure, overflow/timeout. Никаких онлайн-вызовов.
+- **Границы:** **не** ОС-sandbox. При доверенном запуске unittest код может получить доступные OS-пользователю файловые/сетевые права; `WRITE_WORKSPACE` не является OS-ограничением. Изоляция секретов и окружения для всего worker — 6.8, orphan cleanup — 6.9. Никаких расходов, Netcup/production/реальных поставщиков/прав/секретов не меняли.
+
+## Историческая передача — 6.6: ограниченные файловые операции
 
 ## Текущая передача — 6.6: ограниченные файловые операции
 
