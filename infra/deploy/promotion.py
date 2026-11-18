@@ -123,7 +123,8 @@ def stage_release(
         raise PromotionError("Release already exists; refusing overwrite")
     with TemporaryDirectory(prefix=".staging-", dir=releases) as temporary:
         staging = Path(temporary)
-        subprocess.run([interpreter, "-m", "venv", str(staging / "venv")], check=True)
+        subprocess.run([interpreter, "-m", "venv", str(staging / "venv")], check=True,
+                       umask=0o022)
         executable = staging / "venv" / "bin" / "python"
         if not executable.is_file():
             raise PromotionError("Expected POSIX isolated Python runtime not found")
@@ -131,14 +132,16 @@ def stage_release(
         environment.pop("PYTHONPATH", None)
         environment.pop("PYTHONHOME", None)
         subprocess.run([str(executable), "-I", "-m", "pip", "install", "--no-index",
-                        "--no-deps", str(wheel)], check=True, env=environment)
+                        "--no-deps", str(wheel)], check=True, env=environment, umask=0o022)
         subprocess.run([str(executable), "-I", "-c",
                         "from ai_agent_engine.controller import check_health, main; "
                         "assert main(['check', '--health-file', '/nonexistent/ae-health']) == 1"],
-                       check=True, env=environment, cwd=staging)
+                       check=True, env=environment, cwd=staging, umask=0o022)
         (staging / "release-manifest.json").write_text(
             json.dumps(data, sort_keys=True, indent=2) + "\n", encoding="utf-8",
         )
+        os.chmod(staging / "release-manifest.json", 0o644)
+        # Installer/import subprocesses use 022 even when the admin job uses 077.
         # TemporaryDirectory defaults to 0700; the non-root service must read
         # root-owned release code, while never being able to modify it.
         os.chmod(staging, 0o755)

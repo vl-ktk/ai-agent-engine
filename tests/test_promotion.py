@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+import zipfile
 from unittest.mock import patch
 
 from infra.deploy.promotion import (
@@ -117,6 +118,40 @@ class PromotionTests(unittest.TestCase):
                 stage_release(self.bundle, self.root, FIRST,
                               expected_wheel_sha256="0" * 64)
             installer.assert_not_called()
+
+
+    @unittest.skipUnless(os.name == "posix", "Release permissions require POSIX")
+    def test_real_staging_is_runtime_readable_under_private_admin_umask(self):
+        # A real minimal wheel, venv and pip install reproduce root-job umask 077.
+        with zipfile.ZipFile(self.wheel, "w") as wheel:
+            wheel.writestr("ai_agent_engine/__init__.py", "")
+            wheel.writestr("ai_agent_engine/controller.py",
+                          "def check_health(*args): return False\n"
+                          "def main(args): return 1\n")
+            prefix = "ai_agent_engine-0.3.8a0.dist-info/"
+            wheel.writestr(prefix + "METADATA",
+                          "Metadata-Version: 2.1\nName: ai-agent-engine\nVersion: 0.3.8a0\n")
+            wheel.writestr(prefix + "WHEEL",
+                          "Wheel-Version: 1.0\nGenerator: unittest\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+            wheel.writestr(prefix + "RECORD", "")
+        self.data["wheel_bytes"] = self.wheel.stat().st_size
+        self.digest = hashlib.sha256(self.wheel.read_bytes()).hexdigest()
+        self.data["wheel_sha256"] = self.digest
+        self._save()
+        previous_umask = os.umask(0o077)
+        try:
+            target = stage_release(self.bundle, self.root, FIRST,
+                                   expected_wheel_sha256=self.digest)
+        finally:
+            os.umask(previous_umask)
+        self.assertFalse((self.root / "current").exists())
+        for path in (target, *target.rglob("*")):
+            mode = path.stat().st_mode & 0o777
+            self.assertFalse(mode & 0o022, str(path))
+            if path.is_dir():
+                self.assertEqual(mode & 0o005, 0o005, str(path))
+            elif path.is_file():
+                self.assertTrue(mode & 0o004, str(path))
 
     def test_requires_exact_sha(self):
         for bad in ("", "main", "A" * 40, "a" * 39, "a" * 41):

@@ -77,6 +77,11 @@ def main():
     assert OLD != NEW
     (EVIDENCE / "rollback-release.txt").write_text(OLD + "\n")
     run("id")
+    failed = ROOT / "releases/4c5cf0903ca17c865ad38d85bcc6540f747017e0"
+    if failed.exists():
+        for path in (failed / "venv", failed / "venv/lib"):
+            print(f"DIAG previous failed stage {path.name} mode={oct(path.stat().st_mode & 0o777)}", flush=True)
+    run("journalctl", "-u", "ae-controller.service", "-n", "20", "--no-pager", "-o", "cat")
     run("visudo", "-c")
     ssh = subprocess.check_output(["/usr/sbin/sshd", "-T"], text=True)
     for expected in ("permitrootlogin no", "passwordauthentication no", "kbdinteractiveauthentication no"):
@@ -105,6 +110,8 @@ def main():
     digest = manifest["wheel_sha256"]
     promotion.stage_release(bundle, ROOT, NEW, expected_wheel_sha256=digest, interpreter="/usr/bin/python3")
     assert promotion.active_sha(ROOT) == OLD, "concurrent deployment"
+    run("runuser", "-u", "ae-runtime", "--", str(ROOT / "releases" / NEW / "venv/bin/python"),
+        "-I", "-c", "from ai_agent_engine.controller import check_health; print('PASS: staged code readable as ae-runtime')")
 
     # Compare-and-swap publication. Every failed health check returns to OLD.
     promoted = False
