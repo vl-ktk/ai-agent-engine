@@ -1,4 +1,4 @@
-"""Stages 5.1-5.6: scoped intake, durable ordering and task assignments.
+"""Stages 5.1-5.7: scoped intake, durable ordering and task lifecycle.
 
 Owner identity is bound by trusted server configuration, NOT HTTP input.
 Use --db for SQLite persistence; without it the inbox stays in memory.
@@ -21,6 +21,7 @@ from .task_assignment import (
     validate_worker, validate_workspace_name,
 )
 from .task_dag import DependencyCycle, TaskDAG
+from .task_state import TaskState
 from .task_storage import SQLiteTaskStore, StorageUnavailable
 
 
@@ -381,6 +382,24 @@ class TaskInbox:
                 return None
             return self._assignments.get(task_id)
 
+    def state(self, task_id: str, scope: OwnerScope) -> TaskState | None:
+        """Actual 5.7 state, derived from durable admission/immutable claim.
+
+        No RUNNING or terminal state is fabricated before a trusted execution
+        transition API and its durable audit are implemented in later stages.
+        """
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
+            return None
+        with self._lock:
+            try:
+                self._scoped_record(task_id, scope)
+            except TaskNotFound:
+                return None
+            return (TaskState.ASSIGNED if task_id in self._assignments
+                    else TaskState.QUEUED)
+
     def snapshot(self, scope: OwnerScope) -> tuple[TaskRecord, ...]:
         """Only inspect records belonging to the configured owner/projects."""
         if not isinstance(scope, OwnerScope):
@@ -706,6 +725,15 @@ def task_handler(inbox: TaskInbox, scope: OwnerScope) -> Type[BaseHTTPRequestHan
                     self._reply(404, "not_found")
                     return
                 self._reply(200, "assigned", **assignment.metadata())
+                return
+            if self.path.endswith("/state"):
+                task_id = self.path[len(TASK_PATH) + 1:-len("/state")]
+                state = inbox.state(task_id, scope)
+                if state is None:
+                    self._reply(404, "not_found")
+                    return
+                self._reply(200, "state_found", task_id=task_id,
+                            task_state=state.value)
                 return
             task_id = self.path[len(TASK_PATH) + 1:]
             record = inbox.get(task_id, scope)
