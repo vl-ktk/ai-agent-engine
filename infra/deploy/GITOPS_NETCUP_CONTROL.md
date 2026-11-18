@@ -1,8 +1,9 @@
 # Netcup GitOps control: read-only status and owner-approved releases
 
 **Status: READ-ONLY STATUS LIVE PASS; SIGNED RELEASE ACTIVATION PREPARED ONLY.** The
-scoped GitOps request launched GitHub Actions run 44402946575 on 18 November
-2026. SSH returned three active service/timer states and the live release
+initial scoped status run 44402946575 and **strict status re-test 44406398637**
+both succeeded on 18 November 2026. Strict check verified all three units
+active (each independently required) and the live controller release
 85375103800845eeff696e53f510c66c428408ed. Only the read-only channel
 has been verified; do not mark privileged activation, rollback or 6.14 PASS.
 

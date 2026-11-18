@@ -1,3 +1,15 @@
+# HANDOFF — 18.11.2026: Netcup GitOps strict read-only LIVE PASS, signed activation awaiting bootstrap
+
+- **Живой GitOps доступ из текущего ChatGPT → GitHub Action → Netcup SSH доказан.** Строгий повтор [run #44406398637](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44406398637): actor `vl-ktk`, three checked systemd units `active`, VPS release `85375103800845eeff696e53f510c66c428408ed`. Проверка теперь fail-closed, если хотя бы один unit inactive. Никакой записи на VPS.
+- **Подписанный release operator** опубликован как source-only изменение `49279ca267f037ab387c6c9086e85b91e844dfe5`: Linux CI Python 3.11/3.12/3.13 PASS, Python 3.12 `651 unittest OK`, wheel PASS; Windows CI FAIL из-за исторического отсутствия `fcntl`.
+- **Что блокирует пункты управления 2–3:** нет установленного на VPS root-owned оператора / разрешений и отдельного публичного signing key; GitHub Actions secret `AE_RELEASE_SIGNING_PRIVATE_KEY` не настроен. Изменение прав, создание секрета и привилегированный bootstrap требуют отдельного владельческого разрешения и консольного доступа. Не утверждать LIVE activation/rollback. Нельзя использовать старый небезопасный оператор без подписи.
+- **6.14 [ ] LIVE BLOCKED**, модели на Netcup не проверены. Предыдущий GitHub `main` для отката этого документального коммита: `de1feba7d2bb3cb602d06fb6e8c6b410e904861c`; откат только адресным revert после сверки текущего HEAD.
+- Следующий шаг: после авторизованного root bootstrap и ключей провести owner-approved подписанную публикацию на **существующем** Netcup с baseline SHA и тестовым rollback. Рабочие данные не изменять.
+
+[Подробный протокол](./infra/deploy/GITOPS_NETCUP_CONTROL.md).
+
+---
+
 # HANDOFF — 2026-11-18: signed owner release authorization hardening (SOURCE ONLY)
 
 **Источник:** `vl-ktk/ai-agent-engine/main` — исходная версия этой ветки `2dd423073835912f2941ef59c1a2988fda797d91`. Рабочая ветка `infra/netcup-release-auth-hardening-20261118`. На Netcup последняя ЖИВО проверенная версия контроллера `85375103800845eeff696e53f510c66c428408ed`, GitOps SSH status PASS [run #44402946575](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44402946575).
