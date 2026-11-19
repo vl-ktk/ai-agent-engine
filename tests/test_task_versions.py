@@ -136,7 +136,7 @@ class VersionRecordingTests(unittest.TestCase):
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.db), workspace_root=self.root)
         self.recorder = TaskSourceVersionRecorder(self.inbox, OWNER)
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(), (10,))
+            "PRAGMA user_version").fetchone(), (11,))
         for tid, receipt in copies:
             self.assertEqual(self.recorder.read_version(tid), receipt)
             self.assertEqual(self.recorder.verify_version(tid), receipt)
@@ -295,7 +295,7 @@ class VersionRecordingTests(unittest.TestCase):
         self.recorder = TaskSourceVersionRecorder(self.inbox, OWNER)
         self.assertIs(self.inbox.state(tid, OWNER), TaskState.QUEUED)
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(), (10,))
+            "PRAGMA user_version").fetchone(), (11,))
 
 
 if __name__ == "__main__":

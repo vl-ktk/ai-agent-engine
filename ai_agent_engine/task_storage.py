@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 10  # v10 adds immutable task-scoped Git source version receipts.
+SCHEMA_VERSION = 11  # v11 adds immutable owner approvals for AI-orchestrated intake.
 
 
 class StorageUnavailable(RuntimeError):
@@ -101,9 +101,10 @@ class SQLiteTaskStore:
                 self._create_process_table(db)
                 self._create_artifact_tables(db)
                 self._create_source_version_table(db)
+                self._create_owner_approval_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -136,6 +137,7 @@ class SQLiteTaskStore:
                 self._create_process_table(db)
                 self._create_artifact_tables(db)
                 self._create_source_version_table(db)
+                self._create_owner_approval_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -439,8 +441,31 @@ class SQLiteTaskStore:
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot load task database") from exc
 
+    @staticmethod
+    def _create_owner_approval_table(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE IF NOT EXISTS task_owner_approvals (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            proposal_id TEXT NOT NULL,
+            channel TEXT NOT NULL CHECK(channel IN ('message','button')),
+            proposal_sha256 TEXT NOT NULL CHECK(length(proposal_sha256) = 64),
+            approved_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            UNIQUE(owner_id,project_id,proposal_id)
+        )""")
+
+    def owner_approval(self, task_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT owner_id,project_id,proposal_id,
+                channel,proposal_sha256 FROM task_owner_approvals WHERE task_id=?""",
+                (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read owner approval") from exc
+
     def insert_task(self, record, *, key_hash: str | None = None,
-                    payload_hash: str | None = None) -> None:
+                    payload_hash: str | None = None,
+                    owner_approval: tuple[str, str, str] | None = None) -> None:
         try:
             with self._db() as db:
                 db.execute("""INSERT INTO tasks
@@ -457,6 +482,12 @@ class SQLiteTaskStore:
                         (owner_id,project_id,key_hash,payload_hash,task_id)
                         VALUES (?,?,?,?,?)""", (record.owner_id, record.project_id,
                                                   key_hash, payload_hash, record.task_id))
+                if owner_approval is not None:
+                    proposal_id, channel, proposal_sha256 = owner_approval
+                    db.execute("""INSERT INTO task_owner_approvals
+                        (task_id,owner_id,project_id,proposal_id,channel,proposal_sha256)
+                        VALUES (?,?,?,?,?,?)""", (record.task_id,record.owner_id,
+                            record.project_id,proposal_id,channel,proposal_sha256))
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot persist task") from exc
 

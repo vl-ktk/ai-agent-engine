@@ -43,6 +43,8 @@ _REQUIRED_FIELDS = frozenset({"project_id", "title", "prompt"})
 _OPTIONAL_FIELDS = frozenset({"parent_task_id", "priority"})
 _TASK_ID = re.compile(r"(?:task|subtask)_[0-9a-f]{32}\Z")
 _IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
+_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_PROPOSAL_ID = re.compile(r"proposal_[0-9a-f]{32}\Z")
 
 
 class InvalidJSON(ValueError):
@@ -84,6 +86,28 @@ class TaskSubmission:
     prompt: str
     parent_task_id: str | None = None
     priority: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class OwnerApprovalProof:
+    """Trusted owner-intake receipt, never constructed from model output.
+
+    Authentication of the owner and confirmation of the displayed proposal
+    belong to the trusted caller. This object is not an ActionGrant.
+    """
+
+    proposal_id: str
+    channel: str
+    proposal_sha256: str
+
+    def __post_init__(self) -> None:
+        if (type(self.proposal_id) is not str
+                or not _PROPOSAL_ID.fullmatch(self.proposal_id)
+                or self.channel not in ("message", "button")
+                or type(self.channel) is not str
+                or type(self.proposal_sha256) is not str
+                or not _SHA256.fullmatch(self.proposal_sha256)):
+            raise InvalidTask("invalid owner approval")
 
 
 @dataclass(frozen=True)
@@ -361,7 +385,8 @@ class TaskInbox:
             raise StorageUnavailable("invalid persisted task graph") from exc
 
     def accept(self, submission: TaskSubmission, scope: OwnerScope,
-               *, idempotency_key: str | None = None) -> TaskRecord:
+               *, idempotency_key: str | None = None,
+               owner_approval: OwnerApprovalProof | None = None) -> TaskRecord:
         """Admit a task once per trusted owner/project/key and exact payload.
 
         With no key this retains the original 5.1 API behaviour. Replays of
@@ -377,6 +402,11 @@ class TaskInbox:
         if idempotency_key is not None and (type(idempotency_key) is not str
                                              or not _IDEMPOTENCY_KEY.fullmatch(idempotency_key)):
             raise InvalidTask("invalid idempotency key")
+        if owner_approval is not None and (
+                not isinstance(owner_approval, OwnerApprovalProof)
+                or idempotency_key != owner_approval.proposal_id
+                or self._store is None):
+            raise InvalidTask("owner approval requires durable keyed admission")
         with self._lock:
             if submission.project_id not in scope.project_ids:
                 raise ProjectForbidden("project outside configured scope")
@@ -402,6 +432,11 @@ class TaskInbox:
                         raise IdempotencyConflict("idempotency key reused for different task")
                     if previous_id not in self._by_id:
                         raise StorageUnavailable("idempotent task record is missing")
+                    if owner_approval is not None and self._store.owner_approval(previous_id) != (
+                            scope.owner_id, submission.project_id,
+                            owner_approval.proposal_id, owner_approval.channel,
+                            owner_approval.proposal_sha256):
+                        raise IdempotencyConflict("owner approval does not match receipt")
                     return self._by_id[previous_id]
             if submission.parent_task_id is not None:
                 parent = self._by_id.get(submission.parent_task_id)
@@ -421,7 +456,11 @@ class TaskInbox:
             if self._store is not None:
                 self._store.insert_task(record,
                     key_hash=key_ref[2] if key_ref else None,
-                    payload_hash=fingerprint)  # atomic task + key before ACK
+                    payload_hash=fingerprint,
+                    owner_approval=(owner_approval.proposal_id,
+                                    owner_approval.channel,
+                                    owner_approval.proposal_sha256)
+                    if owner_approval is not None else None)  # atomic approval + task + key
             self._next_receipt += 1
             self._pending.append(record)
             self._by_id[task_id] = record
@@ -590,6 +629,16 @@ class TaskInbox:
             raise TypeError("expected a trusted OwnerScope")
         with self._lock:
             return tuple(record for record in self._pending
+                         if record.owner_id == scope.owner_id
+                         and record.project_id in scope.project_ids)
+
+    def scoped_state_snapshot(self, scope: OwnerScope) -> tuple[tuple[TaskRecord, TaskState], ...]:
+        """Coherent owner-scoped task+state view for the AI context builder."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        with self._lock:
+            return tuple((record, self._states[record.task_id])
+                         for record in self._pending
                          if record.owner_id == scope.owner_id
                          and record.project_id in scope.project_ids)
 
