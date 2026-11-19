@@ -20,6 +20,16 @@ ROOT = Path('/opt/ai-agent-engine')
 EXPECTED = os.environ.get('AE_EXPECTED_CURRENT', '')
 AUTH = Path('/run/ae-stage614-browser/Xauthority')
 PYTHON = ROOT / 'owner-siwc-6-14/venv/bin/python'
+LONG_LOGIN_COMMAND = (
+    'from ai_agent_engine.siwc import AuthError, login\n'
+    'try:\n'
+    '    result = login(timeout=900)\n'
+    'except AuthError as exc:\n'
+    "    print('Login unavailable:', exc)\n"
+    'else:\n'
+    "    print('Identity verified. ChatGPT plan permission:', "
+    "'GRANTED' if result['sharing_enabled'] else 'NOT GRANTED')\n"
+)
 
 
 def run(args: list[str], timeout: int = 18) -> bool:
@@ -47,8 +57,8 @@ def main() -> None:
             Path('/tmp/.X11-unix/X14').is_socket()):
         raise SystemExit('owner GPT login runtime or display is missing')
     if run(['systemctl', 'is-active', '--quiet',
-            'ae614-gpt-login-refresh.service']):
-        raise SystemExit('current GPT login terminal is already open')
+            'ae614-gpt-login-long.service']):
+        raise SystemExit('long GPT login terminal is already open')
     home = Path(pwd.getpwnam('ae-runtime').pw_dir)
     if not home.is_dir() or not run([
         '/usr/sbin/runuser', '-u', 'ae-runtime', '--',
@@ -64,7 +74,8 @@ def main() -> None:
         raise SystemExit('owner SIWC CLI status is not healthy')
     # Close only our earlier timed-out temporary terminals.
     for obsolete in ('ae614-gpt-login.service',
-                     'ae614-gpt-login-retry.service'):
+                     'ae614-gpt-login-retry.service',
+                     'ae614-gpt-login-refresh.service'):
         if run(['systemctl', 'is-active', '--quiet', obsolete]):
             if not run(['systemctl', 'stop', obsolete]):
                 raise SystemExit('could not close timed-out temporary terminal')
@@ -80,8 +91,8 @@ def main() -> None:
         'PATH': str(home / '.local/bin') + ':/usr/local/bin:/usr/bin:/bin',
     }
     args = [
-        'systemd-run', '--unit=ae614-gpt-login-refresh',
-        '--uid=ae-runtime', '--property=RuntimeMaxSec=720',
+        'systemd-run', '--unit=ae614-gpt-login-long',
+        '--uid=ae-runtime', '--property=RuntimeMaxSec=1050',
         '--property=NoNewPrivileges=yes',
     ]
     for key, value in environment.items():
@@ -92,13 +103,13 @@ def main() -> None:
         '-fa', 'DejaVu Sans Mono', '-fs', '14',
         '-geometry', '103x26+30+45',
         '-bg', '#10141c', '-fg', '#f5f5f5',
-        '-e', str(PYTHON), '-I', '-m', 'ai_agent_engine.auth', 'login',
+        '-e', str(PYTHON), '-I', '-c', LONG_LOGIN_COMMAND,
     ]
     if not run(args):
         raise SystemExit('GPT owner login terminal could not start')
     time.sleep(3)
     if not run(['systemctl', 'is-active', '--quiet',
-                'ae614-gpt-login-refresh.service']):
+                'ae614-gpt-login-long.service']):
         raise SystemExit('GPT login terminal exited immediately')
     print('STAGE6_14_GPT_LOGIN ' + json.dumps({
         'status': 'INTERACTIVE_OWNER_LOGIN_STARTED_ON_VPS',
@@ -106,8 +117,8 @@ def main() -> None:
         'account': 'ae-runtime',
         'home_selected_from_os_account': True,
         'browser_on_callback_host': True,
-        'login_timeout_seconds': 300,
-        'terminal_max_seconds': 720,
+        'login_timeout_seconds': 900,
+        'terminal_max_seconds': 1050,
         'authorization_completed': False,
         'tokens_exported': False,
         'models_invoked': False,
