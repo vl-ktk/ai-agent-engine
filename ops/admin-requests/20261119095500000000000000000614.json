@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "20261119095500000000000000000614",
+  "source_sha": "48b381be85f851f6a122916e7825d1d88f24c224",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_auth_prereqs.py",
+  "script_sha256": "8e9ee4158d7f92251c544cf2312370de478c6cd032bbebab8705d78b1cf31e64"
+}
