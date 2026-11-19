@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "20261119105000000000000000000614",
+  "source_sha": "ca6e6c9e2ce8aec95ef8239f7ddc75f8c6ee5995",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_gui_feasibility.py",
+  "script_sha256": "a2024359ff13b5960cafcde83303d17e7e1a72fe77a055afd6eba8b959f1ad03"
+}
