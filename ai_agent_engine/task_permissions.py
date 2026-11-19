@@ -109,6 +109,15 @@ class TaskPermissionGate:
         validate_worker(actor_id)
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected trusted OwnerScope")
+        # Gate-checked callbacks can run after the inbox lock is released.
+        # A transfer must wait for them to finish, including their side effects.
+        with self.inbox._transfer_barrier(task_id,scope):
+            return self._run_under_transfer_barrier(
+                task_id,scope,actor_id=actor_id,action=action,operation=operation)
+
+    def _run_under_transfer_barrier(self, task_id: str, scope: OwnerScope,
+                                    *, actor_id: str, action: ProtectedAction,
+                                    operation: Callable[[], _T]) -> _T:
         with self.inbox._lock:
             record = self.inbox._scoped_record(task_id, scope)
             assignment = self.inbox._assignments.get(task_id)
@@ -116,6 +125,10 @@ class TaskPermissionGate:
             kind = "assigned_worker" if matched else "other_worker"
             if not matched:
                 reason = "worker_mismatch"
+            elif self.inbox._store.transfer_has_started(task_id):
+                # The v14 attempt chain supersedes the legacy immutable
+                # assignment; its old grants cannot authorize new actions.
+                reason = "transfer_reassigned"
             elif self.inbox._states[task_id] is not TaskState.RUNNING:
                 reason = "task_not_running"
             elif self.inbox._store.emergency_held(scope.owner_id, record.project_id):

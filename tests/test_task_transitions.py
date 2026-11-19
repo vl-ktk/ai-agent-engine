@@ -277,7 +277,7 @@ class StateTransitionTests(unittest.TestCase):
         store.close()
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.path), workspace_root=self.root)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                             (13,))
+                             (14,))
         self.assertIs(self.inbox.state(claimed, OWNER), TaskState.ASSIGNED)
         self.assertIs(self.inbox.state(unclaimed, OWNER), TaskState.QUEUED)
         self.assertEqual(self.history(claimed), ())  # old v2 has no audit

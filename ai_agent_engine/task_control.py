@@ -118,6 +118,10 @@ class TaskProcessController:
             assignment = self.inbox.get_assignment(task_id, scope)
             if assignment is None:
                 raise TaskNotFound("task has no assignment in owner scope")
+            if self.inbox._store is not None:
+                with self.inbox._lock:
+                    if self.inbox._store.transfer_has_started(task_id):
+                        raise TaskControlError("task assignment was superseded")
             if actor_id != assignment.worker_id:
                 raise TaskControlError("worker does not own assigned task")
             if self.inbox.state(task_id, scope) is not TaskState.ASSIGNED:
@@ -384,6 +388,9 @@ class TaskProcessController:
             assignment = self.inbox.get_assignment(task_id, scope)
             if assignment is None or assignment.worker_id != actor_id:
                 raise TaskControlError("worker does not own task assignment")
+            with self.inbox._lock:
+                if self.inbox._store.transfer_has_started(task_id):
+                    raise TaskControlError("task assignment was superseded")
             if self.inbox.state(task_id, scope) is not TaskState.RUNNING:
                 raise TaskControlError("retry requires a running logical task")
             if self.inbox._store is None:

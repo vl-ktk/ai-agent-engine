@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 13  # v13 adds approved specialist teams and pinned task assignments.
+SCHEMA_VERSION = 14  # v14: owner-approved reassignment attempts and checkpoints.
 
 
 class StorageUnavailable(RuntimeError):
@@ -104,9 +104,10 @@ class SQLiteTaskStore:
                 self._create_owner_approval_table(db)
                 self._create_plan_table(db)
                 self._create_specialist_tables(db)
+                self._create_transfer_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -141,8 +142,9 @@ class SQLiteTaskStore:
                 self._create_source_version_table(db)
                 self._create_owner_approval_table(db)
                 self._create_plan_table(db)
-                if version <= 12:
-                    # The v12 audit CHECK lacks explicit revocation/hold outcomes.
+                if version <= 13:
+                    # v14 adds a fail-closed denial after transfer approval;
+                    # v13 and earlier permission audit CHECK lacks that reason.
                     db.execute("ALTER TABLE task_permission_audit "
                                "RENAME TO task_permission_audit_v12")
                     self._create_permission_audit_table(db)
@@ -152,6 +154,7 @@ class SQLiteTaskStore:
                         FROM task_permission_audit_v12""")
                     db.execute("DROP TABLE task_permission_audit_v12")
                 self._create_specialist_tables(db)
+                self._create_transfer_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -231,7 +234,7 @@ class SQLiteTaskStore:
             reason_code TEXT NOT NULL CHECK(reason_code IN
                 ('granted','grant_missing','grant_expired','grant_revoked',
                  'emergency_hold','role_policy_denied',
-                 'worker_mismatch','task_not_running')),
+                 'worker_mismatch','task_not_running','transfer_reassigned')),
             principal_kind TEXT NOT NULL CHECK(principal_kind IN
                 ('assigned_worker','other_worker')),
             occurred_at TEXT NOT NULL DEFAULT
@@ -608,6 +611,77 @@ class SQLiteTaskStore:
             active INTEGER NOT NULL CHECK(active IN (0,1)),
             PRIMARY KEY(owner_id,project_id)
         )""")
+
+    @staticmethod
+    def _create_transfer_tables(db: sqlite3.Connection) -> None:
+        """v14: immutable proposals, attempt chain and integrity-bound artifacts.
+
+        No new provider process is authorized by a row in these tables.
+        Existing task claims and terminal task states remain unchanged.
+        """
+        db.execute("""CREATE TABLE IF NOT EXISTS task_transfer_proposals (
+            proposal_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            proposal_sha256 TEXT NOT NULL CHECK(length(proposal_sha256)=64),
+            body_json TEXT NOT NULL,
+            expires_at REAL NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('proposed','approved')),
+            approved_channel TEXT CHECK(approved_channel IN ('button','message')),
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_transfer_attempts (
+            attempt_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            ordinal INTEGER NOT NULL CHECK(ordinal BETWEEN 0 AND 10000),
+            agent_id TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            state TEXT NOT NULL CHECK(state IN
+                ('retired','waiting','ready','running','succeeded',
+                 'failed','cancelled','timed_out','superseded','held')),
+            source_proposal_id TEXT REFERENCES task_transfer_proposals(proposal_id),
+            checkpoint_sha256 TEXT NOT NULL CHECK(length(checkpoint_sha256)=64),
+            team_revision INTEGER NOT NULL,
+            team_sha256 TEXT NOT NULL CHECK(length(team_sha256)=64),
+            role_actions_json TEXT NOT NULL,
+            wait_started_at REAL,
+            wait_checks INTEGER NOT NULL DEFAULT 0 CHECK(wait_checks BETWEEN 0 AND 100000),
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            UNIQUE(task_id,ordinal)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_transfer_current (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            attempt_id TEXT NOT NULL UNIQUE REFERENCES task_transfer_attempts(attempt_id),
+            revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 10000)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_transfer_artifacts (
+            attempt_id TEXT NOT NULL REFERENCES task_transfer_attempts(attempt_id),
+            path TEXT NOT NULL,
+            sha256 TEXT NOT NULL CHECK(length(sha256)=64),
+            status TEXT NOT NULL CHECK(status IN ('verified','unverified')),
+            evidence_sha256 TEXT CHECK(evidence_sha256 IS NULL OR length(evidence_sha256)=64),
+            body BLOB NOT NULL CHECK(length(body) <= 2097152),
+            PRIMARY KEY(attempt_id,path)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_transfer_audit (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            proposal_id TEXT,
+            attempt_id TEXT,
+            action TEXT NOT NULL,
+            outcome TEXT NOT NULL CHECK(outcome IN ('allowed','denied','held')),
+            reason_code TEXT NOT NULL,
+            occurred_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+
+    def transfer_has_started(self, task_id: str) -> bool:
+        """Whether v14 has superseded the immutable legacy assignment."""
+        try:
+            return self._db().execute("SELECT 1 FROM task_transfer_current "
+                                      "WHERE task_id=?", (task_id,)).fetchone() is not None
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect transfer state") from exc
 
     def save_specialist_approval(self, *, kind: str, key: str, revision: int,
                                   proposal_id: str, owner_id: str,

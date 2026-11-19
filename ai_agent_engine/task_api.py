@@ -14,7 +14,7 @@ from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import re
-from threading import Lock
+from threading import Lock, RLock
 from typing import Type
 from uuid import uuid4
 
@@ -265,6 +265,9 @@ class TaskInbox:
         if type(max_pending) is not int or not 1 <= max_pending <= 4096:
             raise ValueError("invalid inbox capacity")
         self._lock = Lock()
+        # v14: serialize transfer approval against already authorized,
+        # potentially long-running sensitive callbacks for the same task.
+        self._transfer_barriers: dict[str, RLock] = {}
         self._pending: list[TaskRecord] = []
         self._by_id: dict[str, TaskRecord] = {}
         self._dag = TaskDAG()
@@ -629,6 +632,9 @@ class TaskInbox:
             previous = self._states[task_id]
             if not can_transition(previous, target):
                 reason_code = "invalid_edge"
+            elif (self._store is not None
+                  and self._store.transfer_has_started(task_id)):
+                reason_code = "invalid_edge"
             elif target is TaskState.ASSIGNED:
                 # Generic state writes may not bypass the immutable claim.
                 reason_code = "claim_required"
@@ -711,6 +717,12 @@ class TaskInbox:
                 or record.project_id not in scope.project_ids):
             raise TaskNotFound("task unavailable in owner scope")
         return record
+
+    def _transfer_barrier(self, task_id: str, scope: OwnerScope) -> RLock:
+        """Get a task-scoped action/approval lock; acquire it before _lock."""
+        with self._lock:
+            self._scoped_record(task_id,scope)
+            return self._transfer_barriers.setdefault(task_id,RLock())
 
     def set_dependencies(self, task_id: str, prerequisites: tuple[str, ...],
                          scope: OwnerScope) -> tuple[str, ...]:

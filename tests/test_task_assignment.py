@@ -212,7 +212,7 @@ class AssignmentInboxTests(unittest.TestCase):
         self.reopen()
         self.assertEqual(self.inbox.get_assignment(task.task_id, OWNER_A), assigned)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                             (13,))
+                             (14,))
 
     def test_tampered_persisted_workspace_fails_closed(self):
         task = self.create()
