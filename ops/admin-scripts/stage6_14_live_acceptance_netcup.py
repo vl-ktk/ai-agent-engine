@@ -42,6 +42,35 @@ def production() -> None:
             raise SystemExit('production unit unhealthy')
 
 
+def ensure_test_git() -> bool:
+    """Install a missing Debian Git executable for disposable local repos.
+
+    Never touches the production release or adds a Git remote. No update or
+    upgrade occurs when an executable /usr/bin/git is already installed.
+    """
+    git = Path('/usr/bin/git')
+    if git.is_file() and os.access(git, os.X_OK):
+        if not run([str(git), '--version'], timeout=10)[0]:
+            raise SystemExit('local test git is not runnable')
+        return False
+    apt_env = dict(os.environ)
+    apt_env.update({'DEBIAN_FRONTEND': 'noninteractive',
+                    'APT_LISTCHANGES_FRONTEND': 'none'})
+    try:
+        installed = subprocess.run([
+            '/usr/bin/apt-get', 'install', '-y', '--no-install-recommends',
+            'git'], check=False, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            env=apt_env, timeout=180)
+    except (OSError, subprocess.TimeoutExpired):
+        raise SystemExit('local test git provisioning unavailable') from None
+    if (installed.returncode != 0 or not git.is_file()
+            or not os.access(git, os.X_OK)
+            or not run([str(git), '--version'], timeout=10)[0]):
+        raise SystemExit('local test git provisioning did not pass')
+    return True
+
+
 def main() -> None:
     production()
     if not PYTHON.is_file() or not Path('/usr/local/bin/claude').is_file():
@@ -80,6 +109,9 @@ def main() -> None:
         }, sort_keys=True), flush=True)
         raise SystemExit('one or both subscription CLI checks failed')
 
+    git_installed_now = ensure_test_git()
+    production()
+
     # The same actual subprocess/SQLite/git code as live, using offline
     # deterministic workers. If this fails, NEVER send a model request.
     offline_ok, offline_out = owner([
@@ -90,6 +122,7 @@ def main() -> None:
         print('STAGE6_14_OWNER_E2E ' + json.dumps({
             'status': 'OFFLINE_BLOCKED', 'gpt_ready': True,
             'claude_subscription_cli_ready': True, 'offline_pass': False,
+            'git_installed_now': git_installed_now,
             'model_calls': False, 'credentials_printed': False,
             'production_release_unchanged': True,
         }, sort_keys=True), flush=True)
@@ -106,6 +139,7 @@ def main() -> None:
         'status': 'LIVE_PASS' if live_pass else 'LIVE_BLOCKED',
         'gpt_ready': True, 'claude_subscription_cli_ready': True,
         'offline_pass': True,
+        'git_installed_now': git_installed_now,
         'gpt_claude_e2e_pass': live_pass,
         'live_request_attempted_once': True,
         'retry': False,
