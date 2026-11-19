@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "53373dd6856551baf2304a6f16eaf125",
+  "source_sha": "5701d3f6bab9f94c093ea8444e395ef740778006",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_gui_diagnose.py",
+  "script_sha256": "627f9e5a8a6484ca32e8678b6250ae99a8b17223209527438b8ace99be7a9453"
+}
