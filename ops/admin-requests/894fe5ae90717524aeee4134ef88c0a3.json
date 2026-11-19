@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "894fe5ae90717524aeee4134ef88c0a3",
+  "source_sha": "d429cf0779c0a92bd67a7aa54f4af050b113f982",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_fix_owner_login_home.py",
+  "script_sha256": "d52b336d4f9cdce6da0d2e2e790375266322afad0a71da3f7f745f96a305b7c5"
+}
