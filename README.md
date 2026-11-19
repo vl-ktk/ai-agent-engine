@@ -2,6 +2,16 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
+**Stage 7.5 [x] (offline foundation, owner choice №11 / А):**
+The [project leader workspace](./infra/orchestrator/PROJECT_LEADER_7_5.md)
+has exact owner-approved, idempotent provisioning, a private project registry,
+separate owner/project-scoped folders and SQLite, and minimal references to
+management artifacts without a source-code checkout or another task queue.
+Its security, isolation and crash-retry cases are covered by offline tests.
+The other approved 7.5 architectural choices (specialist writes, project
+memory, merge/recovery, backup, cleanup and lifecycle) remain **unimplemented**
+until their later stages. No Netcup modification or live deployment.
+
 **Provider milestone (2026-11-18):** Stage **6.3 [x]** passed one real,
 explicitly owner-triggered Claude Pro task via the scoped SQLite queue and
 the unmodified `claude -p` CLI (`CLAUDE_TASK_6_3_LIVE PASS`). The adapter is
