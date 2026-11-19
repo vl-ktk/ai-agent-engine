@@ -1,3 +1,16 @@
+# HANDOFF — 19.11.2026: Stage 6.14 GPT SIWC dependencies PREP PASS / subscriptions NOT SIGNED IN
+
+**Источник:** `vl-ktk/ai-agent-engine/main`; владелец поручил продолжать 6.14 самостоятельно, с минимальными обязательными действиями владельца. Не начинать 6.15/7.1 без реального `STAGE6_14_LIVE PASS`.
+
+- **LIVE Netcup preflight #44482293034:** действующий `ae-runtime` имел код GPT SIWC, но **не имел `PyJWT` и `cryptography`** в установленном release venv; официальный Claude CLI уже готов. Только безопасные булевы результаты, `models_invoked=false`.
+- **LIVE Netcup preparation #44482724531 PASS:** создан отдельный root-managed venv `/opt/ai-agent-engine/owner-siwc-6-14/venv/bin/python` с `PyJWT[crypto]>=2.10,<3` и копией `ai_agent_engine` **из действительно установленного release**. Проверено под `ae-runtime`: импорт `jwt`, `cryptography`, `ai_agent_engine.siwc` и команда `auth status`. Создано только изолированное окружение; **не** менялись работающий `/opt/ai-agent-engine/current`, `ae-controller`, timers, SQLite, права/секреты, рабочие данные. Авторизация и модельные запросы не выполнялись. Script commit `0bbd6e1c81c6783133c8b0a604d03ada71c9189f`, owner request commit `1727a0eb23c99badbb163f111b942d1da6bd5e2b`.
+- **Выкладка:** осталась прежняя `0.3.11a0`, release `0e04af007375d82daf8f7d3b36c71abb0c784e0b`; rollback `85375103800845eeff696e53f510c66c428408ed`. Отдельный owner SIWC venv можно оставить без влияния на контроллер; удаление только адресным отдельным действием после проверки.
+- **Проверенный блокер:** обе подписочные авторизации под `ae-runtime` ещё не выполнены. Для GPT официальный OpenAI SIWC open-source flow требует `http://127.0.0.1:<port>/auth/callback` **на том же хосте, что и браузер** (схема локальной регистрации); Codex CLI device-code login не является подменой для токенов этого SIWC клиента. Для Claude CLI подтверждён `claude auth login`. Не пересылать коды/токены через чат, GitHub/Actions или чужие учётные записи.
+- **Следующий шаг:** организовать личный интерактивный браузер на VPS или локальный защищённый SSH-туннель для GPT callback, затем подписочно авторизовать GPT и Claude **под `ae-runtime`**. Выполнить ровно один `/opt/ai-agent-engine/owner-siwc-6-14/venv/bin/python -m ai_agent_engine.task_stage6_14_acceptance --live --owner-approved --provider both` только после проверки обеих авторизаций и с прямым разрешением владельца на реальные модельные вызовы. Проверить аудит, SQLite, rollback и явно отметить PASS/BLOCKED.
+- **Тесты:** локальные `py_compile` обоих admin scripts, parser checks PASS; GitHub owner workflow перед SSH проверил исходники и Python unittest; оба owner-запуска SUCCESS. Общий Linux/Windows CI статус отдельно проверить, исторический Windows FAIL не считать исправленным.
+
+---
+
 # HANDOFF — 19.11.2026: Stage 6.14 Netcup Claude CLI PREP PASS / E2E BLOCKED
 
 **Источник:** `vl-ktk/ai-agent-engine/main`. Владелец поручил готовить Netcup под новый личный вход GPT/Claude без переноса старых OAuth токенов. Смена действующего Netcup release и запуск моделей не требовались.
