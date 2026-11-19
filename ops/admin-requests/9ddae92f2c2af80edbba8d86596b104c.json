@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "9ddae92f2c2af80edbba8d86596b104c",
+  "source_sha": "1f665e6d974a3f7f483a451bbed574c31013cc35",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_click_apple_on_vps.py",
+  "script_sha256": "56717472fdb20da4ad3570c0fc4253b04d8ea64cb7c0f202496cfb6682d54a21"
+}
