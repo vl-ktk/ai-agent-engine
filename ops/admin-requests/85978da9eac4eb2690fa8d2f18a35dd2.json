@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "85978da9eac4eb2690fa8d2f18a35dd2",
+  "source_sha": "a38df43a32baf4f65218cf5c30a43b56aed4412f",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_console_keepawake.py",
+  "script_sha256": "caf58f817182be449acea4e942889e844dd2d004b3ee694146fa499edd8cc554"
+}
