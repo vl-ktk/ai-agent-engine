@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "27222c48ceabd462680ef2fbc74c943c",
+  "source_sha": "d428d2c9286b0d4de384462814fc89bebfe80671",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_vnc_input_diagnose.py",
+  "script_sha256": "f9702421a0aed96c4dd48467a58a1cc33f25a681e1865e19e1852f682327eb8c"
+}
