@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "cf0e0e1115be4fee5f524bbe7a9eb9a0",
+  "source_sha": "4e8f8831ce0da3fff0749a954a70f938cbfce0f6",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_provider_login_status.py",
+  "script_sha256": "a5733eea0c9447e71c1f9d45483bcc0ddef241de71ccf50a6f88020bc8a2cd65"
+}
