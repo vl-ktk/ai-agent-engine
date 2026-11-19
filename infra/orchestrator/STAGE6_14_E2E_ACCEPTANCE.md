@@ -1,6 +1,6 @@
 # 6.14 — сквозная приёмка GPT / Claude через оркестратор
 
-**Статус 18.11.2026: PARTIAL / LIVE BLOCKED.** Исходники и офлайн-сценарий подготовлены, но **обязательные реальные вызовы GPT и Claude через личные авторизованные подключения ещё не выполнены**. Не менять статус 6.14 на [x] из-за офлайн PASS.
+**Итог 19.11.2026: LIVE PASS — пункт 6.14 выполнен.** Реальный одноразовый GPT+Claude E2E на Netcup подтверждён [запуском #44511087941](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44511087941). Предыдущие разделы оставлены как история подготовки и ранее снятых блокеров.
 
 ## Цель и точный критерий
 
@@ -76,3 +76,25 @@ PR #58 (`stage-6.14-live-e2e-acceptance`), `tests/test_stage6_14_acceptance.py`:
 Живой [owner job #44424028255](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44424028255) **SUCCESS**. `ae-runtime`: `claude --version` выполнена, CLI установлен, systemd controller и timers здоровы до и после. Repo commits: `e65aabe` (проверенный скрипт), `f4e3164` (запрос). 664 offline unittest + wheel + security/workflow checks PASS на runner до SSH. Текущий release `0e04af0` не менялся, моделей не вызывали.
 
 Обе личные подписочные авторизации пока **не подтверждены**. GPT SIWC уже есть в release, но требует реального OAuth flow с loopback callback; Claude CLI готов к `claude auth login` под `ae-runtime`. Следующий шаг: owner login без копирования секретов в CI, потом единый E2E. **6.14 остаётся [ ] LIVE BLOCKED.**
+
+
+## Финальная приёмка 19.11.2026 — GPT + Claude LIVE PASS
+
+Владелец явно поручил завершить подпункт полностью. На Netcup под **одним личным Linux-пользователем `ae-runtime`** отдельно проверены подписочные подключения: [owner auth status #44509438297](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44509438297) `GPT READY`, `Claude logged_in=true`, оба status-командных вызова PASS, служебные таймеры и `ae-controller.service` healthy. Ни один секрет/токен/аккаунт не выведен в CI.
+
+**Живой E2E:** [owner workflow #44511087941](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44511087941) **SUCCESS**, маркер `STAGE6_14_OWNER_E2E`:
+
+- `status=LIVE_PASS`, `gpt_claude_e2e_pass=true`, `offline_pass=true`;
+- `gpt_ready=true`, `claude_subscription_cli_ready=true`, `live_request_attempted_once=true`, `retry=false`;
+- `temporary_sqlite_git_artifacts_only=true`, `credentials_printed=false`, `model_responses_printed=false`;
+- `production_release_unchanged=true`, `production_services_healthy=true`.
+
+Это соответствует `STAGE6_14_LIVE PASS: gpt,claude` самой установленной приёмки: ровно по одному реальному запросу с маркерами `AE-614-GPT` и `AE-614-CLAUDE`; для обоих провайдеров подтверждены `SUCCEEDED`, грант, provider audit, delivery ACK, SHA-256 тестового файла, Git baseline/source-version, смена пробной версии и обратный checkout, закрытие и повторное открытие приватной task SQLite и остановка дочерних процессов. Работа проводилась только в `TemporaryDirectory`; тест не открывал внешний сервис и не публиковал Git-коммиты.
+
+**Снятый диагностический блокер:** первая однократная попытка [#44510339972](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44510339972) остановилась на `OFFLINE_BLOCKED`, без реальных модельных вызовов; безопасная диагностика [#44510681523](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44510681523) установила `AcceptanceRejected(local_git_unavailable)` на первом временном `git init`. Финальный run установил отсутствовавший системный Debian `git` (`git_installed_now=true`), после чего офлайн и LIVE приёмка прошли без повторов модельного запроса.
+
+**Проверки исходников:** локальный `py_compile` Python admin scripts PASS; административный Actions workflow на Ubuntu выполнил source/workflow checks, полный unittest и сборку wheel до подключения к Netcup; job SUCCESS. Общий CI по Windows имеет известный ранее Linux-only `fcntl` FAIL; не выдаётся за green.
+
+**Публикация и откат:** рабочий AI Agent Engine не перекладывали и не перезапускали. До и после проверен release `0e04af007375d82daf8f7d3b36c71abb0c784e0b` (`0.3.11a0`); прежний рабочий rollback release `85375103800845eeff696e53f510c66c428408ed`. В GitHub опубликован только исходник адресного owner admin script [обновление `db6ecdc`](https://github.com/vl-ktk/ai-agent-engine/commit/db6ecdcf43195d1cc111e0fe8646fe9c0e250aa8) и request [коммит `f4eba07`](https://github.com/vl-ktk/ai-agent-engine/commit/f4eba072a23275022d7a115fc57ddd334d6a4dce); их откат — только адресным `git revert` после проверки нового HEAD, без force. Установленный системный `git` не является выпуском Engine, удалять его без отдельной команды не нужно.
+
+**Ограничения:** это одноразовая личная проверка, не разрешение на 24/7 unattended Claude Pro runner или публичную подписочную маршрутизацию. Нет измеренного факта списаний/Extra Usage, финансовый баланс не проверялся. Следующий подпункт по плану — **7.1**, только по новой команде владельца.
