@@ -507,48 +507,64 @@ class TaskInbox:
     def claim_task(self, task_id: str, worker_id: str, workspace_name: str,
                    scope: OwnerScope) -> TaskAssignment:
         """First writer wins: bind worker AND private directory atomically."""
+        with self._lock:
+            return self._claim_task_locked(task_id, worker_id, workspace_name, scope)
+
+    def _claim_task_locked(self, task_id: str, worker_id: str,
+                           workspace_name: str, scope: OwnerScope,
+                           *, specialist_pin: tuple | None = None) -> TaskAssignment:
+        """Internal shared claim path; caller MUST hold the inbox lock.
+
+        Stage 7.3 supplies an independently checked pin and persists it in
+        the same SQLite transaction as the OS workspace claim and state.
+        """
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected a trusted OwnerScope")
         if type(task_id) is not str or not _TASK_ID.fullmatch(task_id):
             raise TaskNotFound("invalid task identifier")
         validate_worker(worker_id)
         validate_workspace_name(workspace_name)
-        with self._lock:
-            self._scoped_record(task_id, scope)
-            if task_id in self._assignments:
-                self._reject_transition(task_id, self._states[task_id],
-                                        TaskState.ASSIGNED, worker_id,
-                                        "already_assigned")
-                raise AlreadyAssigned("task already has a worker and workspace")
-            if self._states[task_id] is not TaskState.QUEUED:
-                self._reject_transition(task_id, self._states[task_id],
-                                        TaskState.ASSIGNED, worker_id, "not_queued")
-                raise TransitionRejected("not_queued")
-            if self._workspace_root is None:
-                raise InvalidAssignment("trusted workspace root not configured")
-            try:
-                lease = self._workspace_root.acquire(workspace_name)
-            except WorkspaceBusy:
-                self._reject_transition(task_id, self._states[task_id],
-                                        TaskState.ASSIGNED, worker_id,
-                                        "workspace_busy")
-                raise
-            workspace_dir = lease.directory
-            assignment = TaskAssignment(task_id, worker_id, workspace_name,
-                                        workspace_dir)
-            try:
-                if self._store is not None:
+        if specialist_pin is not None and self._store is None:
+            raise StorageUnavailable("specialist assignment requires durable storage")
+        self._scoped_record(task_id, scope)
+        if task_id in self._assignments:
+            self._reject_transition(task_id, self._states[task_id],
+                                    TaskState.ASSIGNED, worker_id,
+                                    "already_assigned")
+            raise AlreadyAssigned("task already has a worker and workspace")
+        if self._states[task_id] is not TaskState.QUEUED:
+            self._reject_transition(task_id, self._states[task_id],
+                                    TaskState.ASSIGNED, worker_id, "not_queued")
+            raise TransitionRejected("not_queued")
+        if self._workspace_root is None:
+            raise InvalidAssignment("trusted workspace root not configured")
+        try:
+            lease = self._workspace_root.acquire(workspace_name)
+        except WorkspaceBusy:
+            self._reject_transition(task_id, self._states[task_id],
+                                    TaskState.ASSIGNED, worker_id,
+                                    "workspace_busy")
+            raise
+        workspace_dir = lease.directory
+        assignment = TaskAssignment(task_id, worker_id, workspace_name,
+                                    workspace_dir)
+        try:
+            if self._store is not None:
+                if specialist_pin is None:
                     self._store.insert_assignment(assignment)
-            except BaseException:
-                lease.close()
-                raise
-            self._assignments[task_id] = assignment
-            self._leases[task_id] = lease
-            self._states[task_id] = TaskState.ASSIGNED
-            if self._store is None:
-                self._record_volatile(task_id, TaskState.QUEUED,
-                                      TaskState.ASSIGNED, worker_id, True, "claim")
-            return assignment
+                else:
+                    self._store.insert_assignment(assignment,
+                                                  specialist_pin=specialist_pin)
+        except BaseException:
+            lease.close()
+            raise
+        self._assignments[task_id] = assignment
+        self._leases[task_id] = lease
+        self._states[task_id] = TaskState.ASSIGNED
+        if self._store is None:
+            self._record_volatile(task_id, TaskState.QUEUED,
+                                  TaskState.ASSIGNED, worker_id, True, "claim")
+        return assignment
 
     def get_assignment(self, task_id: str, scope: OwnerScope) -> TaskAssignment | None:
         if not isinstance(scope, OwnerScope):

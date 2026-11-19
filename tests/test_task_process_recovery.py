@@ -284,7 +284,7 @@ class ProcessRecoveryTests(unittest.TestCase):
             db.execute("PRAGMA user_version=7")
         self.inbox = self.open_inbox()
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(), (12,))
+            "PRAGMA user_version").fetchone(), (13,))
         self.assertIsNone(self.inbox._store.process_record(self.task_id))
 
 

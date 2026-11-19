@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+import json
 import time
 from types import MappingProxyType
 from typing import Callable, TypeVar
@@ -109,7 +110,7 @@ class TaskPermissionGate:
         if not isinstance(scope, OwnerScope):
             raise TypeError("expected trusted OwnerScope")
         with self.inbox._lock:
-            self.inbox._scoped_record(task_id, scope)
+            record = self.inbox._scoped_record(task_id, scope)
             assignment = self.inbox._assignments.get(task_id)
             matched = assignment is not None and assignment.worker_id == actor_id
             kind = "assigned_worker" if matched else "other_worker"
@@ -117,10 +118,29 @@ class TaskPermissionGate:
                 reason = "worker_mismatch"
             elif self.inbox._states[task_id] is not TaskState.RUNNING:
                 reason = "task_not_running"
+            elif self.inbox._store.emergency_held(scope.owner_id, record.project_id):
+                reason = "emergency_hold"
             else:
                 identity = (task_id, actor_id, action)
-                if identity not in self._grants:
+                pin = self.inbox._store.specialist_pin(task_id)
+                if pin is not None:
+                    try:
+                        permitted = json.loads(pin[16])
+                        if (type(permitted) is not list
+                                or any(type(item) is not str for item in permitted)):
+                            raise ValueError("invalid specialist policy")
+                    except (ValueError,TypeError) as exc:
+                        raise PermissionUnavailable("invalid specialist action policy") from exc
+                else:
+                    permitted = None
+                if pin is not None and (pin[12] != actor_id
+                                        or action.value not in permitted):
+                    reason = "role_policy_denied"
+                elif identity not in self._grants:
                     reason = "grant_missing"
+                elif self.inbox._store.is_permission_revoked(task_id, actor_id,
+                                                               action.value):
+                    reason = "grant_revoked"
                 else:
                     deadline = self._grants[identity]
                     reason = ("grant_expired" if deadline is not None
@@ -133,6 +153,28 @@ class TaskPermissionGate:
         if not allowed:
             raise PermissionDenied("permission_denied")
         return operation()
+
+    def revoke(self, scope: OwnerScope, grant: ActionGrant) -> None:
+        """Trusted owner/operator revocation; permanent for this task grant.
+
+        A new task is required for regranting a revoked identity. No model
+        text or HTTP request is allowed to invoke this privileged method.
+        """
+        if not isinstance(scope, OwnerScope) or not isinstance(grant, ActionGrant):
+            raise TypeError("trusted scope and grant required")
+        with self.inbox._lock:
+            self.inbox._scoped_record(grant.task_id, scope)
+            self.inbox._store.revoke_permission(grant.task_id, grant.worker_id,
+                                                grant.action.value)
+
+    def set_emergency_hold(self, scope: OwnerScope, project_id: str,
+                           *, active: bool) -> None:
+        """Trusted owner-controlled project stop; applies to old task pins."""
+        if (not isinstance(scope, OwnerScope) or type(project_id) is not str
+                or project_id not in scope.project_ids or type(active) is not bool):
+            raise PermissionDenied("permission_denied")
+        with self.inbox._lock:
+            self.inbox._store.set_emergency_hold(scope.owner_id, project_id, active)
 
     def audit_history(self, task_id: str,
                       scope: OwnerScope) -> tuple[PermissionAuditEvent, ...]:

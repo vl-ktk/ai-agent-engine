@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 12  # v12 adds approved, immutable AI plans (no task dispatch).
+SCHEMA_VERSION = 13  # v13 adds approved specialist teams and pinned task assignments.
 
 
 class StorageUnavailable(RuntimeError):
@@ -103,9 +103,10 @@ class SQLiteTaskStore:
                 self._create_source_version_table(db)
                 self._create_owner_approval_table(db)
                 self._create_plan_table(db)
+                self._create_specialist_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -140,6 +141,17 @@ class SQLiteTaskStore:
                 self._create_source_version_table(db)
                 self._create_owner_approval_table(db)
                 self._create_plan_table(db)
+                if version <= 12:
+                    # The v12 audit CHECK lacks explicit revocation/hold outcomes.
+                    db.execute("ALTER TABLE task_permission_audit "
+                               "RENAME TO task_permission_audit_v12")
+                    self._create_permission_audit_table(db)
+                    db.execute("""INSERT INTO task_permission_audit
+                        (event_id,task_id,action,allowed,reason_code,principal_kind,occurred_at)
+                        SELECT event_id,task_id,action,allowed,reason_code,principal_kind,occurred_at
+                        FROM task_permission_audit_v12""")
+                    db.execute("DROP TABLE task_permission_audit_v12")
+                self._create_specialist_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -217,7 +229,8 @@ class SQLiteTaskStore:
                  'external_request','delete_artifact')),
             allowed INTEGER NOT NULL CHECK(allowed IN (0,1)),
             reason_code TEXT NOT NULL CHECK(reason_code IN
-                ('granted','grant_missing','grant_expired',
+                ('granted','grant_missing','grant_expired','grant_revoked',
+                 'emergency_hold','role_policy_denied',
                  'worker_mismatch','task_not_running')),
             principal_kind TEXT NOT NULL CHECK(principal_kind IN
                 ('assigned_worker','other_worker')),
@@ -527,6 +540,209 @@ class SQLiteTaskStore:
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot read approved plan") from exc
 
+    @staticmethod
+    def _create_specialist_tables(db: sqlite3.Connection) -> None:
+        """Versioned approvals never imply grants or task/process launches."""
+        db.execute("""CREATE TABLE IF NOT EXISTS approved_specialist_catalogs (
+            owner_id TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 1000000),
+            proposal_id TEXT NOT NULL UNIQUE,
+            channel TEXT NOT NULL CHECK(channel IN ('message','button')),
+            digest TEXT NOT NULL CHECK(length(digest)=64),
+            canonical_json TEXT NOT NULL,
+            approved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            PRIMARY KEY(owner_id, revision)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS approved_specialist_teams (
+            team_id TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 1000000),
+            proposal_id TEXT NOT NULL UNIQUE,
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            channel TEXT NOT NULL CHECK(channel IN ('message','button')),
+            digest TEXT NOT NULL CHECK(length(digest)=64),
+            canonical_json TEXT NOT NULL,
+            approved_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            PRIMARY KEY(team_id, revision)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_specialist_pins (
+            task_id TEXT PRIMARY KEY REFERENCES tasks(task_id),
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            plan_id TEXT NOT NULL,
+            plan_revision INTEGER NOT NULL,
+            plan_digest TEXT NOT NULL CHECK(length(plan_digest)=64),
+            step_id TEXT NOT NULL,
+            team_id TEXT NOT NULL,
+            team_revision INTEGER NOT NULL,
+            team_digest TEXT NOT NULL CHECK(length(team_digest)=64),
+            catalog_revision INTEGER NOT NULL,
+            catalog_digest TEXT NOT NULL CHECK(length(catalog_digest)=64),
+            agent_id TEXT NOT NULL,
+            role_id TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            provider_reason TEXT,
+            allowed_actions TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_specialist_audit (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            accepted INTEGER NOT NULL CHECK(accepted IN (0,1)),
+            reason_code TEXT NOT NULL,
+            occurred_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_permission_revocations (
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            worker_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            revoked_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            PRIMARY KEY(task_id, worker_id, action)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS project_emergency_holds (
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            active INTEGER NOT NULL CHECK(active IN (0,1)),
+            PRIMARY KEY(owner_id,project_id)
+        )""")
+
+    def save_specialist_approval(self, *, kind: str, key: str, revision: int,
+                                  proposal_id: str, owner_id: str,
+                                  project_id: str | None, channel: str,
+                                  digest: str, canonical_json: str) -> tuple:
+        """Immutable exact-version receipt; stale and cross-owner CAS rejected."""
+        if kind not in ("catalog", "team"):
+            raise ValueError("unknown specialist approval")
+        table = ("approved_specialist_catalogs" if kind == "catalog"
+                 else "approved_specialist_teams")
+        try:
+            db = self._db()
+            db.execute("BEGIN IMMEDIATE")
+            with db:
+                if kind == "catalog":
+                    latest = db.execute(f"""SELECT owner_id,revision,proposal_id,
+                        channel,digest,canonical_json FROM {table}
+                        WHERE owner_id=? ORDER BY revision DESC LIMIT 1""",
+                        (owner_id,)).fetchone()
+                    row = (owner_id,revision,proposal_id,channel,digest,canonical_json)
+                else:
+                    latest = db.execute(f"""SELECT team_id,revision,proposal_id,
+                        owner_id,project_id,channel,digest,canonical_json
+                        FROM {table} WHERE team_id=? ORDER BY revision DESC LIMIT 1""",
+                        (key,)).fetchone()
+                    row = (key,revision,proposal_id,owner_id,project_id,
+                           channel,digest,canonical_json)
+                if latest is not None:
+                    if kind == "team" and latest[3:5] != (owner_id,project_id):
+                        raise StorageUnavailable("specialist team unavailable in owner scope")
+                    if latest == row:
+                        return latest
+                    if revision != latest[1] + 1:
+                        raise StorageUnavailable("specialist revision stale or out of order")
+                elif revision != 1:
+                    raise StorageUnavailable("first specialist revision must be one")
+                placeholders = ",".join("?" for _ in row)
+                columns = ("owner_id,revision,proposal_id,channel,digest,canonical_json"
+                           if kind == "catalog" else
+                           "team_id,revision,proposal_id,owner_id,project_id,"
+                           "channel,digest,canonical_json")
+                db.execute(f"INSERT INTO {table} ({columns}) "
+                           f"VALUES ({placeholders})", row)
+                return row
+        except sqlite3.IntegrityError as exc:
+            raise StorageUnavailable("specialist approval conflicts") from exc
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist specialist approval") from exc
+
+    def specialist_catalog(self, owner_id: str, revision: int | None = None) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT owner_id,revision,proposal_id,
+                channel,digest,canonical_json FROM approved_specialist_catalogs
+                WHERE owner_id=? AND (? IS NULL OR revision=?)
+                ORDER BY revision DESC LIMIT 1""",
+                (owner_id,revision,revision)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read specialist catalog") from exc
+
+    def specialist_team(self, team_id: str, revision: int | None = None) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT team_id,revision,proposal_id,
+                owner_id,project_id,channel,digest,canonical_json
+                FROM approved_specialist_teams WHERE team_id=?
+                AND (? IS NULL OR revision=?) ORDER BY revision DESC LIMIT 1""",
+                (team_id,revision,revision)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read specialist team") from exc
+
+    def specialist_pin(self, task_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT task_id,owner_id,project_id,
+                plan_id,plan_revision,plan_digest,step_id,team_id,
+                team_revision,team_digest,catalog_revision,catalog_digest,
+                agent_id,role_id,provider_id,provider_reason,allowed_actions
+                FROM task_specialist_pins WHERE task_id=?""",
+                (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read specialist assignment") from exc
+
+    def specialist_audit(self, task_id: str) -> list[tuple]:
+        try:
+            return self._db().execute("""SELECT event_id,agent_id,accepted,
+                reason_code,occurred_at FROM task_specialist_audit
+                WHERE task_id=? ORDER BY event_id""", (task_id,)).fetchall()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read specialist audit") from exc
+
+    def reject_specialist(self, task_id: str, owner_id: str, project_id: str,
+                          agent_id: str, reason: str) -> None:
+        try:
+            with self._db() as db:
+                db.execute("""INSERT INTO task_specialist_audit
+                    (task_id,owner_id,project_id,agent_id,accepted,reason_code)
+                    VALUES (?,?,?,?,0,?)""",
+                    (task_id,owner_id,project_id,agent_id,reason))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot audit rejected specialist") from exc
+
+    def is_permission_revoked(self, task_id: str, worker_id: str,
+                              action: str) -> bool:
+        try:
+            return self._db().execute("""SELECT 1 FROM task_permission_revocations
+                WHERE task_id=? AND worker_id=? AND action=?""",
+                (task_id,worker_id,action)).fetchone() is not None
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot verify permission revocation") from exc
+
+    def revoke_permission(self, task_id: str, worker_id: str, action: str) -> None:
+        try:
+            with self._db() as db:
+                db.execute("""INSERT OR IGNORE INTO task_permission_revocations
+                    (task_id,worker_id,action) VALUES (?,?,?)""",
+                    (task_id,worker_id,action))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot revoke permission") from exc
+
+    def set_emergency_hold(self, owner_id: str, project_id: str, active: bool) -> None:
+        try:
+            with self._db() as db:
+                db.execute("""INSERT INTO project_emergency_holds
+                    (owner_id,project_id,active) VALUES (?,?,?)
+                    ON CONFLICT(owner_id,project_id) DO UPDATE SET active=excluded.active""",
+                    (owner_id,project_id,int(active)))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot change project hold") from exc
+
+    def emergency_held(self, owner_id: str, project_id: str) -> bool:
+        try:
+            row = self._db().execute("""SELECT active FROM project_emergency_holds
+                WHERE owner_id=? AND project_id=?""", (owner_id,project_id)).fetchone()
+            return row is not None and row[0] == 1
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot verify project hold") from exc
+
     def insert_task(self, record, *, key_hash: str | None = None,
                     payload_hash: str | None = None,
                     owner_approval: tuple[str, str, str] | None = None) -> None:
@@ -651,7 +867,7 @@ class SQLiteTaskStore:
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot persist priority") from exc
 
-    def insert_assignment(self, assignment) -> None:
+    def insert_assignment(self, assignment, *, specialist_pin: tuple | None = None) -> None:
         """Commit claim, status change and audit together, before HTTP ACK."""
         try:
             with self._db() as db:
@@ -664,6 +880,18 @@ class SQLiteTaskStore:
                     WHERE task_id=? AND state='queued'""", (assignment.task_id,))
                 if cursor.rowcount != 1:
                     raise StorageUnavailable("task cannot be assigned from current state")
+                if specialist_pin is not None:
+                    db.execute("""INSERT INTO task_specialist_pins
+                        (task_id,owner_id,project_id,plan_id,plan_revision,
+                         plan_digest,step_id,team_id,team_revision,team_digest,
+                         catalog_revision,catalog_digest,agent_id,role_id,
+                         provider_id,provider_reason,allowed_actions)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", specialist_pin)
+                    db.execute("""INSERT INTO task_specialist_audit
+                        (task_id,owner_id,project_id,agent_id,accepted,reason_code)
+                        VALUES (?,?,?,?,1,'assigned')""",
+                        (specialist_pin[0],specialist_pin[1],
+                         specialist_pin[2],specialist_pin[12]))
                 self._append_audit(db, assignment.task_id, "queued", "assigned",
                                    assignment.worker_id, True, "claim")
         except sqlite3.Error as exc:

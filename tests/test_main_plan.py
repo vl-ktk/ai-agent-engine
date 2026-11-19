@@ -317,7 +317,7 @@ class PlanApprovalTests(unittest.TestCase):
             db.execute("PRAGMA user_version=11")
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.path))
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(), (12,))
+            "PRAGMA user_version").fetchone(), (13,))
         self.assertIsNone(load_approved_plan(self.inbox, SCOPE, self.proposal.plan_id))
         self.assertEqual(self.inbox._store.owner_approval(approved_task.task_id),
                          ("vlady", "engine", "proposal_" + "1" * 32,
