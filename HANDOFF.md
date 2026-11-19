@@ -1,3 +1,14 @@
+# HANDOFF — 19.11.2026: 6.14 Claude owner OAuth awaits Apple sign-in
+
+- **Текущий подпункт:** 6.14 [ ] `PARTIAL / AUTH BLOCKED`. Источник `vl-ktk/ai-agent-engine/main`; рабочий VPS release `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, откат `85375103800845eeff696e53f510c66c428408ed`. Production не выкладывали и не изменяли.
+- **GPT подписка READY:** серверная status-проверка [#44506164076](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44506164076) подтвердила сохранённую SIWC identity, GRANTED permission и неистёкший token под `ae-runtime`. **Claude `logged_in=false`, `status_command_ok=false`**: официальная команда `claude auth login` в xterm ждала `Paste code here if prompted` и завершения OAuth.
+- **GUI стабилизирован:** [#44508063025](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44508063025) LIVE SUCCESS: остановлен конфликтующий 55-секундный VT1→VT7 refresh, перезапущено только временное Claude login xterm, открыт 20-минутный непрерывный GUI-window с автоматическим возвратом VT1. GPT учётные данные и рабочие данные не читались, модельных вызовов нет. Серверные основные службы healthy; 6.14 E2E не запускался.
+- **На экране владельца:** браузерная вкладка Netcup SCP Screen (`?popup=1`) на VPS Firefox уже открыла `appleid.apple.com` после `Continue with Apple` в Claude OAuth. Сейчас ожидает **личный ввод Apple Account и 2FA** владельцем. Эти данные не передавать ассистенту/в GitHub. После Apple Anthropic может показать код для возврата в Claude CLI — тогда закончить локально в той же GUI-сессии; не выводить код/секрет в CI/чат.
+- **Дальше:** после сообщения владельца о входе повторить безопасный `claude auth status --json` под `ae-runtime`; подтвердить `loggedIn=true`, GPT READY и production CAS/health. Только после отдельного явного разрешения на модельные запросы рассматривать один настоящий 6.14 E2E и проверку ограничений использования подписки. Не отмечать 6.14 PASS до live E2E.
+- **Проверки:** Python compile нового admin script PASS локально, owner Actions Linux тесты/сборка до SSH PASS, Netcup `STAGE6_14_CLAUDE_GUI_QUIET` SUCCESS, `credentials_read=false`, `model_calls=false`. Windows CI исторически нестабилен; не утверждать общий CI green.
+
+---
+
 # HANDOFF — 19.11.2026: Stage 6.14 GPT SIWC dependencies PREP PASS / subscriptions NOT SIGNED IN
 
 **Источник:** `vl-ktk/ai-agent-engine/main`; владелец поручил продолжать 6.14 самостоятельно, с минимальными обязательными действиями владельца. Не начинать 6.15/7.1 без реального `STAGE6_14_LIVE PASS`.
