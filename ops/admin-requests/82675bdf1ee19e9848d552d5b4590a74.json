@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "82675bdf1ee19e9848d552d5b4590a74",
+  "source_sha": "07d49c2d96bc5bdb56404a4f5ea6e57962e8b06a",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_gui_access_check.py",
+  "script_sha256": "183fca8168206aa5a31f9815e6a28a564f96c82eb625f58b5f3cc6c8a22dfea8"
+}
