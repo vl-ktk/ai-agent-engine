@@ -471,6 +471,39 @@ class TaskInbox:
                 self._idempotent[key_ref] = (task_id, fingerprint)
             return record
 
+    def persist_approved_plan(self, *, scope: OwnerScope, plan_id: str,
+                              revision: int, proposal_id: str, project_id: str,
+                              channel: str, plan_sha256: str,
+                              canonical_json: str) -> tuple:
+        """Trusted 7.2 plan receipt: separate from executable TaskInbox entries.
+
+        Only the owner-authenticated plan gateway may call this method.
+        Creating an approval does not queue a root task or any child task.
+        """
+        if not isinstance(scope, OwnerScope) or self._store is None:
+            raise InvalidTask("approved plans need trusted durable storage")
+        if project_id not in scope.project_ids:
+            raise ProjectForbidden("project outside configured scope")
+        with self._lock:
+            return self._store.save_approved_plan(
+                plan_id=plan_id, revision=revision, proposal_id=proposal_id,
+                owner_id=scope.owner_id, project_id=project_id,
+                channel=channel, plan_sha256=plan_sha256,
+                canonical_json=canonical_json)
+
+    def latest_approved_plan(self, plan_id: str, scope: OwnerScope) -> tuple | None:
+        """Owner/project-scoped current approved plan; older revisions inactive."""
+        if not isinstance(scope, OwnerScope):
+            raise TypeError("expected a trusted OwnerScope")
+        if self._store is None:
+            return None
+        with self._lock:
+            row = self._store.latest_approved_plan(plan_id)
+            if (row is None or row[3] != scope.owner_id
+                    or row[4] not in scope.project_ids):
+                return None
+            return row
+
     def claim_task(self, task_id: str, worker_id: str, workspace_name: str,
                    scope: OwnerScope) -> TaskAssignment:
         """First writer wins: bind worker AND private directory atomically."""

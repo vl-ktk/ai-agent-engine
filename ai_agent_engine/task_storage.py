@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 11  # v11 adds immutable owner approvals for AI-orchestrated intake.
+SCHEMA_VERSION = 12  # v12 adds approved, immutable AI plans (no task dispatch).
 
 
 class StorageUnavailable(RuntimeError):
@@ -102,9 +102,10 @@ class SQLiteTaskStore:
                 self._create_artifact_tables(db)
                 self._create_source_version_table(db)
                 self._create_owner_approval_table(db)
+                self._create_plan_table(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -138,6 +139,7 @@ class SQLiteTaskStore:
                 self._create_artifact_tables(db)
                 self._create_source_version_table(db)
                 self._create_owner_approval_table(db)
+                self._create_plan_table(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -462,6 +464,68 @@ class SQLiteTaskStore:
                 (task_id,)).fetchone()
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot read owner approval") from exc
+
+    @staticmethod
+    def _create_plan_table(db: sqlite3.Connection) -> None:
+        db.execute("""CREATE TABLE IF NOT EXISTS approved_task_plans (
+            plan_id TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 1000000),
+            proposal_id TEXT NOT NULL UNIQUE,
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            channel TEXT NOT NULL CHECK(channel IN ('message','button')),
+            plan_sha256 TEXT NOT NULL CHECK(length(plan_sha256) = 64),
+            canonical_json TEXT NOT NULL,
+            approved_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            PRIMARY KEY(plan_id, revision)
+        )""")
+
+    def save_approved_plan(self, *, plan_id: str, revision: int,
+                           proposal_id: str, owner_id: str, project_id: str,
+                           channel: str, plan_sha256: str,
+                           canonical_json: str) -> tuple:
+        """Atomic version CAS; replays must match exactly, never revive old plans.
+
+        No task is inserted or dispatched by this operation. Only the trusted
+        caller may provide an authenticated owner decision.
+        """
+        try:
+            db = self._db()
+            db.execute("BEGIN IMMEDIATE")
+            with db:
+                latest = db.execute("""SELECT plan_id,revision,proposal_id,owner_id,
+                    project_id,channel,plan_sha256,canonical_json
+                    FROM approved_task_plans WHERE plan_id=?
+                    ORDER BY revision DESC LIMIT 1""", (plan_id,)).fetchone()
+                row = (plan_id, revision, proposal_id, owner_id, project_id,
+                       channel, plan_sha256, canonical_json)
+                if latest is not None:
+                    if latest[3:5] != (owner_id, project_id):
+                        raise StorageUnavailable("plan unavailable in owner scope")
+                    if latest == row:
+                        return latest
+                    if revision != latest[1] + 1:
+                        raise StorageUnavailable("plan revision is stale or out of order")
+                elif revision != 1:
+                    raise StorageUnavailable("first plan revision must be one")
+                db.execute("""INSERT INTO approved_task_plans
+                    (plan_id,revision,proposal_id,owner_id,project_id,channel,
+                     plan_sha256,canonical_json) VALUES (?,?,?,?,?,?,?,?)""", row)
+                return row
+        except sqlite3.IntegrityError as exc:
+            raise StorageUnavailable("plan approval conflicts with existing receipt") from exc
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot persist approved plan") from exc
+
+    def latest_approved_plan(self, plan_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT plan_id,revision,proposal_id,owner_id,
+                project_id,channel,plan_sha256,canonical_json
+                FROM approved_task_plans WHERE plan_id=?
+                ORDER BY revision DESC LIMIT 1""", (plan_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read approved plan") from exc
 
     def insert_task(self, record, *, key_hash: str | None = None,
                     payload_hash: str | None = None,

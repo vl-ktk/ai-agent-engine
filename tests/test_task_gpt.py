@@ -191,7 +191,7 @@ class GPTTaskOfflineTests(unittest.TestCase):
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.db_path),
                                workspace_root=self.root)
         with sqlite3.connect(self.db_path) as db:
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 11)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 12)
             self.assertIsNotNone(db.execute("SELECT name FROM sqlite_master "
                                             "WHERE name='task_provider_audit'").fetchone())
 
