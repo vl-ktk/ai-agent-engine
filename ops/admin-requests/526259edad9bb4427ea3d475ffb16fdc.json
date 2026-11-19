@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "526259edad9bb4427ea3d475ffb16fdc",
+  "source_sha": "2c3182c362399cafcea6e83f2f6a05569c89765c",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_show_gpt_login.py",
+  "script_sha256": "978253fce6be12ec319400ba082ec63263cd188cd7d64af0a20dfcc5001f54e2"
+}
