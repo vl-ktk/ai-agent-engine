@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "b3e1d98345efc55af9ccb509f5a77303",
+  "source_sha": "587954076260228a06b48366580ea3777ec99209",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_restore_vnc_input.py",
+  "script_sha256": "d09b2485d51b6111c12ca3d0f407d115bac81cc7af89bbb7b662d09884383cc0"
+}
