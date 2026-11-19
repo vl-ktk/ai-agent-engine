@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "e1a66b82d88b0e4c2221c6f75e179574",
+  "source_sha": "db6ecdcf43195d1cc111e0fe8646fe9c0e250aa8",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_live_acceptance_netcup.py",
+  "script_sha256": "b8d13a2e03fe4ea9b82cc366afa1f0e1c0f54932bc02515387ffb7c01560621d"
+}
