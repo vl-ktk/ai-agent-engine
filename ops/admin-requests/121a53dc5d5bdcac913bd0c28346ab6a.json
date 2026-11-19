@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "121a53dc5d5bdcac913bd0c28346ab6a",
+  "source_sha": "bba2d26d1cdb78195e547c3c2249e7aedd58fc67",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage6_14_start_claude_login.py",
+  "script_sha256": "20ff532bbcd628615c547b6e5b9695cc497b8aa6ffe2db20afe4fd4e1c69f251"
+}
