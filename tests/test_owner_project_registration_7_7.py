@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -214,6 +215,15 @@ class OwnerProjectRegistrationTests(unittest.TestCase):
                 ("task", 1, "vl-ktk", "ai-agent-engine", "check", "test", 50, 50))
         with self.assertRaisesRegex(ValueError, "diagnostic tasks unexpectedly exist"):
             VERIFY.verify_registered_project(self.root, prepared_source_sha=self.commit)
+
+    def test_independent_verification_imports_from_isolated_admin_python(self):
+        code = ("import runpy; "
+                "runpy.run_path(" + repr(str(VERIFY_PATH)) + ")"
+                "['_bootstrap_runtime_imports']()")
+        completed = subprocess.run(
+            (sys.executable, "-I", "-c", code), cwd=ROOT,
+            capture_output=True, text=True, timeout=15)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 if __name__ == "__main__":
