@@ -1,3 +1,28 @@
+# HANDOFF — 20.11.2026, этап 7.11 / уточнение отсутствующего Python-модуля
+
+**Источник:** `vl-ktk/ai-agent-engine/main` `4de869831bc3c886c040a937d56ca29863d95263`
+до этой source-правки; source rollback — этот SHA. Source-only PR #103
+`adae6d17590592cf9f139f7a34305bd47a758942` прошёл Linux CI
+3.11/3.12/3.13 и wheel (Windows — прежние POSIX-ошибки). Его безопасная
+one-shot Netcup диагностика [run 44803116314](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44803116314)
+**успешно выполнилась**, но вернула для исходной 7.11 OFFLINE-проверки
+`ModuleNotFoundError`, `function=unknown`, `source=unknown`, `line=0`.
+Это ещё **не** доказательство названия отсутствующего модуля; такое имя
+предыдущая диагностика намеренно не выводила. `model_calls=false`,
+`oauth_refresh=false`, рабочая SQLite и службы без изменений.
+
+**Текущая source-правка:** та же offline-only диагностика дополнительно
+ограниченно выводит `missing_module` (проверенное синтаксическое имя
+модуля), boolean доступности приватного исходника и boolean доступности
+пакетного import; пути/секреты/текст моделей не выводятся. Тесты
+`tests/test_stage7_11_offline_env_diagnose.py`. После CI исполнить ровно
+одну owner-request диагностику, определить конкретную проблему окружения
+и править её отдельным reviewed PR. `7.11 [ ] PARTIAL`; к 7.12 не
+переходить. Live core `0.3.11a0`, неизменный release/rollback id
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite v14.
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.11 / первый Netcup E2E: OFFLINE BLOCKED
 
 **Источник перед диагностикой:** `vl-ktk/ai-agent-engine/main`

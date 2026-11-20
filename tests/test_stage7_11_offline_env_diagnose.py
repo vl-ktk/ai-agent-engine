@@ -4,6 +4,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 import unittest
 
 if os.name != "posix":
@@ -23,12 +25,15 @@ class OfflineMetadataTests(unittest.TestCase):
     def test_known_failures_only_expose_code_location(self):
         evidence = dict(status="OFFLINE_BLOCKED", exception="PermissionError",
                         function="_execute_claimed", line=201,
-                        source="task_gpt.py")
+                        source="task_gpt.py", missing_module="none",
+                        private_package_visible=True, source_file_readable=True)
         self.assertEqual(diag._parse_metadata(self.encoded(evidence)), evidence)
 
     def test_passed_default_is_offline_only(self):
         good = dict(status="OFFLINE_PASS", exception="none",
-                    function="none", source="none", line=0)
+                    function="none", source="none", line=0,
+                    missing_module="none", private_package_visible=True,
+                    source_file_readable=True)
         self.assertEqual(diag._parse_metadata(self.encoded(good)), good)
         self.assertIn("live=False", diag._CODE)
         self.assertNotIn("--live", diag._CODE)
@@ -36,10 +41,15 @@ class OfflineMetadataTests(unittest.TestCase):
     def test_private_path_account_and_extra_fields_rejected(self):
         valid = dict(status="OFFLINE_BLOCKED", exception="ValueError",
                      function="run_acceptance", line=10,
-                     source="task_stage7_11_acceptance.py")
+                     source="task_stage7_11_acceptance.py",
+                     missing_module="ai_agent_engine", private_package_visible=False,
+                     source_file_readable=False)
         for changes in (dict(source="/private/credential.json"),
                         dict(exception="Secret:secret"),
-                        dict(line=True), dict(token="secret")):
+                        dict(line=True), dict(token="secret"),
+                        dict(missing_module="/private/token"),
+                        dict(private_package_visible="true"),
+                        dict(source_file_readable=1)):
             bad = dict(valid, **changes)
             with self.subTest(changes=changes), self.assertRaisesRegex(
                     RuntimeError, "offline metadata untrusted"):
@@ -49,6 +59,28 @@ class OfflineMetadataTests(unittest.TestCase):
         result = diag._parse_metadata(b"no response")
         self.assertEqual(result["status"], "OFFLINE_BLOCKED")
         self.assertEqual(result["exception"], "ProcessUnavailable")
+        self.assertIs(result["private_package_visible"], False)
+
+    def test_missing_module_is_public_identifier_only(self):
+        evidence = dict(status="OFFLINE_BLOCKED", exception="ModuleNotFoundError",
+                        function="unknown", line=0, source="unknown",
+                        missing_module="ai_agent_engine", private_package_visible=False,
+                        source_file_readable=False)
+        self.assertEqual(diag._parse_metadata(self.encoded(evidence)), evidence)
+        self.assertIn("find_spec('ai_agent_engine')", diag._CODE)
+        self.assertIn("ModuleNotFoundError", diag._CODE)
+
+    def test_actual_offline_child_metadata_without_provider_models(self):
+        process = subprocess.run(
+            [sys.executable, "-c", diag._CODE],
+            cwd=source.parents[2], stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=30, check=False)
+        report = diag._parse_metadata(process.stdout)
+        self.assertEqual(process.returncode, 0)
+        self.assertEqual(report["status"], "OFFLINE_PASS")
+        self.assertEqual(report["missing_module"], "none")
+        self.assertIs(report["private_package_visible"], True)
+        self.assertIs(report["source_file_readable"], True)
 
 
 if __name__ == "__main__":
