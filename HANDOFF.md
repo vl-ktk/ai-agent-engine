@@ -1,4 +1,14 @@
-# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / решение А подтверждено, Netcup HOLD
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / Netcup preflight PASS, runtime BLOCKED
+
+## Последний запрос владельца — начать подключение 7.7 к Netcup
+
+Владелец после предыдущего ограничения ответил «Давай» на предложение перейти к подключению 7.7 на Netcup. Это разрешает **проверку и подготовку подключения 7.7**; Windows, новые расходы, секреты/права доступа и чужие данные по-прежнему вне задачи. Последующая live проверка **не** является выкладкой и не доказывает, что интеграция запущена.
+
+**Новая read-only проверка сервера, 20.11.2026:** [GitHub Actions run 44698257792](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44698257792) — **PASS**, активны `ae-controller.service`, `ae-backup.timer`, `ae-host-check.timer`; `/opt/ai-agent-engine/current` → `releases/0e04af007375d82daf8f7d3b36c71abb0c784e0b` (установленный пакет `0.3.11a0`, зафиксированный rollback SHA). Запрос выпущен отдельным GitHub commit `f818f903d838391b9701f1662d93e5bc1a9016f2`; сам Netcup не менялся.
+
+**Проверенные блокеры до любой активации:** в **точном источнике работающего релиза** нет `project_leader.py` (7.5), `project_diagnostics.py` (7.7) и `project_diagnostic_adapter.py`; `controller.py` — heartbeat/systemd, **не task execution/event loop**. Поэтому простая замена wheel `0.3.11a0` на текущий `0.3.13a0` не подключит диагностику к задачам. Нужно сначала реализовать и утвердить конкретный серверный task runner с проверенным owner/project binding, источниками FAILED-событий, отдельным приватным проектным ledger и восстановлением/QA; это новая runtime-инфраструктура и изменение жизненного цикла, а не существующий процесс, к которому можно подключиться. Кроме того, GitHub release preparation/transfer/activate требуют **ручного owner `workflow_dispatch`** и exact SHA/wheel/rollback для каждой стадии — не обходить.
+
+**Действие после preflight:** live deployment **HOLD**, никаких изменений Windows, Netcup, systemd, SQLite/рабочих данных, SSH/правах доступа, подписках и секретах. Код `0.3.13a0` и 7.7 bridge уже опубликованы в GitHub (commits `c76d8ea` и `4732946`), offline проверки `807 OK (1 skipped)`, Linux CI и wheel PASS; Windows CI FAIL по старой ошибке и вне scope. **Перед продолжением:** согласовать отдельно запуск отсутствующего серверного task runner и допустимую схему owner/project-runtime данных, затем разработать и проверить полный release candidate на базе live source; прямо перед owner-controlled deploy сверить current SHA и подготовить rollback. Статус **7.7 [ ] PARTIAL / NETCUP RUNTIME BLOCKED**, не начинать 7.8 автоматически.
 
 ## Последнее указание владельца — действующие границы
 
