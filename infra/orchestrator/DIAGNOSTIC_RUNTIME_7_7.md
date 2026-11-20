@@ -46,6 +46,14 @@ pre-execution baseline and signal. A crash that loses those inputs is HOLD for
 owner review, not an automatic replay. This callable is not a task execution
 loop or a Netcup deployment. The server still has no live TaskInbox owner.
 
+**Source-only `0.3.18a0`:** the opt-in
+[`SingleProjectDiagnosticRunner`](./SINGLE_PROJECT_RUNNER_7_7.md) provides a
+bounded, real Linux offline task/exit producer for *pre-admitted* tasks. It
+uses the existing exclusive inbox, approved registry, scope, permission gate,
+delivery ledger and process controller. Only one fixed read-only Git check
+is enabled; it never reads task prompts as instructions. This is **not** a
+production Netcup task-loop or a credential-bearing GPT/Claude executor.
+
 The non-secret source-only [configuration example](./diagnostic_runtime_7_7.single-project.example.json)
 illustrates the intended **future** private state directory. The example
 cannot be fed directly to a running service: the host operator must first
@@ -104,7 +112,7 @@ real GPT/Claude QA.
    Last observed read-only at 20.11.2026: `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
    (`0.3.11a0`), not a standing guarantee.
 4. Build a candidate from the precise deployed source with approved 7.5/7.7
-   dependency closure. GitHub `main` `0.3.17a0` contains additional offline
+   dependency closure. GitHub `main` `0.3.18a0` contains additional offline
    stages and must **not** simply be promoted blindly as a live orchestrator.
 5. Have the GitHub owner manually run pinned `release-preparation.yml`, then
    `netcup-owner-release-transfer.yml` and

@@ -201,6 +201,26 @@ class TaskProcessControlTests(unittest.TestCase):
                               expected)
                 self.assertIs(self.inbox.state(task_id, OWNER), expected)
 
+    def test_gated_pre_release_callback_does_not_execute_on_denial(self):
+        task_id = self.create()
+        assignment = self.claim(task_id)
+        marker = Path(assignment.workspace_dir) / "should-not-exist"
+        worker = (sys.executable, "-c",
+                  f"from pathlib import Path; Path({str(marker)!r}).write_text('ran')")
+
+        def denied():
+            self.assertIs(self.inbox.state(task_id, OWNER), TaskState.RUNNING)
+            self.assertFalse(marker.exists())
+            raise TaskControlError("permission_preflight_denied")
+
+        with self.assertRaisesRegex(TaskControlError, "permission_preflight_denied"):
+            self.control.launch_gated(
+                task_id, OWNER, actor_id="worker-a", worker_argv=worker,
+                cwd=assignment.workspace_dir, environment={"PATH": "/usr/bin:/bin"},
+                quiet=True, before_release=denied)
+        self.assertFalse(marker.exists())
+        self.assertIs(self.inbox.state(task_id, OWNER), TaskState.CANCELLED)
+
     def test_finish_refuses_live_child_and_mismatched_result(self):
         task_id = self.create()
         self.claim(task_id)

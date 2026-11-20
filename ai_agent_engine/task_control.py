@@ -151,7 +151,9 @@ class TaskProcessController:
     def launch_gated(self, task_id: str, scope: OwnerScope, *, actor_id: str,
                      worker_argv: tuple[str, ...], cwd: str,
                      environment: dict[str, str],
-                     timeout_seconds: float | None = None) -> subprocess.Popen:
+                     timeout_seconds: float | None = None,
+                     before_release: Callable[[], None] | None = None,
+                     quiet: bool = False) -> subprocess.Popen:
         """Start a dormant child; commit its identity before releasing exec.
 
         A pre-attach SIGKILL of this supervisor closes the one-byte pipe.
@@ -163,7 +165,9 @@ class TaskProcessController:
                 or any(type(item) is not str or not item or "\x00" in item
                        for item in worker_argv)
                 or type(cwd) is not str or not cwd.startswith("/")
-                or not isinstance(environment, dict)):
+                or not isinstance(environment, dict)
+                or (before_release is not None and not callable(before_release))
+                or type(quiet) is not bool):
             raise TaskControlError("invalid trusted worker launch")
         assignment = self.inbox.get_assignment(task_id, scope)
         if (assignment is None or assignment.worker_id != actor_id
@@ -178,14 +182,21 @@ class TaskProcessController:
             process = subprocess.Popen(
                 argv, cwd=cwd, env=environment,
                 pass_fds=(read_fd,), close_fds=True,
-                start_new_session=True, stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                start_new_session=True,
+                stdin=subprocess.DEVNULL if quiet else subprocess.PIPE,
+                stdout=subprocess.DEVNULL if quiet else subprocess.PIPE,
+                stderr=subprocess.DEVNULL)
             os.close(read_fd)
             read_fd = -1
             self.attach(task_id, process, scope, actor_id=actor_id,
                         timeout_seconds=timeout_seconds,
                         _launch_kind="gated")
             attached = True
+            # A trusted permission gate may commit its decision only after
+            # the task is RUNNING but *before* releasing the worker's exec.
+            # Denial closes the pipe and cancels the dormant child.
+            if before_release is not None:
+                before_release()
             if os.write(write_fd, b"G") != 1:
                 raise TaskControlError("gated worker did not start")
             return process
