@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "ed5e771a887d78570aab88c93e277b9e",
+  "source_sha": "8f0f983c478e2674a50893f73e52cff97ce73f94",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage7_11_offline_env_diagnose.py",
+  "script_sha256": "b747885d5be90522746e03d1a817695a983f7546726c43461c2c663c9ffaf0de"
+}
