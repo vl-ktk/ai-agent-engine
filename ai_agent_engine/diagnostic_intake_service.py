@@ -197,7 +197,7 @@ def _private_config(path: Path) -> dict[str, object]:
             "workspace_root", "task_db", "socket_path", "source_bindings",
     } or doc["schema"] != 1 or type(doc["schema"]) is not int
             or type(doc["project_ids"]) is not list
-            or not doc["project_ids"] or len(doc["project_ids"]) > 16
+            or len(doc["project_ids"]) != 1
             or any(type(p) is not str for p in doc["project_ids"])
             or len(set(doc["project_ids"])) != len(doc["project_ids"])
             or type(doc["source_bindings"]) is not dict

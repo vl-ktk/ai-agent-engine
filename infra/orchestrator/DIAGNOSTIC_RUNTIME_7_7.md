@@ -4,6 +4,20 @@
 Windows changes, paid provider calls, secret/permission modifications or broad
 production-data migrations. This source is **not** an active task runner.
 
+**Owner decision 20.11.2026:** the initial allowed scope is **only** the
+AI Agent Engine project. Its internal identifiers are
+`owner_id=vl-ktk`, `project_id=ai-agent-engine`, accepted by `OwnerScope`. The runtime now
+requires **exactly one** project and fails closed on multi-project config.
+This is a selection of scope, **not** an authenticated `OwnerDecision`, grant,
+or proof that the workspace exists on Netcup.
+
+The non-secret source-only [configuration example](./diagnostic_runtime_7_7.single-project.example.json)
+illustrates the intended **future** private state directory. The example
+cannot be fed directly to a running service: the host operator must first
+approve/provision the exact project registry, workspace, Git binding and
+private task DB, then install the config as `0600` under the correct host UID.
+Do not create or share a second project as part of this first rollout.
+
 ## Implemented source-only component
 
 - `ai_agent_engine/diagnostic_intake_service.py`: bounded newline-delimited JSON

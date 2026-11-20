@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "owner_id": "vl-ktk",
+  "project_ids": ["ai-agent-engine"],
+  "project_leader_root": "/var/lib/ai-agent-engine-diagnostics/projects",
+  "workspace_root": "/var/lib/ai-agent-engine-diagnostics/workspaces",
+  "task_db": "/var/lib/ai-agent-engine-diagnostics/tasks.sqlite3",
+  "socket_path": "/run/ai-agent-engine-diagnostics/intake.sock",
+  "source_bindings": {
+    "ai-agent-engine": "/var/lib/ai-agent-engine-diagnostics/workspaces/ai-agent-engine"
+  }
+}

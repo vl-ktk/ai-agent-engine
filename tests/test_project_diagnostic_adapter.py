@@ -255,6 +255,11 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
         config.write_text(json.dumps(payload))
         with self.assertRaises(IntakeUnavailable):
             _private_config(config)
+        payload["project_ids"] = ["alpha", "beta"]
+        payload["source_bindings"]["beta"] = str(self.base / "other-repo")
+        config.write_text(json.dumps(payload))
+        with self.assertRaises(IntakeUnavailable):
+            _private_config(config)
 
     def test_runtime_loads_only_approved_project_and_prepared_task_db(self):
         config = self.base / "runtime.json"
@@ -279,6 +284,19 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
                    side_effect=observe):
             run_configured_service(config, Event())
         self.assertEqual(called, [("TaskDiagnosticAdapter", Path(payload["socket_path"]))])
+
+    def test_single_project_template_matches_allowed_identity_schema(self):
+        example = (Path(__file__).resolve().parents[1] / "infra" / "orchestrator"
+                   / "diagnostic_runtime_7_7.single-project.example.json")
+        doc = json.loads(example.read_text(encoding="utf-8"))
+        self.assertEqual(doc["owner_id"], "vl-ktk")
+        self.assertEqual(doc["project_ids"], ["ai-agent-engine"])
+        self.assertEqual(set(doc["source_bindings"]), {"ai-agent-engine"})
+        self.assertEqual(OwnerScope(doc["owner_id"],
+                                    frozenset(doc["project_ids"])).owner_id,
+                         "vl-ktk")
+        self.assertEqual(OwnerScope("vl-ktk", frozenset({"ai-agent-engine"})).project_ids,
+                         frozenset({"ai-agent-engine"}))
 
 
 if __name__ == "__main__":
