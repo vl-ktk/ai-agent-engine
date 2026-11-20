@@ -1,3 +1,40 @@
+# HANDOFF — 20.11.2026, Secure Vault 7.7A / Netcup-only service rollout
+
+**Последнее поручение:** «Всё на сервере, делай дальше». Владелец отказался
+от Cloudflare/R2 и иных off-host резервных копий: Vault, его key-provider и
+шифрованные копии размещаются **на том же Netcup**. Это осознанно НЕ
+обеспечивает спасение при полной гибели VPS. Обновить старые формулировки
+off-host DR в плане; не подключать чужие Cloudflare buckets.
+
+**Реальные host факты:** доверенный [Netcup audit
+44758461197](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44758461197)
+PASS: systemd 257, `systemd-creds` доступен, пользователь `ae-runtime` есть,
+около 150 ГиБ свободно, отдельных Vault service/key/root нет. Контроллер
+`0.3.11a0`, SHA `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
+по тому аудиту неизменен. Перед установкой wrapper снова проверяет live SHA.
+
+**Исходник очередного изменения:** изолированный host adapter
+`ai_agent_engine/vault_runtime.py` (UNIX-сокет + kernel `SO_PEERCRED`, root
+owner, ограниченный UID `ae-runtime`), root-reviewed installer
+`ops/admin-scripts/vault_netcup_install_7_7a.py` (новый `ae-vault`, systemd
+encrypted host-bound credentials, отдельные service/socket/backup timer,
+приватная SQLite, локальный AES backup с проверкой restore), synthetic tests,
+обновлённые roadmap и этот HANDOFF. Старые пакеты, users/units и Windows
+не меняются этим **исходным коммитом**.
+
+**Граница готовности:** до успешного owner-admin request, live проверки
+сервисов, локального backup/restore и реальной доверенной chat ingress
+**7.7A остаётся `[ ] PARTIAL`**. На этом этапе нет автоматического сохранения
+паролей из самого ChatGPT: kernel actor identity нельзя принимать из JSON.
+Не утверждать, что все GPT/Claude/Codex получают раздельные права по
+одному системному UID; требуется отдельная аутентификация исполнителей.
+При смене installed controller SHA — HOLD. Rollback старого контроллера:
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`; новую Vault можно
+отдельно остановить `systemctl stop ae-vault.service ae-vault.socket
+ae-vault-backup.timer` с сохранением данных/ключей и без удаления.
+
+---
+
 # HANDOFF — 20.11.2026, Secure Vault 7.7A / owner-approved live preflight
 
 **Новое разрешение владельца:** полностью закончить 7.7A, включая
