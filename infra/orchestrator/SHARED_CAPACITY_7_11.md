@@ -1,8 +1,9 @@
 # 7.11 — Shared controller capacity (source-only contract)
 
-**Status on 20.11.2026: `[ ] PARTIAL / SOURCE ONLY`.** Neither a live
-controller nor GPT/Claude subscription runtime is wired to this gate. No
-production execution, new paid API or unattended account use is authorized.
+**Status on 20.11.2026: `[ ] PARTIAL`.** Source GPT/Claude task adapters now
+have a pinned-specialist admission bridge (offline E2E verified), but the
+live Netcup controller and provider sessions are **not** wired to it. No
+production model execution, new paid API or unattended account use is authorized.
 
 ## Single pool, not one process per avatar
 
@@ -56,6 +57,26 @@ resetting the rolling provider window. Existing v1–v16 task DBs migrate
 transactionally on first opening with new code. Migration is not reversible
 without an independently validated database restore.
 
+## Provider adapter integration (source-only)
+
+`GPTTaskExecutor` and `ClaudeTaskExecutor` accept an explicit trusted
+`SharedCapacity` instance constructed over **the same** private `TaskInbox`.
+For each 7.3 specialist-pinned dispatch they check the approved provider,
+deny a missing capacity gate, and reserve the shared CPU/provider budget
+**before** obtaining a delivery token or launching the subprocess.
+`cpu_busy`, `provider_busy`, `provider_quota` and other admission refusals
+return `GPTTaskOutcome(executed=False, capacity_reason=...)` while the task
+remains `ASSIGNED`, without consuming an attempt or starting a child.
+Terminal execution settles the exact slot; crashes and unknown running
+processes retain it for recovery. Duplicates never spend a second quota.
+
+The historical unpinned 6.2/6.3 personal pilots remain executable *only*
+when no capacity manager was supplied; supplying one forbids unpinned tasks.
+This backward-compatibility path is **not** a general 7.11 dispatcher.
+Production must construct **one** shared policy/DB for every trusted adapter
+and must not invoke standalone personal pilots as a parallel admission path.
+This module does not install that dispatcher or authorize unattended CLI use.
+
 ## Verified local scope and outstanding integration
 
 The new offline tests exercise common GPT+Claude CPU slots, independent
@@ -63,12 +84,14 @@ provider concurrency and quotas, wait with no callback, cross-owner/worker
 denials, two concurrent contenders, durable restart, clock behavior, exact
 settlement and v16→v17 migration. No real GPT/Claude calls are needed.
 
-To complete 7.11 as **live** work, the trusted orchestrator must call this
-gate on *every* provider dispatch, select a machine-appropriate approved
-policy, ensure verified process recovery and integrate capacity waits with
-the existing queue. **Do not deploy task SQLite v17 to Netcup:** the last
-confirmed live controller core is `0.3.11a0`, and the known pinned backup
-hook has not been reviewed for schema v16/v17. Inspect and update the signed
-backup/restore gate, live source SHA and rollback path first, then obtain the
-required release approval and run an isolated live E2E. This source work
-does not close 7.7/7.7A/7.8/7.9 or initiate 7.12.
+To complete 7.11 as **live** work, the trusted orchestrator must instantiate
+the same policy for *every* provider dispatch, select machine-appropriate
+numeric limits based on actually authorized subscription modes, recover
+processes safely, and connect capacity waits to its real queue. On Netcup the
+root-installed diagnostic backup hook was upgraded to v14–v17 compatibility
+with an existing snapshot verify + isolated restore PASS (owner Actions run
+`44796580391`). The live **core remains `0.3.11a0`**, its task SQLite remains
+v14, and no live GPT/Claude orchestration or v17 migration has been performed.
+Do **not** migrate the live DB solely to claim a milestone; first review
+release/source/rollback and obtain limited true provider E2E with approved
+accounts. This source work does not close 7.7/7.7A/7.8/7.9 or initiate 7.12.

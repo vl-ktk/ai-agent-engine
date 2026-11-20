@@ -23,6 +23,8 @@ from .task_delivery import TaskDeliveryManager
 from .task_isolation import provider_worker_environment, redact_text, sensitive_environment_values
 from .task_permissions import ProtectedAction, TaskPermissionGate
 from .task_state import TaskState, TransitionRejected
+from .main_shared_capacity import SharedCapacity
+from .main_specialists import load_specialist_pin
 
 
 _MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,127}\Z")
@@ -40,6 +42,7 @@ class GPTTaskOutcome:
     model_id: str
     executed: bool
     text: str | None = None
+    capacity_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,7 +73,8 @@ class GPTTaskExecutor:
                  worker_id: str, model_id: str,
                  permission_gate: TaskPermissionGate,
                  timeout_seconds: float = 30,
-                 worker_argv: tuple[str, ...] | None = None) -> None:
+                 worker_argv: tuple[str, ...] | None = None,
+                 capacity: SharedCapacity | None = None) -> None:
         if not isinstance(inbox, TaskInbox) or not inbox.durable:
             raise GPTTaskError("durable inbox is required")
         if not isinstance(scope, OwnerScope):
@@ -84,6 +88,9 @@ class GPTTaskExecutor:
         if (not isinstance(permission_gate, TaskPermissionGate)
                 or permission_gate.inbox is not inbox):
             raise GPTTaskError("trusted permission gate required")
+        if capacity is not None and (not isinstance(capacity, SharedCapacity)
+                                     or capacity.inbox is not inbox):
+            raise GPTTaskError("capacity must share the trusted task inbox")
         if worker_argv is not None and (
                 type(worker_argv) is not tuple or not worker_argv
                 or any(type(s) is not str or not s or "\x00" in s
@@ -96,6 +103,7 @@ class GPTTaskExecutor:
         self.timeout_seconds = float(timeout_seconds)
         self.worker_argv = (worker_argv or (
             sys.executable, "-m", "ai_agent_engine.gpt_task_worker"))
+        self.capacity = capacity
         self.delivery = TaskDeliveryManager(inbox, retry_delay_seconds=0)
         self.control = TaskProcessController(inbox, permission_gate=permission_gate)
 
@@ -170,7 +178,36 @@ class GPTTaskExecutor:
                              ensure_ascii=False, separators=(",", ":")).encode()
         if len(payload) > 20_000:
             raise GPTTaskError("private task payload too large")
+        pin = load_specialist_pin(self.inbox, self.scope, task_id)
+        if pin is None:
+            if self.capacity is not None:
+                raise GPTTaskError("approved specialist pin required for capacity")
+            # Legacy 6.2/6.3 one-owner pilot: never silently reclassify its
+            # unpinned task as an approved 7.11 dispatch.
+            self._claim_or_verify(task_id, workspace_name)
+            return self._execute_claimed(task_id, payload)
+        if pin.agent_id != self.worker_id or pin.provider_id != self._provider:
+            raise GPTTaskError("approved specialist provider mismatch")
+        if self.capacity is None:
+            raise GPTTaskError("pinned provider dispatch requires shared capacity")
         self._claim_or_verify(task_id, workspace_name)
+        # Do not spend a new provider quota or reserve a CPU slot for a
+        # duplicate delivery which cannot legitimately launch a model.
+        previous = self.delivery.snapshot(task_id, self.scope)
+        state = self.inbox.state(task_id, self.scope)
+        if state is not TaskState.ASSIGNED or previous is not None:
+            return GPTTaskOutcome(task_id, state, self.model_id, False)
+        decision, result = self.capacity.run(
+            task_id, self.scope, worker_id=self.worker_id,
+            operation=lambda: self._execute_claimed(task_id, payload))
+        if not decision.admitted:
+            return GPTTaskOutcome(task_id, TaskState.ASSIGNED, self.model_id,
+                                  False, capacity_reason=decision.reason)
+        assert result is not None
+        return result
+
+    def _execute_claimed(self, task_id: str, payload: bytes) -> GPTTaskOutcome:
+        """Issue one existing delivery, already admitted when specialist-pinned."""
         ticket = self.delivery.reserve(task_id, self.scope,
                                        actor_id=self.worker_id, max_attempts=1)
         if not ticket.should_execute:

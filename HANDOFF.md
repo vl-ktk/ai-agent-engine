@@ -1,3 +1,57 @@
+# HANDOFF — 20.11.2026, этап 7.11 / совместимый live backup + source provider bridge
+
+**Источник при принятии:** `vl-ktk/ai-agent-engine/main`
+`9ad92f983d9656da6b1801c170523f558d32cb66` (source rollback до
+текущей source-правки). Единственный активный пункт **7.11 `[ ] PARTIAL`**;
+7.12 не начинать. Новые живые модели/платные API/секреты не подключали.
+
+**Netcup факт:** reviewed historical v14 installed hook был подтверждён
+root audit [run 44795224860](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44795224860):
+task SQLite v14, один существующий snapshot verify `PASS`, scratch restore
+`PASS`, services unchanged. Затем reviewed atomic upgrade script
+`ops/admin-scripts/upgrade_diagnostic_backup_v17_7_11.py` source commit
+`c39e12a40bb42f4a0a28e8d24c6c1e20653e90f4` выполнен root owner
+[run 44796580391](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44796580391)
+**SUCCESS**: `V17_COMPATIBLE_BACKUP_HOOK_INSTALLED`, существующая копия
+verify `PASS`, изолированное восстановление `PASS`; оригинальный хук сохранён
+в приватном root evidence для отката. Backup hook совместим со схемами
+v14–v17. Не делались backup creation, live DB mutation, services restart,
+controller update. Live **core `0.3.11a0`**, release/id отката
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`, SQLite **v14**.
+Изменение backup hook не эквивалентно core release; перед возможным
+откатом hook нужно использовать root evidence и проверять live состояние.
+
+**Новая source-правка 7.11:** `GPTTaskExecutor` / `ClaudeTaskExecutor` теперь
+получают один опционально предоставляемый доверенный `SharedCapacity` и
+обязательно требуют его для каждого 7.3-pinned task. Проверяют соответствие
+provider, резервируют общий CPU/provider слот до delivery/subprocess,
+откладывают отказанный вызов без запуска процесса и расхода delivery,
+выдают обезличенный `capacity_reason`; завершение освобождает слот, а
+неопределённый процесс его удерживает. Старый unpinned личный 6.2/6.3
+пилот не объявляется 7.11-диспетчером; при наличии capacity unpinned
+запрос отклоняется. Файлы: `task_gpt.py`, `task_claude.py`, новые
+`tests/test_provider_capacity_dispatch_7_11.py`, документ 7.11, версия
+wheel **`0.3.25a0`** (исходник; **не Netcup release**).
+
+**Проверки локально:** пять новых end-to-end fixture тестов GPT/Claude,
+полный Linux Python 3.12 регресс **1055 OK (3 skipped)**, `compileall`,
+public-source/workflow scans, `git diff --check` и wheel
+`0.3.25a0` build PASS. GitHub PR/CI/merge и финальный SHA указывать
+только после проверки.
+
+**Открытый блокер:** нет действующего главного orchestrator/owner-approved
+provider dispatch на Netcup и доверенных live GPT/Claude sessions для
+нового режима. Нет утверждённой числовой политики для Netcup 4 vCPU
+с верификацией провайдерских лимитов. Нельзя без этих предпосылок
+доказывать live CPU quota/очередь или обновлять task SQLite v14→v17;
+схема мигрирует необратимо без restore, даже при работающем backup hook.
+Остановиться на 7.11, не объявлять `[x]`, не переходить к 7.12 без решения
+владельца. Для завершения: безопасный live dispatch/owner-подтверждение
+provider modes и численных ограничений, preflight выпуска + отдельная
+изолированная E2E-проверка и rollback, затем фактическая приёмка владельцем.
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.11 / backup hook hash drift CONFIRMED
 
 **ИТОГ metadata-only followup:** владелец разрешил точно установить
