@@ -177,7 +177,7 @@ class CrisisEscalationTests(unittest.TestCase):
         self.coordinator = CrisisEscalationCoordinator(
             self.inbox,self.diagnostics,SCOPE,"engine")
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(),(16,))
+            "PRAGMA user_version").fetchone(),(17,))
         self.assertEqual(self.inbox._store.permission_history(self.original)
                          [0][4],"grant_missing")
         self.assertEqual(self.inbox._store._db().execute(
