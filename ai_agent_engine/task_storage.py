@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 15  # v15: one-shot owner-scoped crisis escalation ledger.
+SCHEMA_VERSION = 16  # v16: durable owner-appointed global direction leads.
 
 
 class StorageUnavailable(RuntimeError):
@@ -106,9 +106,10 @@ class SQLiteTaskStore:
                 self._create_specialist_tables(db)
                 self._create_transfer_tables(db)
                 self._create_crisis_tables(db)
+                self._create_global_lead_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
+        elif app_id == APPLICATION_ID and 1 <= version <= 15:
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -157,6 +158,7 @@ class SQLiteTaskStore:
                 self._create_specialist_tables(db)
                 self._create_transfer_tables(db)
                 self._create_crisis_tables(db)
+                self._create_global_lead_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -779,6 +781,79 @@ class SQLiteTaskStore:
                 (incident_id,)).fetchall())
         except sqlite3.Error as exc:
             raise StorageUnavailable("cannot read crisis audit") from exc
+
+    @staticmethod
+    def _create_global_lead_tables(db: sqlite3.Connection) -> None:
+        """v16: owner decisions, not permissions or provider dispatch."""
+        db.execute("""CREATE TABLE IF NOT EXISTS global_direction_decisions (
+            owner_id TEXT NOT NULL,
+            direction_id TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK(revision BETWEEN 1 AND 1000000),
+            action TEXT NOT NULL CHECK(action IN ('appoint','remove')),
+            agent_id TEXT,
+            role_id TEXT,
+            catalog_revision INTEGER NOT NULL,
+            catalog_sha256 TEXT,
+            previous_sha256 TEXT,
+            proposal_id TEXT NOT NULL UNIQUE,
+            channel TEXT NOT NULL CHECK(channel IN ('message','button')),
+            digest TEXT NOT NULL CHECK(length(digest)=64),
+            canonical_json TEXT NOT NULL,
+            approved_at TEXT NOT NULL DEFAULT
+                (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            PRIMARY KEY(owner_id,direction_id,revision),
+            CHECK((action='appoint' AND agent_id IS NOT NULL
+                AND role_id IS NOT NULL AND catalog_revision>0
+                AND length(catalog_sha256)=64) OR
+                  (action='remove' AND agent_id IS NULL
+                AND role_id IS NULL AND catalog_revision=0
+                AND catalog_sha256 IS NULL))
+        )""")
+
+    def global_lead_rows(self, owner_id: str,
+                         direction_id: str | None = None) -> tuple[tuple, ...]:
+        try:
+            return tuple(self._db().execute("""SELECT owner_id,direction_id,
+                revision,action,agent_id,role_id,catalog_revision,
+                catalog_sha256,previous_sha256,proposal_id,channel,digest,
+                canonical_json FROM global_direction_decisions
+                WHERE owner_id=? AND (? IS NULL OR direction_id=?)
+                ORDER BY direction_id,revision""",
+                (owner_id,direction_id,direction_id)).fetchall())
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect global direction leaders") from exc
+
+    def save_global_lead(self, row: tuple, expected_previous: str | None,
+                         *, catalog_digest: str | None) -> None:
+        """Atomic CAS against latest appointment and approved catalog."""
+        (owner,direction,revision,action,agent,role,cat_rev,cat_sha,
+         previous,proposal_id,channel,digest,canonical) = row
+        try:
+            db = self._db()
+            db.execute("BEGIN IMMEDIATE")
+            with db:
+                latest = db.execute("""SELECT revision,digest FROM
+                    global_direction_decisions WHERE owner_id=? AND direction_id=?
+                    ORDER BY revision DESC LIMIT 1""",
+                    (owner,direction)).fetchone()
+                if (revision != (latest[0]+1 if latest else 1)
+                        or expected_previous != (latest[1] if latest else None)
+                        or previous != expected_previous):
+                    raise StorageUnavailable("stale global lead decision")
+                if action == "appoint":
+                    current = db.execute("""SELECT revision,digest FROM
+                        approved_specialist_catalogs WHERE owner_id=?
+                        ORDER BY revision DESC LIMIT 1""",
+                        (owner,)).fetchone()
+                    if current != (cat_rev,catalog_digest) or cat_sha != catalog_digest:
+                        raise StorageUnavailable("global lead catalog changed")
+                db.execute("""INSERT INTO global_direction_decisions
+                    (owner_id,direction_id,revision,action,agent_id,role_id,
+                     catalog_revision,catalog_sha256,previous_sha256,
+                     proposal_id,channel,digest,canonical_json)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", row)
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot save global lead decision") from exc
 
     def transfer_has_started(self, task_id: str) -> bool:
         """Whether v14 has superseded the immutable legacy assignment."""

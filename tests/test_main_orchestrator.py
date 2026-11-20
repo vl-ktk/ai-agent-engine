@@ -222,7 +222,7 @@ class MainOrchestratorTests(unittest.TestCase):
         self.assertIsNotNone(self.inbox.get(before, OWNER))
         self.assertIsNone(self.inbox._store.owner_approval(before))
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone()[0], 15)
+            "PRAGMA user_version").fetchone()[0], 16)
 
     def test_context_truncates_oversized_focus_without_escaping_scope(self):
         for index in range(20):
