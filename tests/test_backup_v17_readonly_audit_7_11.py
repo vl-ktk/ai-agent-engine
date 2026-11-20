@@ -11,6 +11,9 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if os.name != "posix":
+    raise unittest.SkipTest("Netcup owner-admin audit runs only on POSIX hosts")
+
 SPEC = importlib.util.spec_from_file_location(
     "audit_backup_v17_readonly_7_11",
     ROOT / "ops/admin-scripts/audit_backup_v17_readonly_7_11.py",
