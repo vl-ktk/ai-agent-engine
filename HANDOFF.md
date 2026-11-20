@@ -1,3 +1,37 @@
+# HANDOFF — 20.11.2026 / 7.11, изолированный Netcup GPT+Claude E2E LIVE PASS
+
+**Источник на входе:** GitHub `vl-ktk/ai-agent-engine/main`
+`86c8bce1d62cc84cbf6a0ba90924e0aa5e2679ea` (source rollback перед
+этой исключительно документационной правкой). Владелец просил фиксировать
+все повторяемые причины и сразу добавлять защиту. `docs/KNOWN_ISSUES.md`
+содержит запись AE-711-001 с подтверждённым исправлением временного
+root-owned source после [PR #106](https://github.com/vl-ktk/ai-agent-engine/pull/106).
+
+**Реальная приёмка:** [Netcup OFFLINE #44807319708](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44807319708)
+вернул `OFFLINE_PASS`, runtime файлы читаются и пакет доступен. Затем
+строго однократный [owner LIVE #44808394097](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44808394097)
+вернул `LIVE_PASS`: один настоящий GPT и один личный Claude Pro,
+CPU wait/provider rolling quota, отсутствие delivery на ожидании,
+durable disposable SQLite v17, без автоматических повторов и paid API
+fallback. Секреты и модельные ответы в журнал не выводились.
+
+**Netcup production БЕЗ изменений:** controller core **v0.3.11a0**,
+release/rollback id `0e04af007375d82daf8f7d3b36c71abb0c784e0b`,
+рабочая task SQLite **v14**, systemd без перезапуска, backup hook v14–v17
+ранее верифицирован. Числа из disposable acceptance `cpu_slots=1`,
+GPT `1 параллельно, 2/300 секунд`, Claude `1 параллельно, 1/300 секунд`
+относятся **только к тесту**, production-policy не утверждена.
+
+**Остаётся:** 7.11 **`[ ] PARTIAL`**, 7.12 не начинать. Для полного
+закрытия: отдельное owner-approved решение о численных production-лимитах
+и изменении рабочей SQLite v14→v17; source-интеграция единого SharedCapacity
+в постоянный trusted Netcup dispatcher, бэкап/restore/rollback, test release,
+повторная проверка live версии непосредственно до выкладки. Миграция
+working task DB и production promotion не делались и не являются
+автоматическим следствием пройденного isolated E2E.
+
+---
+
 # HANDOFF — 20.11.2026 / 7.11, причина импорта подтверждена, fix source-only
 
 **Источник на входе:** GitHub `vl-ktk/ai-agent-engine/main`

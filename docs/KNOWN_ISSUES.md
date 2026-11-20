@@ -25,9 +25,16 @@
 - **Защита:**
   `tests/test_stage7_11_netcup_live_acceptance.py::test_root_owned_disposable_copy_is_recursively_owned_by_runtime`,
   плюс синтетическая CPU/provider acceptance в disposable SQLite v17.
-- **Статус:** конкретная причина подтверждена; исходная правка ожидает
-  GitHub CI и повторной офлайн-проверки на Netcup. Не ставить `FIXED`, пока
-  реальный запуск под `ae-runtime` не вернёт `OFFLINE_PASS`.
+- **Статус: FIXED для изолированной Netcup acceptance.** Исходник
+  [PR #106](https://github.com/vl-ktk/ai-agent-engine/pull/106) прошёл
+  Linux 3.11/3.12/3.13 и wheel CI, после чего реальный
+  [Netcup OFFLINE #44807319708](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44807319708)
+  вернул `OFFLINE_PASS`, `runtime_file_readable=true`,
+  `runtime_package_traversable=true`, `private_package_visible=true`.
+  Ограниченный [LIVE #44808394097](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44808394097)
+  затем подтвердил `LIVE_PASS` одного GPT и одного Claude без изменения
+  production core/SQLite. Это **не** подтверждение постоянного live-dispatch
+  и не разрешение автоматически менять рабочую базу.
 
 ## CI-313-001 — финализаторы SQLite мешают тесту stderr в Python 3.13
 
