@@ -19,7 +19,18 @@ import tempfile
 
 _PATH = Path("ops/admin-scripts/stage7_11_capacity_live_acceptance.py")
 _CODE = r"""
-import json,sys
+import importlib.util,json,os,re,sys
+from pathlib import Path
+expected = Path('ai_agent_engine/__init__.py').resolve()
+try:
+    spec = importlib.util.find_spec('ai_agent_engine')
+except (ImportError, AttributeError, ValueError):
+    spec = None
+private_package_visible = bool(spec and spec.origin and
+                               Path(spec.origin).resolve() == expected)
+source_file_readable = (Path('ai_agent_engine/task_stage7_11_acceptance.py').is_file()
+                        and os.access('ai_agent_engine/task_stage7_11_acceptance.py',os.R_OK))
+missing_module = 'none'
 try:
     from ai_agent_engine.task_stage7_11_acceptance import run_acceptance
     out = run_acceptance(live=False)
@@ -28,6 +39,13 @@ try:
     report = {'status':'OFFLINE_PASS', 'exception':'none',
               'function':'none', 'line':0, 'source':'none'}
 except BaseException as exc:
+    if isinstance(exc, ModuleNotFoundError):
+        name = getattr(exc,'name',None)
+        if isinstance(name,str) and len(name) <= 80 and re.fullmatch(
+                r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,5}',name):
+            missing_module = name
+        else:
+            missing_module = 'unknown'
     stack = []
     tb = exc.__traceback__
     while tb is not None:
@@ -39,6 +57,9 @@ except BaseException as exc:
     name,number,source = stack[-1] if stack else ('unknown',0,'unknown')
     report={'status':'OFFLINE_BLOCKED','exception':type(exc).__name__,
             'function':name,'line':number,'source':source}
+report['missing_module']=missing_module
+report['private_package_visible']=private_package_visible
+report['source_file_readable']=source_file_readable
 print('STAGE7_11_OFFLINE_METADATA '+json.dumps(report,sort_keys=True),flush=True)
 sys.exit(0 if report['status']=='OFFLINE_PASS' else 2)
 """
@@ -64,19 +85,28 @@ def _parse_metadata(output: bytes) -> dict:
         except (UnicodeError, ValueError, TypeError):
             raise RuntimeError("offline metadata corrupt") from None
         if (type(result) is not dict
-                or set(result) != {"status", "exception", "function", "line", "source"}
+                or set(result) != {"status", "exception", "function", "line", "source",
+                                   "missing_module", "private_package_visible",
+                                   "source_file_readable"}
                 or result["status"] not in ("OFFLINE_PASS", "OFFLINE_BLOCKED")
                 or any(type(result[name]) is not str
                        or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}", result[name])
                        for name in ("exception", "function"))
                 or type(result["source"]) is not str
                 or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]{0,79}", result["source"])
+                or type(result["missing_module"]) is not str
+                or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,5}",
+                                    result["missing_module"])
+                or type(result["private_package_visible"]) is not bool
+                or type(result["source_file_readable"]) is not bool
                 or type(result["line"]) is not int
                 or not 0 <= result["line"] <= 10000):
             raise RuntimeError("offline metadata untrusted")
         return result
     return {"status": "OFFLINE_BLOCKED", "exception": "ProcessUnavailable",
-            "function": "unknown", "source": "unknown", "line": 0}
+            "function": "unknown", "source": "unknown", "line": 0,
+            "missing_module": "unknown", "private_package_visible": False,
+            "source_file_readable": False}
 
 
 def main() -> None:
