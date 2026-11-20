@@ -1,0 +1,46 @@
+# Stage 7.7 — SOURCE-ONLY, DO NOT INSTALL/ENABLE from a code commit.
+# Requires a separately approved trusted owner/project registry, prepared task
+# database at the exact latest schema, and owner-controlled release activation.
+# A second process MUST NOT open the database used by another active TaskInbox.
+# Does not call GPT/Claude, admit tasks, execute tools, or grant permissions.
+[Unit]
+Description=AI Agent Engine private verified diagnostic intake
+After=local-fs.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=ae-runtime
+Group=ae-runtime
+WorkingDirectory=/opt/ai-agent-engine/current
+ExecStart=/opt/ai-agent-engine/current/venv/bin/python -m ai_agent_engine.diagnostic_intake_service --config /var/lib/ai-agent-engine-diagnostics/runtime.json
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=15
+TimeoutStopSec=10
+UMask=0077
+StateDirectory=ai-agent-engine-diagnostics
+StateDirectoryMode=0700
+RuntimeDirectory=ai-agent-engine-diagnostics
+RuntimeDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX
+StandardOutput=journal
+StandardError=journal
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=60
+
+[Install]
+WantedBy=multi-user.target

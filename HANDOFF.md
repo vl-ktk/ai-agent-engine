@@ -1,4 +1,15 @@
-# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / Netcup preflight PASS, runtime BLOCKED
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / private intake prepared, deployment HOLD
+
+## Последнее решение — разрешён отдельный серверный обработчик и приватная диагностика
+
+Владелец ответил «Давай» на явный вопрос о расширении 7.7 до отдельного серверного процесса и закрытой SQLite **без** автоматических GPT/Claude и платных API. Windows не изменять; изменение существующих секретов/прав доступа и обход штатных owner release workflows не разрешались.
+
+**Подготовленные исходники `0.3.14a0`, НЕ server deployment:**
+`ai_agent_engine/diagnostic_intake_service.py`, дополнительный Linux test coverage в `tests/test_project_diagnostic_adapter.py`, source-only `infra/systemd/ae-diagnostic-intake.service.template`, [протокол](./infra/orchestrator/DIAGNOSTIC_RUNTIME_7_7.md). Строгий лимит события 2048 bytes, `AF_UNIX` + peer UID, приватный сокет 0600 в 0700 каталоге, один запрос на соединение, без сети/моделей/shell/новых грантов. Требуется отдельная owner-approved конфигурация и проектный реестр, подготовленный task SQLite точной схемы v14 (без неявной миграции). Используется только уже опубликованный `TaskDiagnosticAdapter` с проверенной задачей, worker и Git baseline, HOLD на недостоверном сигнале, recovery без replay.
+
+**Критическая граница:** это *приём подтверждённых событий*, **не** полный исполнитель задач. `SQLiteTaskStore` — строго единоличный писатель с `flock`; запуск sidecar против действующей очереди запрещён. На Netcup отсутствует доверенный постоянно работающий producer этих событий, отсутствуют проверенные рабочие owner/project bindings и отдельный owner-approved host unit. Поэтому шаблон службы **не установлен**, runtime SQLite на Netcup **не создавали**, производство не трогали. Активация требует проектной конфигурации и отдельной owner-controlled подготовки/переноса/активации релиза через ручные GitHub workflows. Версия на VPS по последней read-only проверке **`0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`** (rollback SHA), проверить заново перед любой выкладкой. Статус **7.7 [ ] PARTIAL / HOST DEPLOYMENT HOLD**; 7.8 не начинать.
+
+**Проверки подготовки:** `python -m unittest tests.test_project_diagnostics tests.test_project_diagnostic_adapter -q` — 27 test cases, 1 skipped (AF_UNIX bind sandbox EPERM), PASS; полный `python -m unittest discover -s tests -q` — **812 OK (2 skipped)**; `compileall`, public-source и workflow boundary scanners — PASS. Wheel `ai_agent_engine-0.3.14a0-py3-none-any.whl` построен и содержит оба ядра + intake; SHA-256 `4be0aadd265ee169fbfb392f31bfd22c8e48207ab9dd5059c2f4aad0abcb8153`. Реальный AF_UNIX socket E2E и Netcup live QA **не** проведены. Ни Windows, ни Netcup не меняли. Предыдущий GitHub HEAD для source rollback: `573c72b1202745f7d852c68a3ec9d3de384f7ec6`.
 
 ## Последний запрос владельца — начать подключение 7.7 к Netcup
 
