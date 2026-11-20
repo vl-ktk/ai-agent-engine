@@ -1,3 +1,40 @@
+# HANDOFF — 20.11.2026, этап 7.11 / backup hook hash drift CONFIRMED
+
+**ИТОГ metadata-only followup:** владелец разрешил точно установить
+причину предыдущего HOLD. Слит [PR #97](https://github.com/vl-ktk/ai-agent-engine/pull/97),
+code SHA `bb7a4e73a253e0a7d109c6143d29a70f79c5610c`;
+отдельный owner request commit
+`55855178dc7430a9f748a7775abd645d28c9bccf`.
+[Netcup Actions run #44792580500](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44792580500)
+**SUCCESS** после полной preflight проверки. На существующем live release
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b` (`0.3.11a0`),
+`ae-controller.service`, `ae-backup.timer`, `ae-host-check.timer` активны.
+
+**Точная диагностика:** `/usr/local/libexec/ae-diagnostic-backup.py`
+существует, regular, владелец root, режим `0755`, `nlink=1`,
+размер в безопасных пределах. **Только SHA-256 не совпадает** с
+закреплённой ревизией исходника `6ef4e3d...`. Проверка вычислила hash
+локально на Netcup, но не печатала содержимое или фактический digest.
+**Причина несовпадения ревизии пока неизвестна; это не доказательство
+компрометации или повреждения.** Файл не исполнялся; рабочую SQLite и
+бэкапы не открывали, службы/права/секреты не меняли, новый релиз не
+выкладывали. Netcup rollback не нужен; source SHA до инструмента:
+`ce3511117cf558b73641d91a692696f4d0a01c18`.
+
+**Проверки:** 8 offline metadata tests PASS; полный Linux Python 3.12
+регресс **1019 OK (3 skipped)**. GitHub Linux 3.11/3.12/3.13 и wheel
+PASS; Windows прежние `4 failures / 44 errors` (`fcntl`, новых ошибок
+нет); compileall, public-source/workflow scans, tree SHA PASS.
+
+**Следующее по поручению владельца:** сопоставить установленный hash
+с перечнем доверенных ранее рассмотренных backup-hook ревизий без запуска
+неопознанного файла; если не найден, отдельно согласовать безопасную
+аттестацию содержимого. Лишь после установленной идентичности и
+совместимости v17 проверять SQLite schema, snapshots и restore-smoke.
+**7.11 остаётся `[ ] PARTIAL / HOLD`, 7.12 не начинать.**
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.11 / Netcup backup v17 READ-ONLY AUDIT
 
 **ФАКТИЧЕСКИЙ ИТОГ / HOLD:** проверочный инструмент принят в GitHub
