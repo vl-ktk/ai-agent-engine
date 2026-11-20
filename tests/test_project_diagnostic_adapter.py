@@ -26,6 +26,7 @@ from ai_agent_engine.project_diagnostics import (
 from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
 from ai_agent_engine.task_api import OwnerScope, TaskInbox, parse_submission
 from ai_agent_engine.task_assignment import WorkspaceRoot
+from ai_agent_engine.task_control import TaskControlError, TaskProcessController
 from ai_agent_engine.task_state import TaskState
 from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
 
@@ -88,6 +89,26 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
                                     actor_id="worker-a")
         self.inbox.transition_state(self.task_id, TaskState.FAILED, SCOPE,
                                     actor_id="worker-a")
+
+    def managed_process(self, exit_code):
+        """Real isolated child, no AI provider, network or shell."""
+        self.inbox.claim_task(self.task_id, "worker-a", "slot-a", SCOPE)
+        controller = TaskProcessController(self.inbox)
+        child = subprocess.Popen(
+            [sys.executable, "-c",
+             f"import time; time.sleep(0.1); raise SystemExit({exit_code})"],
+            cwd=self.repo, start_new_session=True,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL)
+        try:
+            controller.attach(self.task_id, child, SCOPE, actor_id="worker-a")
+        except BaseException:
+            child.terminate()
+            child.wait(timeout=2)
+            controller.close()
+            raise
+        child.wait(timeout=3)
+        return controller
 
     def record(self, **kwargs):
         return self.adapter.record_failed_task(
@@ -155,6 +176,92 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
         self.assertEqual(self.adapter.recover_project_unknown("alpha"), ())
         with self.assertRaises(DiagnosticHold):
             self.adapter.recover_project_unknown("other")
+
+    def test_real_failed_managed_child_commits_once_and_records_diagnostics(self):
+        controller = self.managed_process(7)
+        try:
+            incident = self.adapter.finish_managed_process(
+                controller, self.task_id, success=False,
+                baseline_commit=self.baseline, signal=self.signal)
+            self.assertEqual(incident.occurrences, 1)
+            self.assertEqual(self.inbox.state(self.task_id, SCOPE), TaskState.FAILED)
+            self.assertEqual(self.adapter.record_failed_task(
+                self.task_id, signal=self.signal,
+                baseline_commit=self.baseline), incident)
+            self.assertEqual(len(self.inbox.transition_history(self.task_id, SCOPE)), 3)
+        finally:
+            controller.close()
+
+    def test_managed_success_produces_no_diagnostic_and_exit_status_is_checked(self):
+        controller = self.managed_process(0)
+        try:
+            with self.assertRaises(TaskControlError):
+                self.adapter.finish_managed_process(
+                    controller, self.task_id, success=False,
+                    baseline_commit=self.baseline, signal=self.signal)
+            self.assertIs(self.inbox.state(self.task_id, SCOPE), TaskState.RUNNING)
+            self.assertIsNone(self.adapter.finish_managed_process(
+                controller, self.task_id, success=True))
+            self.assertEqual(self.inbox.state(self.task_id, SCOPE), TaskState.SUCCEEDED)
+            with self.assertRaises(DiagnosticHold):
+                self.adapter.record_failed_task(
+                    self.task_id, signal=self.signal,
+                    baseline_commit=self.baseline)
+        finally:
+            controller.close()
+
+    def test_managed_preflight_refuses_false_source_and_foreign_controller(self):
+        controller = self.managed_process(9)
+        try:
+            with self.assertRaises(InvalidDiagnostic):
+                self.adapter.finish_managed_process(
+                    controller, self.task_id, success=False,
+                    baseline_commit="not-a-commit", signal=self.signal)
+            with self.assertRaises(DiagnosticHold):
+                self.adapter.finish_managed_process(
+                    controller, self.task_id, success=False,
+                    baseline_commit=self.baseline,
+                    signal=FailureSignal("task_" + "a" * 32,
+                        "test_failure", "AssertionError", "unit.test_case",
+                        "expected", "actual", "safe"))
+            with self.assertRaises(DiagnosticHold):
+                foreign = TaskDiagnosticAdapter(self.inbox, OTHER, self.diagnostics)
+                foreign.finish_managed_process(
+                    controller, self.task_id, success=False,
+                    baseline_commit=self.baseline, signal=self.signal)
+            with self.assertRaisesRegex(DiagnosticHold, "managed_process_owner_mismatch"):
+                other_controller = TaskProcessController(TaskInbox())
+                try:
+                    self.adapter.finish_managed_process(
+                        other_controller, self.task_id, success=False,
+                        baseline_commit=self.baseline, signal=self.signal)
+                finally:
+                    other_controller.close()
+            self.assertEqual(self.inbox.state(self.task_id, SCOPE), TaskState.RUNNING)
+            self.assertEqual(self.adapter.finish_managed_process(
+                controller, self.task_id, success=False,
+                baseline_commit=self.baseline, signal=self.signal).occurrences, 1)
+        finally:
+            controller.close()
+
+    def test_diagnostic_failure_after_committed_process_failure_is_not_replayed(self):
+        controller = self.managed_process(5)
+        try:
+            with patch.object(self.diagnostics, "record_failure",
+                              side_effect=DiagnosticHold("offline_diagnostic_hold")):
+                with self.assertRaises(DiagnosticHold):
+                    self.adapter.finish_managed_process(
+                        controller, self.task_id, success=False,
+                        baseline_commit=self.baseline, signal=self.signal)
+            self.assertEqual(self.inbox.state(self.task_id, SCOPE), TaskState.FAILED)
+            # Separate SQLite transactions: reconcile evidence only, never
+            # finalize/restart the process a second time.
+            incident = self.adapter.record_failed_task(
+                self.task_id, signal=self.signal,
+                baseline_commit=self.baseline)
+            self.assertEqual(incident.occurrences, 1)
+        finally:
+            controller.close()
 
     def event(self, **overrides):
         item = {"schema": 1, "task_id": self.task_id,

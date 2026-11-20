@@ -11,7 +11,7 @@ requires **exactly one** project and fails closed on multi-project config.
 This is a selection of scope, **not** an authenticated `OwnerDecision`, grant,
 or proof that the workspace exists on Netcup.
 
-**Source-only update `0.3.16a0` (test hotfix `0.3.16a1`):** the standalone diagnostic CLI returns
+**Source-only update `0.3.16a0` (socket fix `0.3.16a3`):** the standalone diagnostic CLI returns
 `standalone_task_owner_forbidden` and **does not** open a second task SQLite.
 The trusted task-process owner must call
 `bind_inprocess_diagnostics(config, inbox=inbox, scope=scope, leaders=leaders)`
@@ -26,6 +26,25 @@ task database inode, workspace root, registry root, source directory or
 private file permissions disagree with the pre-provisioned configuration.
 The CLI/service template must not be installed; its restart loop is disabled.
 This bridge is still **not an automatic source of FAILED events**.
+
+**Source-only `0.3.17a0`:** a trusted task-owner process may opt into
+`TaskDiagnosticAdapter.finish_managed_process(controller, task_id,
+success=..., baseline_commit=..., signal=...)` after a worker child has exited.
+The supplied `TaskProcessController` must own the very same open `TaskInbox`.
+The controller verifies the actual isolated process-group exit and its return
+code before durably transitioning the task to `SUCCEEDED`/`FAILED` as its
+assigned worker. An actual `FAILED` then passes through the already-scoped
+adapter with Git provenance and idempotent diagnostics. Successful completions
+produce no diagnostic. Incorrect return status, foreign ownership, invalid
+Git baseline, or a task/evidence mismatch are held. The trusted runtime must
+retain the pre-execution baseline; a model-supplied SHA is not provenance.
+
+**Two SQLite transactions are not atomic:** if recording the diagnostic fails
+after the task is `FAILED`, never retry/relauch the completed process. A trusted
+owner may reconcile the *evidence* with `record_failed_task` using the same
+pre-execution baseline and signal. A crash that loses those inputs is HOLD for
+owner review, not an automatic replay. This callable is not a task execution
+loop or a Netcup deployment. The server still has no live TaskInbox owner.
 
 The non-secret source-only [configuration example](./diagnostic_runtime_7_7.single-project.example.json)
 illustrates the intended **future** private state directory. The example
@@ -85,7 +104,7 @@ real GPT/Claude QA.
    Last observed read-only at 20.11.2026: `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
    (`0.3.11a0`), not a standing guarantee.
 4. Build a candidate from the precise deployed source with approved 7.5/7.7
-   dependency closure. GitHub `main` `0.3.16a1` contains additional offline
+   dependency closure. GitHub `main` `0.3.17a0` contains additional offline
    stages and must **not** simply be promoted blindly as a live orchestrator.
 5. Have the GitHub owner manually run pinned `release-preparation.yml`, then
    `netcup-owner-release-transfer.yml` and
