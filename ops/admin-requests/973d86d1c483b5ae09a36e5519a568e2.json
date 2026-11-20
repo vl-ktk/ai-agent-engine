@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "973d86d1c483b5ae09a36e5519a568e2",
+  "source_sha": "f4baca74c7e2f487a892f184a3048096d1179e12",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/authorize_diagnostic_v2_gate.py",
+  "script_sha256": "35f13072f87147538ea56870beeab601b615a6ca8d329a340a3ce59f92e44afb"
+}
