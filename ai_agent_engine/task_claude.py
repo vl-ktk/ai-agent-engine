@@ -11,6 +11,7 @@ import sys
 
 from .task_api import OwnerScope, TaskInbox
 from .task_gpt import GPTTaskExecutor
+from .main_shared_capacity import SharedCapacity
 from .task_permissions import TaskPermissionGate
 
 
@@ -23,7 +24,8 @@ class ClaudeTaskExecutor(GPTTaskExecutor):
                  authorized_owner_id: str, worker_id: str,
                  permission_gate: TaskPermissionGate,
                  model_id: str = "default", timeout_seconds: float = 180,
-                 worker_argv: tuple[str, ...] | None = None) -> None:
+                 worker_argv: tuple[str, ...] | None = None,
+                 capacity: SharedCapacity | None = None) -> None:
         if (type(authorized_owner_id) is not str or not authorized_owner_id
                 or not isinstance(scope, OwnerScope)
                 or scope.owner_id != authorized_owner_id):
@@ -31,6 +33,7 @@ class ClaudeTaskExecutor(GPTTaskExecutor):
         super().__init__(inbox, scope, worker_id=worker_id,
                          model_id=model_id, permission_gate=permission_gate,
                          timeout_seconds=timeout_seconds,
+                         capacity=capacity,
                          worker_argv=worker_argv or (
                              sys.executable, "-m", "ai_agent_engine.claude_task_worker"))
 
