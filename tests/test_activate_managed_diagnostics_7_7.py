@@ -15,10 +15,12 @@ from unittest.mock import patch
 
 SCRIPT = (Path(__file__).resolve().parents[1] / "ops" / "admin-scripts"
           / "activate_managed_diagnostics_7_7.py")
-SPEC = importlib.util.spec_from_file_location("ae_activate_7_7", SCRIPT)
-assert SPEC is not None and SPEC.loader is not None
-ACTIVATE = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(ACTIVATE)
+ACTIVATE = None
+if sys.platform.startswith("linux"):
+    SPEC = importlib.util.spec_from_file_location("ae_activate_7_7", SCRIPT)
+    assert SPEC is not None and SPEC.loader is not None
+    ACTIVATE = importlib.util.module_from_spec(SPEC)
+    SPEC.loader.exec_module(ACTIVATE)
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Linux-only owner host installer")
