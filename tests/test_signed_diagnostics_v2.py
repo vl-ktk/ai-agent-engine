@@ -54,6 +54,20 @@ class SignedDiagnosticsV2Tests(unittest.TestCase):
         self.assertEqual(self.op.OPERATION, "upgrade-managed-diagnostics-7-7-v2")
         self.assertEqual(self.op.CONFIRMATION, "UPGRADE_SIGNED_DIAGNOSTICS_7_7_V2")
 
+    def test_operator_entry_point_invokes_only_pinned_upgrade(self):
+        argv = ["addon-operator", "--source-sha", self.op.SOURCE_SHA,
+                "--expected-current", self.op.LIVE_SHA,
+                "--wheel-sha256", "a" * 64,
+                "--confirmation", self.op.CONFIRMATION]
+        with (patch.object(sys, "argv", argv),
+              patch.object(self.op.os, "geteuid", return_value=0),
+              patch.object(self.op, "upgrade") as signed_upgrade):
+            self.assertEqual(self.op.main(), 0)
+            signed_upgrade.assert_called_once_with(
+                source_sha=self.op.SOURCE_SHA,
+                expected_current=self.op.LIVE_SHA,
+                wheel_sha256="a" * 64)
+
     def test_operator_extracts_only_exact_reviewed_candidate(self):
         package = ROOT / "ai_agent_engine"
         raw = BytesIO()
