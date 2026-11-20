@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "4c887a42b1dee8d2e0d097b86ef1593e",
+  "source_sha": "bb7a4e73a253e0a7d109c6143d29a70f79c5610c",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/audit_backup_hook_metadata_7_11.py",
+  "script_sha256": "104e2981c855e9f7309359ec99f73faaa42676f3db126d2bede8ca86b8ec5d4e"
+}
