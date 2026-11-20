@@ -84,6 +84,29 @@ provider concurrency and quotas, wait with no callback, cross-owner/worker
 denials, two concurrent contenders, durable restart, clock behavior, exact
 settlement and v16→v17 migration. No real GPT/Claude calls are needed.
 
+**One-shot isolated Netcup acceptance prepared 20.11.2026:**
+`task_stage7_11_acceptance.py` creates an owner-approved fixed catalog,
+team, specialist pins, task SQLite v17 and four disposable test tasks in a
+temporary directory. With an explicitly selected shared `cpu_slots=1`,
+`gpt=1 parallel / 2 reservations per 300s`, `claude=1 parallel /
+1 reservation per 300s` policy, it checks CPU wait before any subprocess,
+one GPT and one Claude adapter execution, GPT quota wait, and durable restart.
+Default/CI mode uses deterministic local subprocesses and **zero model
+requests**. `--live --owner-approved` requests **at most one real call per
+provider**, without retry or printing model replies. These are deliberately
+conservative **acceptance-only** numbers, not installed production policy.
+
+The separate reviewed root owner job
+`ops/admin-scripts/stage7_11_capacity_live_acceptance.py` checks exact
+current core release, services, v17-compatible backup hook, and unchanged
+working SQLite v14. It uses the existing `ae-runtime` ChatGPT OAuth grant and
+official personal Claude CLI, allows a **single normal OAuth refresh** if
+the previous GPT access token expired, and refuses paid API/alternative
+provider routing. It copies reviewed source into a disposable private area;
+the live core package, working task DB and systemd services stay untouched.
+No client/provider output or tokens enter its GitHub Actions logs. A failed
+preflight stops before model requests; a failed live run is never retried.
+
 To complete 7.11 as **live** work, the trusted orchestrator must instantiate
 the same policy for *every* provider dispatch, select machine-appropriate
 numeric limits based on actually authorized subscription modes, recover

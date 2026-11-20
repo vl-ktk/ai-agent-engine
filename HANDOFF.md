@@ -1,3 +1,52 @@
+# HANDOFF — 20.11.2026, этап 7.11 / подготовлен приватный Netcup provider E2E
+
+**Источник при принятии:** GitHub `vl-ktk/ai-agent-engine/main`
+`2763e7370d1f39bf859e680c10b6e2f8bfde8a48`. Отдельная авторизованная
+read-only status request создана в `main` SHA
+`0c8141c28b5290cf336272bcb38945b930de04e6`, точка source rollback
+для настоящего изменения — этот SHA. Владелец подтвердил личный закрытый
+Netcup/Claude Pro режим без чужих пользователей или коммерческого доступа;
+предыдущий policy HOLD на один личный E2E снят.
+
+**Проверка текущих авторизаций:** владелец 19.11 уже имел реальный Netcup
+GPT+Claude E2E PASS [run 44511087941](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44511087941)
+в **временном** хранилище с рабочими входами. Новая независимая owner
+[status run 44799388152](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44799388152)
+20.11 PASS: на `ae-runtime` `claude logged_in=true`, GPT identity и
+ChatGPT plan grant сохранены, но короткоживущий **GPT access token expired**.
+Это не доказательство потери refresh grant: исходный SIWC код умеет обычный
+refresh. Никаких моделей status run не вызывал; production release
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b` здоров и неизменен.
+
+**Подготовлено к одной ограниченной live-проверке 7.11:**
+`ai_agent_engine/task_stage7_11_acceptance.py` с фиксированными локальными
+owner approval/team/catalog/plan, четырьмя специалистами, единой private
+task SQLite v17, CPU wait, GPT+Claude вызовами, провайдерской квотой и
+restart; в default OFFLINE режиме только mock subprocesses, для live
+обязательны `--live --owner-approved`. Один live GPT и один Claude запрос,
+без повтора. `ops/admin-scripts/stage7_11_capacity_live_acceptance.py` —
+root owner job с exact release/backup hook/DB preflight, проверкой
+существующих личных сеансов, одним нормальным GPT OAuth refresh при
+истечении access token, затем disposable source copy и офлайн/live test
+**только под `ae-runtime`**. Ни платного API fallback, ни новых login,
+service/core deploy, рабочего SQLite v17 migration, вывода секретов или
+модельного текста. Новый source-only wheel version `0.3.26a0`.
+
+**Проверки до source PR:** 12 новых тестов и изолированный offline CLI PASS;
+полный Linux Python 3.12 регресс **1067 OK (3 skipped)**; `compileall`,
+`git diff --check` PASS. GitHub CI, точный source PR/merge, выполнение
+owner live job, результат refresh и E2E должны указываться **только после
+фактического запуска**; не объявлять live PASS заранее.
+
+**Остаётся:** выполнить отдельный owner request только после source merge,
+зафиксировать реальный лог, затем решить, можно ли включить это в
+постоянный доверенный Netcup-dispatch. Пока actual core `0.3.11a0`
+остаётся heartbeat-only, а не главным многомодельным оркестратором;
+7.11 `[ ] PARTIAL`, 7.12 не начинать. Если refresh отклонён — стоп до
+личного входа владельца, не копировать/не просить токены в чат.
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.11 / совместимый live backup + source provider bridge
 
 **Источник при принятии:** `vl-ktk/ai-agent-engine/main`
