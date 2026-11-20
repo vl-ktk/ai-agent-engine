@@ -1,4 +1,10 @@
-# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / one-project scope selected, deployment HOLD
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
+
+## Текущая работа — единый процесс TaskInbox + диагностика, source-only `0.3.16a0`
+
+После «Давай» владельца подготовлен безопасный **in-process** способ подключения диагностики 7.7 к **уже открытому** единственному `TaskInbox`: `bind_inprocess_diagnostics(config, inbox=..., scope=..., leaders=...)` возвращает адаптер в том же процессе; `run_configured_service(..., inbox=..., scope=..., leaders=...)` принимает локальные события по сокету, не открывая вторую task SQLite или новый registry. Валидация сверяет одобренный owner/project, фактический inode открытого task DB, private config `0600`, идентичность workspace и project-leader roots, ровно один источник Git; чужая область, неподтверждённая конфигурация и закрытая task DB получают HOLD. Автономный вызов CLI без владения существующей очередью **запрещён** (`standalone_task_owner_forbidden`); устаревший systemd sidecar остаётся только source-only и без рестарта. Приватные БД и approval без явного владельца не создаются, модель/инструменты/новые права не запускаются.
+
+**Состояние:** GitHub parent source SHA `c04a26684454e18ea56c6c26e8f06480982e881f` (для адресного отката этого feature-commit); Netcup по последней независимой read-only проверке `0.3.11a0`, SHA `0e04af007375d82daf8f7d3b36c71abb0c784e0b` (перед любой выкладкой пересмотреть). **Нет** запущенного на Netcup owner task runtime, производящего подтверждённые `FAILED` события, и нет подтверждённого owner-approved project registry. Ручной GitHub owner workflow обязателен после проверки готовности. **Netcup/Windows/секреты/права/другие проекты не менять, 7.7 [ ] PARTIAL / LIVE HOLD; 7.8 не начинать.** **Проверки:** 30 тестов 7.7 PASS (1 skipped: AF_UNIX sandbox EPERM); полный `unittest` **815 test cases OK, 2 skipped**; `compileall`, workflow-boundary scanner PASS; wheel `ai_agent_engine-0.3.16a0-py3-none-any.whl` собран, содержит 7.7-модули, SHA-256 `b59ef0498dc3e16213835ffcfed1e51cf362060a0afb5b682b35a905060b2246`. Отдельный CLI отказал со статусом 1, как и задумано. GitHub CI и Netcup E2E — только после публикации/подключения.
 
 ## Последнее решение владельца — сначала только AI Agent Engine
 

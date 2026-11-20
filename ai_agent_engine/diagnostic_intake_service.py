@@ -8,7 +8,6 @@ start a second independent writer against an active TaskInbox database.
 
 from __future__ import annotations
 
-from contextlib import closing
 import argparse
 import json
 import os
@@ -26,11 +25,8 @@ from .project_diagnostics import (
 )
 from .project_leader import ProjectLeaderStore, ProjectLeaderUnavailable
 from .task_api import OwnerScope, ProjectForbidden, TaskInbox
-from .task_assignment import WorkspaceRoot
-from .task_storage import (
-    APPLICATION_ID as TASK_APP_ID, SCHEMA_VERSION as TASK_SCHEMA,
-    SQLiteTaskStore, StorageUnavailable,
-)
+from .task_assignment import InvalidAssignment, WorkspaceRoot
+from .task_storage import StorageUnavailable
 
 
 MAX_EVENT_BYTES = 2048
@@ -212,47 +208,89 @@ def _private_config(path: Path) -> dict[str, object]:
     return doc
 
 
-def run_configured_service(config: Path, stopped: Event) -> None:
-    """Own one durable TaskInbox exclusively; never authenticate an owner itself.
+def bind_inprocess_diagnostics(config: Path, *, inbox: TaskInbox,
+                               scope: OwnerScope,
+                               leaders: ProjectLeaderStore) -> tuple[TaskDiagnosticAdapter, Path]:
+    """Bind diagnostics to the *existing* exclusive TaskInbox and registry.
 
-    A trusted host operator must provision both the pre-approved project
-    registry and private config. No auto-creation of owner approvals or tasks.
+    This function never opens another task store, creates an approval, or
+    executes a task. Only the trusted task-process owner may pass the live
+    inbox and its already-approved project registry. Socket intake and direct
+    adapter calls then share that same process-local durable task state.
     """
+    if (not isinstance(inbox, TaskInbox) or not inbox.durable
+            or not isinstance(scope, OwnerScope)
+            or not isinstance(leaders, ProjectLeaderStore)
+            or inbox._store is None or inbox._store._fd is None
+            or inbox._store._connection is None
+            or not isinstance(inbox._workspace_root, WorkspaceRoot)
+            or leaders._root_fd is None or leaders._registry is None):
+        raise IntakeUnavailable("existing_task_owner_and_registry_required")
     doc = _private_config(config)
-    scope = OwnerScope(doc["owner_id"], frozenset(doc["project_ids"]))
+    if scope != OwnerScope(doc["owner_id"], frozenset(doc["project_ids"])):
+        raise IntakeUnavailable("owner_project_scope_mismatch")
     task_path = Path(doc["task_db"])
-    if (not task_path.is_absolute() or task_path.is_symlink()
-            or not task_path.is_file()
-            or task_path.stat().st_uid != os.geteuid()
-            or stat.S_IMODE(task_path.stat().st_mode) != 0o600):
-        raise IntakeUnavailable("preexisting_private_task_db_required")
-    # Never silently migrate production task state as a side effect of starting
-    # diagnostics. The owner must separately prepare/verify the exact schema.
+    workspace_root = Path(doc["workspace_root"])
+    project_root = Path(doc["project_leader_root"])
+    if (not task_path.is_absolute() or str(task_path) != os.path.realpath(task_path)
+            or task_path != inbox._store.path
+            or not workspace_root.is_absolute()
+            or workspace_root != inbox._workspace_root.path
+            or str(workspace_root) != os.path.realpath(workspace_root)
+            or not project_root.is_absolute() or project_root != leaders.root
+            or str(project_root) != os.path.realpath(project_root)):
+        raise IntakeUnavailable("existing_runtime_binding_mismatch")
     try:
-        with closing(sqlite3.connect(f"file:{task_path}?mode=ro", uri=True)) as probe:
-            if (probe.execute("PRAGMA application_id").fetchone()[0] != TASK_APP_ID
-                    or probe.execute("PRAGMA user_version").fetchone()[0] != TASK_SCHEMA
-                    or probe.execute("PRAGMA quick_check").fetchone()[0] != "ok"):
-                raise IntakeUnavailable("task_db_not_prepared")
-    except sqlite3.Error:
-        raise IntakeUnavailable("task_db_not_prepared") from None
-    bindings = {(scope.owner_id, project): Path(source) for project, source
-                in doc["source_bindings"].items()}
-    with ProjectLeaderStore(Path(doc["project_leader_root"])) as leaders:
-        for project in scope.project_ids:
-            if leaders.get(scope, project) is None:
-                raise IntakeUnavailable("approved_project_required")
-        inbox = TaskInbox(store=SQLiteTaskStore(task_path),
-                          workspace_root=WorkspaceRoot(Path(doc["workspace_root"])))
+        actual = task_path.stat(follow_symlinks=False)
+        open_fd = os.fstat(inbox._store._fd)
+        if (not stat.S_ISREG(actual.st_mode)
+                or actual.st_uid != os.geteuid()
+                or stat.S_IMODE(actual.st_mode) != 0o600
+                or (actual.st_dev, actual.st_ino) != (open_fd.st_dev, open_fd.st_ino)):
+            raise IntakeUnavailable("task_database_identity_changed")
+    except OSError:
+        raise IntakeUnavailable("task_database_identity_changed") from None
+
+    bindings: dict[tuple[str, str], Path] = {}
+    for project, source in doc["source_bindings"].items():
+        directory = Path(source)
+        if (not directory.is_absolute() or directory.parent != workspace_root
+                or str(directory) != os.path.realpath(directory)):
+            raise IntakeUnavailable("source_outside_trusted_workspace")
         try:
-            diagnostics = ProjectDiagnosticsStore(leaders, source_bindings=bindings)
-            adapter = TaskDiagnosticAdapter(inbox, scope, diagnostics)
-            # An uncertain interrupted repair is held. Never replay work.
-            for project in scope.project_ids:
-                adapter.recover_project_unknown(project)
-            serve_local_intake(adapter, Path(doc["socket_path"]), stopped)
-        finally:
-            inbox.close()
+            if inbox._workspace_root.resolve(directory.name) != str(directory):
+                raise IntakeUnavailable("source_outside_trusted_workspace")
+        except (InvalidAssignment, OSError, ValueError):
+            raise IntakeUnavailable("source_outside_trusted_workspace") from None
+        if leaders.get(scope, project) is None:
+            raise IntakeUnavailable("approved_project_required")
+        bindings[(scope.owner_id, project)] = directory
+
+    diagnostics = ProjectDiagnosticsStore(leaders, source_bindings=bindings)
+    adapter = TaskDiagnosticAdapter(inbox, scope, diagnostics)
+    # Crash uncertainty stays HOLD. Never autonomously rerun failed work.
+    for project in scope.project_ids:
+        adapter.recover_project_unknown(project)
+    return adapter, Path(doc["socket_path"])
+
+
+def run_configured_service(config: Path, stopped: Event, *,
+                           inbox: TaskInbox | None = None,
+                           scope: OwnerScope | None = None,
+                           leaders: ProjectLeaderStore | None = None) -> None:
+    """Serve intake *inside* its owning task process, never as a sidecar.
+
+    The standalone CLI intentionally has no live inbox and is refused. A host
+    task runtime must supply all three trusted objects explicitly; their
+    ownership remains with the caller after this method returns.
+    """
+    if inbox is None or scope is None or leaders is None:
+        raise IntakeUnavailable("standalone_task_owner_forbidden")
+    if not isinstance(stopped, Event):
+        raise IntakeUnavailable("trusted_shutdown_event_required")
+    adapter, socket_path = bind_inprocess_diagnostics(
+        config, inbox=inbox, scope=scope, leaders=leaders)
+    serve_local_intake(adapter, socket_path, stopped)
 
 
 def main(argv: list[str] | None = None) -> int:

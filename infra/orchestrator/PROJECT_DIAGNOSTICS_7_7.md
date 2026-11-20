@@ -179,3 +179,7 @@
 ## 20.11.2026 — область первого запуска утверждена
 
 Владелец ответил **«Да» на подключение только AI Agent Engine**. В коде `0.3.15a0` один project scope обязателен; в конфигурационном примере используется `vl-ktk / ai-agent-engine` (внутренние валидные идентификаторы, **не** перенос прав и не подтверждённая живой серверной системой привязка). Остальные проекты не активировать. Отдельная GitHub-authenticated owner approval/host provisioning и ручной release workflow остаются необходимыми; фактическая версия Netcup не обновлена, 7.7 **[ ] PARTIAL**.
+
+## 20.11.2026 — подключение к единственному процессу очереди, source-only
+
+В коде `0.3.16a0` добавлена привязка `bind_inprocess_diagnostics` к **уже открытому** доверенному `TaskInbox` и `ProjectLeaderStore`. Один socket intake может работать потоком **внутри этого же процесса** через `run_configured_service` с явными `inbox/scope/leaders`. Строго проверяются identity БД по открытому inode, exact owner/project, workspace/registry roots, единственный bound Git source и private config. Старый автономный CLI отвергается без доступа к очереди — отдельный sidecar нельзя запускать. Доказанные ошибки продолжают записываться исключительно через existing `TaskDiagnosticAdapter` и подтверждённый `FAILED`; **источник реальных FAILED событий/действующий task runner Netcup всё ещё не подключён**. Это подготовка, не live выпуск, 7.7 **[ ] PARTIAL**.

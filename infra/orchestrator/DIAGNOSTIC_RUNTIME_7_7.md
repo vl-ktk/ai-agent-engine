@@ -11,6 +11,20 @@ requires **exactly one** project and fails closed on multi-project config.
 This is a selection of scope, **not** an authenticated `OwnerDecision`, grant,
 or proof that the workspace exists on Netcup.
 
+**Source-only update `0.3.16a0`:** the standalone diagnostic CLI now returns
+`standalone_task_owner_forbidden` and **does not** open a second task SQLite.
+The trusted task-process owner must call
+`bind_inprocess_diagnostics(config, inbox=inbox, scope=scope, leaders=leaders)`
+to get an adapter for synchronous `record_failed_task` calls, or start
+`run_configured_service(config, stopped, inbox=inbox, scope=scope, leaders=leaders)`
+on a thread **inside the same process** for private socket intake. Both
+methods use the existing TaskInbox and ProjectLeaderStore objects; neither
+opens another TaskInbox/registry. The binding is refused if owner/project,
+task database inode, workspace root, registry root, source directory or
+private file permissions disagree with the pre-provisioned configuration.
+The CLI/service template must not be installed; its restart loop is disabled.
+This bridge is still **not an automatic source of FAILED events**.
+
 The non-secret source-only [configuration example](./diagnostic_runtime_7_7.single-project.example.json)
 illustrates the intended **future** private state directory. The example
 cannot be fed directly to a running service: the host operator must first
@@ -39,17 +53,17 @@ Do not create or share a second project as part of this first rollout.
   HOLD. On uncertain restart, `recover_unknown` holds incomplete attempts.
 - The systemd source template is **not installed**. Its state and socket paths
   are isolated from the existing controller. No Netcup settings were changed.
+  The obsolete separate-process template is now explicitly non-deployable.
 
 ## Strict runtime boundary
 
 `SQLiteTaskStore` has an exclusive `flock`; two independent daemons cannot
-share it as live writers. The local intake must therefore be owned by the
-**one trusted task process** controlling this `TaskInbox`, or operate on a
-separately prepared dedicated DB with a trusted producer explicitly feeding
-events into that same process. Simply enabling a new sidecar service alongside
-an active task runner is **not permitted**: it could lock the queue or fail to
-observe newly admitted tasks. The source-only systemd template is for future
-owner review, **not** approval to enable an idle service.
+share it as live writers. The local intake must be owned by the **one trusted
+task process** controlling `TaskInbox`. Simply enabling a new sidecar service
+is **not permitted**: it would compete for the lock or fail to observe tasks.
+The source-only systemd template is obsolete and will not serve as a release
+unit. A future host runtime must run task execution and bounded diagnostic
+intake in one process, with an authenticated owner/project gate.
 
 There is currently **no live task execution loop** on Netcup supplying such
 events. An event-socket receiver alone does not complete 7.7 live acceptance.
@@ -69,16 +83,17 @@ real GPT/Claude QA.
    Last observed read-only at 20.11.2026: `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
    (`0.3.11a0`), not a standing guarantee.
 4. Build a candidate from the precise deployed source with approved 7.5/7.7
-   dependency closure. GitHub `main` `0.3.14a0` contains additional offline
+   dependency closure. GitHub `main` `0.3.16a0` contains additional offline
    stages and must **not** simply be promoted blindly as a live orchestrator.
 5. Have the GitHub owner manually run pinned `release-preparation.yml`, then
    `netcup-owner-release-transfer.yml` and
    `netcup-owner-release-activate.yml` using verified source/wheel/main/live
    SHA inputs and signed release intent. Never bypass manual gates with the
    owner-admin workflow or an arbitrary root script.
-6. After separately reviewed host configuration and unit installation,
+6. After separately reviewed host configuration and the **single task-owner**
+   runtime installation (not the obsolete diagnostic sidecar),
    perform a bounded synthetic, then authenticated real failed-task E2E with
-   exact Git provenance, separate project scope, restart/recovery, audit,
+   exact Git provenance, the one approved project scope, restart/recovery, audit,
    and measured CPU/RAM/disk before declaring 7.7 complete. Roll back any
    failed release to the freshly reverified previous server SHA.
 

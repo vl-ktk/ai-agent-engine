@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import patch
 
 from ai_agent_engine.diagnostic_intake_service import (
-    IntakeUnavailable, MAX_EVENT_BYTES, _private_config,
+    IntakeUnavailable, MAX_EVENT_BYTES, _private_config, bind_inprocess_diagnostics,
     process_local_event, run_configured_service, serve_local_intake,
 )
 from ai_agent_engine.main_orchestrator import OwnerDecision
@@ -26,7 +26,7 @@ from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
 from ai_agent_engine.task_api import OwnerScope, TaskInbox, parse_submission
 from ai_agent_engine.task_assignment import WorkspaceRoot
 from ai_agent_engine.task_state import TaskState
-from ai_agent_engine.task_storage import SQLiteTaskStore
+from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
 
 
 SCOPE = OwnerScope("owner77bridge", frozenset({"alpha"}))
@@ -190,12 +190,22 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
             probe.close()
         self.fail_task()
         path = self.base / "diagnostic.sock"
+        config = self.base / "runtime.json"
+        config.write_text(json.dumps({
+            "schema": 1, "owner_id": SCOPE.owner_id,
+            "project_ids": ["alpha"], "project_leader_root": str(self.project_root),
+            "workspace_root": str(self.workspace_root),
+            "task_db": str(self.task_db), "socket_path": str(path),
+            "source_bindings": {"alpha": str(self.repo)},
+        }))
+        config.chmod(0o600)
         stopped = Event()
         faults = []
 
         def run():
             try:
-                serve_local_intake(self.adapter, path, stopped)
+                run_configured_service(config, stopped, inbox=self.inbox,
+                                       scope=SCOPE, leaders=self.leaders)
             except Exception as exc:
                 faults.append(exc)
 
@@ -273,17 +283,78 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
         }
         config.write_text(json.dumps(payload))
         config.chmod(0o600)
-        self.inbox.close()
-        self.leaders.close()
         called = []
 
         def observe(adapter, path, stopped):
             called.append((type(adapter).__name__, path))
+            self.assertIs(adapter._inbox, self.inbox)
 
         with patch("ai_agent_engine.diagnostic_intake_service.serve_local_intake",
                    side_effect=observe):
-            run_configured_service(config, Event())
+            run_configured_service(config, Event(), inbox=self.inbox,
+                                   scope=SCOPE, leaders=self.leaders)
         self.assertEqual(called, [("TaskDiagnosticAdapter", Path(payload["socket_path"]))])
+        self.fail_task()
+        adapter, path = bind_inprocess_diagnostics(
+            config, inbox=self.inbox, scope=SCOPE, leaders=self.leaders)
+        self.assertEqual(path, Path(payload["socket_path"]))
+        self.assertEqual(adapter.record_failed_task(
+            self.task_id, signal=self.signal,
+            baseline_commit=self.baseline).occurrences, 1)
+        self.assertEqual(self.inbox.state(self.task_id, SCOPE), TaskState.FAILED)
+
+    def test_standalone_diagnostic_daemon_refused_without_second_sqlite_owner(self):
+        config = self.base / "runtime.json"
+        payload = {"schema": 1, "owner_id": SCOPE.owner_id,
+                   "project_ids": ["alpha"], "project_leader_root": str(self.project_root),
+                   "workspace_root": str(self.workspace_root),
+                   "task_db": str(self.task_db),
+                   "socket_path": str(self.base / "diagnostic.sock"),
+                   "source_bindings": {"alpha": str(self.repo)}}
+        config.write_text(json.dumps(payload))
+        config.chmod(0o600)
+        with self.assertRaisesRegex(IntakeUnavailable, "standalone_task_owner_forbidden"):
+            run_configured_service(config, Event())
+        with self.assertRaises(StorageUnavailable):
+            SQLiteTaskStore(self.task_db)
+        # A refused sidecar has not closed or modified the legitimate inbox.
+        self.assertIsNotNone(self.inbox.get(self.task_id, SCOPE))
+
+    def test_inprocess_scope_and_store_bindings_fail_closed(self):
+        config = self.base / "runtime.json"
+        payload = {"schema": 1, "owner_id": SCOPE.owner_id,
+                   "project_ids": ["alpha"], "project_leader_root": str(self.project_root),
+                   "workspace_root": str(self.workspace_root),
+                   "task_db": str(self.task_db),
+                   "socket_path": str(self.base / "diagnostic.sock"),
+                   "source_bindings": {"alpha": str(self.repo)}}
+        config.write_text(json.dumps(payload))
+        config.chmod(0o600)
+
+        def bind():
+            return bind_inprocess_diagnostics(config, inbox=self.inbox,
+                                              scope=SCOPE, leaders=self.leaders)
+
+        with self.assertRaisesRegex(IntakeUnavailable, "owner_project_scope_mismatch"):
+            bind_inprocess_diagnostics(config, inbox=self.inbox,
+                                       scope=OTHER, leaders=self.leaders)
+        for field, wrong in (("task_db", str(self.base / "not-this-db")),
+                             ("workspace_root", str(self.base)),
+                             ("project_leader_root", str(self.base))):
+            changed = dict(payload)
+            changed[field] = wrong
+            config.write_text(json.dumps(changed))
+            with self.assertRaises(IntakeUnavailable):
+                bind()
+        changed = dict(payload)
+        changed["source_bindings"] = {"alpha": str(self.base / "unbound")}
+        config.write_text(json.dumps(changed))
+        with self.assertRaises(IntakeUnavailable):
+            bind()
+        config.write_text(json.dumps(payload))
+        self.inbox.close()
+        with self.assertRaisesRegex(IntakeUnavailable, "existing_task_owner_and_registry_required"):
+            bind()
 
     def test_single_project_template_matches_allowed_identity_schema(self):
         example = (Path(__file__).resolve().parents[1] / "infra" / "orchestrator"
