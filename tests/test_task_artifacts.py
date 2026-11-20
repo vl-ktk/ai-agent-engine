@@ -135,7 +135,7 @@ class ArtifactTransferTests(unittest.TestCase):
         self.inbox = TaskInbox(store=SQLiteTaskStore(self.db), workspace_root=self.root)
         self.transfer = TaskArtifactTransfer(self.inbox, OWNER)
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(), (16,))
+            "PRAGMA user_version").fetchone(), (17,))
         for tid, expected in known:
             self.assertEqual(self.transfer.read_bundle(tid), expected)
             self.assertIs(self.inbox.state(tid, OWNER), TaskState.SUCCEEDED)
@@ -264,7 +264,7 @@ class ArtifactTransferTests(unittest.TestCase):
         self.transfer = TaskArtifactTransfer(self.inbox, OWNER)
         self.assertIs(self.inbox.state(tid, OWNER), TaskState.QUEUED)
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone(), (16,))
+            "PRAGMA user_version").fetchone(), (17,))
         self.assertEqual(self.inbox._store._db().execute(
             "SELECT COUNT(*) FROM task_artifact_reports").fetchone(), (0,))
 

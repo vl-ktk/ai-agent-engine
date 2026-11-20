@@ -176,7 +176,7 @@ class GlobalLeadTests(unittest.TestCase):
             db.execute("PRAGMA user_version=15")
         self.restart()
         db=self.inbox._store._db()
-        self.assertEqual(db.execute("PRAGMA user_version").fetchone(),(16,))
+        self.assertEqual(db.execute("PRAGMA user_version").fetchone(),(17,))
         self.assertEqual(db.execute("SELECT count(*) FROM task_crisis_escalations")
                          .fetchone(),(0,))
         self.assertIsNone(load_global_lead(self.inbox,OWNER,direction_id="backend"))

@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 16  # v16: durable owner-appointed global direction leads.
+SCHEMA_VERSION = 17  # v17: durable shared provider and controller capacity.
 
 
 class StorageUnavailable(RuntimeError):
@@ -107,9 +107,10 @@ class SQLiteTaskStore:
                 self._create_transfer_tables(db)
                 self._create_crisis_tables(db)
                 self._create_global_lead_tables(db)
+                self._create_capacity_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and 1 <= version <= 15:
+        elif app_id == APPLICATION_ID and 1 <= version <= 16:
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -159,6 +160,7 @@ class SQLiteTaskStore:
                 self._create_transfer_tables(db)
                 self._create_crisis_tables(db)
                 self._create_global_lead_tables(db)
+                self._create_capacity_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -259,6 +261,105 @@ class SQLiteTaskStore:
             occurred_at TEXT NOT NULL DEFAULT
                 (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         )""")
+
+    @staticmethod
+    def _create_capacity_tables(db: sqlite3.Connection) -> None:
+        """v17: one global ledger, independent of project or avatar count.
+
+        Released reservations remain as immutable quota-consumption evidence.
+        A crashed worker never frees a slot merely because time has passed.
+        """
+        db.execute("""CREATE TABLE IF NOT EXISTS task_capacity_reservations (
+            reservation_id TEXT PRIMARY KEY,
+            task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            worker_id TEXT NOT NULL,
+            provider TEXT NOT NULL CHECK(provider IN ('gpt','claude')),
+            reserved_at REAL NOT NULL,
+            released_at REAL CHECK(released_at IS NULL OR released_at >= reserved_at)
+        )""")
+        db.execute("""CREATE UNIQUE INDEX IF NOT EXISTS ix_capacity_one_active
+            ON task_capacity_reservations(task_id) WHERE released_at IS NULL""")
+        db.execute("""CREATE INDEX IF NOT EXISTS ix_capacity_provider_window
+            ON task_capacity_reservations(provider,reserved_at)""")
+
+    def reserve_capacity(self, *, reservation_id: str, task_id: str,
+                         owner_id: str, project_id: str, worker_id: str,
+                         provider: str, cpu_slots: int, provider_slots: int,
+                         max_calls: int, window_seconds: int,
+                         now: float) -> tuple[str, float | None]:
+        """Atomically enforce cross-project slots and a rolling call budget.
+
+        The caller must hold TaskInbox._lock and authenticate the pinned
+        specialist, assignment and owner scope before reaching this method.
+        A returned wait reason never consumes a quota or launches a worker.
+        """
+        try:
+            db = self._db()
+            db.execute("BEGIN IMMEDIATE")
+            with db:
+                last = db.execute("""SELECT MAX(reserved_at)
+                    FROM task_capacity_reservations""").fetchone()[0]
+                if last is not None and now < last:
+                    return "clock_rollback", None
+                if db.execute("""SELECT 1 FROM task_capacity_reservations
+                    WHERE task_id=? AND released_at IS NULL""",
+                    (task_id,)).fetchone():
+                    return "task_active", None
+                if db.execute("""SELECT count(*) FROM task_capacity_reservations
+                    WHERE released_at IS NULL""").fetchone()[0] >= cpu_slots:
+                    return "cpu_busy", None
+                if db.execute("""SELECT count(*) FROM task_capacity_reservations
+                    WHERE provider=? AND released_at IS NULL""",
+                    (provider,)).fetchone()[0] >= provider_slots:
+                    return "provider_busy", None
+                calls = db.execute("""SELECT reserved_at
+                    FROM task_capacity_reservations
+                    WHERE provider=? AND reserved_at>? ORDER BY reserved_at""",
+                    (provider, now - window_seconds)).fetchall()
+                if len(calls) >= max_calls:
+                    return "provider_quota", max(0.001, calls[0][0] + window_seconds - now)
+                db.execute("""INSERT INTO task_capacity_reservations
+                    (reservation_id,task_id,owner_id,project_id,worker_id,
+                     provider,reserved_at)
+                    VALUES (?,?,?,?,?,?,?)""",
+                    (reservation_id, task_id, owner_id, project_id,
+                     worker_id, provider, now))
+                return "admitted", None
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot reserve shared capacity") from exc
+
+    def release_capacity(self, reservation_id: str, task_id: str,
+                         worker_id: str, now: float) -> bool:
+        """Settle only the exact reservation; never delete quota evidence."""
+        try:
+            db = self._db()
+            db.execute("BEGIN IMMEDIATE")
+            with db:
+                row = db.execute("""SELECT worker_id,reserved_at,released_at
+                    FROM task_capacity_reservations
+                    WHERE reservation_id=? AND task_id=?""",
+                    (reservation_id, task_id)).fetchone()
+                if row is None or row[0] != worker_id or now < row[1]:
+                    raise StorageUnavailable("capacity reservation mismatch")
+                if row[2] is not None:
+                    return False
+                db.execute("""UPDATE task_capacity_reservations
+                    SET released_at=? WHERE reservation_id=?
+                    AND task_id=? AND released_at IS NULL""",
+                    (now, reservation_id, task_id))
+                return True
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot settle shared capacity") from exc
+
+    def capacity_reservation(self, task_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT reservation_id,worker_id,provider
+                FROM task_capacity_reservations WHERE task_id=?
+                AND released_at IS NULL""", (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect capacity reservation") from exc
 
     @staticmethod
     def _create_process_table(db: sqlite3.Connection) -> None:

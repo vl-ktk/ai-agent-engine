@@ -2,6 +2,13 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
+**Stage 7.11 `[ ] PARTIAL / SOURCE ONLY` (20.11.2026):** the
+[shared-capacity gate](./infra/orchestrator/SHARED_CAPACITY_7_11.md)
+adds one durable cross-project CPU-slot pool, operator-set GPT/Claude
+parallelism/call-window budgets, wait responses and crash-safe reservation
+settlement in private task SQLite v17. It does not yet gate the live model
+adapters or run on Netcup. No provider calls, automatic retry, or deployment.
+
 **Stage 7.6 [x] (offline memory core, owner choice №10 / В):**
 The [per-project memory store](./infra/orchestrator/PROJECT_MEMORY_7_6.md)
 adds project SQLite v2, provenance-backed append-only events, versioned

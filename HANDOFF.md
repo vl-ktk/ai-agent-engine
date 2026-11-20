@@ -1,3 +1,41 @@
+# HANDOFF — 20.11.2026, этап 7.11 / общие слоты и квоты (SOURCE ONLY)
+
+**Источник и откат исходников:** `vl-ktk/ai-agent-engine/main`
+`9c96d9e2785201d0a6f66b32daeed447244b8bef` до изменений. Разработка
+в `codex/stage-7-11-shared-capacity`; итоговый GitHub SHA/CI/PR нужно
+сверить после публикации. Это не номер работающего Netcup-релиза.
+
+**Статус `[ ] PARTIAL / SOURCE ONLY`:** реализован один доверенный
+`SharedCapacity` над существующим `TaskInbox`: общий пул контроллерных
+слотов между проектами/провайдерами, явные `gpt`/`claude` лимиты
+параллельности и вызовов за окно, безопасное `ASSIGNED` ожидание без
+провайдерного запроса, сортированный просмотр очереди, привязка к
+утверждённой 7.3 роли/назначенному worker и owner scope, fail-closed при
+аварии, clock rollback, emergency hold или замене 7.4. Приватная task SQLite
+v17 хранит атомарные бронирования и неизменяемый расход квоты; слот нельзя
+освободить до терминального состояния и подтверждённого завершения
+процесса. `run` — opt-in доверенная оболочка вокруг callback; сама по себе
+не перехватывает старые GPT/Claude executors. Файлы:
+`ai_agent_engine/main_shared_capacity.py`,
+`infra/orchestrator/SHARED_CAPACITY_7_11.md`,
+`tests/test_main_shared_capacity_7_11.py`; wheel `0.3.24a0`.
+
+**Проверки:** 11 новых профильных offline unit PASS; полный Linux Python
+3.12 регресс после всех правок **1006 OK (3 skipped)**.
+Wheel `0.3.24a0`, `compileall`, source/workflow scanners, `git diff --check`
+PASS. Никаких live GPT/Claude вызовов, paid API, изменений Netcup/Windows,
+ключей, разрешений, рабочего SQLite или чужих проектов.
+
+**Блокер к `[x]` и следующий шаг:** нужно обязательное подключение gate
+ко *всем* реальным provider dispatch, утверждённые числовые лимиты под
+4 vCPU Netcup, review подписанного backup hook для v16/v17, согласованная
+точка возврата и ограниченная live приёмка. Из известного: живое ядро
+Netcup `0.3.11a0`/`0e04af007375d82daf8f7d3b36c71abb0c784e0b`,
+новая схема на нём не развёрнута. **7.11 открыт; 7.12 не начинать** до
+полного завершения 7.11 либо нового согласованного DEFERRED.
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.10 / равноправный обмен задачами
 
 **Источник перед правкой:** `vl-ktk/ai-agent-engine/main` SHA
