@@ -179,9 +179,12 @@ def _check_preprovisioned(uid: int, gid: int) -> None:
     # The systemd-managed runtime directory is intentionally still absent.
     sys.path.insert(0, str(Path.cwd()))
     from ai_agent_engine.diagnostic_host_preflight import inspect_preprovisioned_host
+    from ai_agent_engine.diagnostic_intake_service import _private_config
     with _as_user(uid, gid):
+        doc = _private_config(PRIVATE_ROOT / "runtime.json")
         report = inspect_preprovisioned_host(PRIVATE_ROOT / "runtime.json")
-    if (report.source_commit != PROJECT_SHA
+    if (doc["socket_path"] != str(SOCKET)
+            or report.source_commit != PROJECT_SHA
             or report.candidate_ready
             or report.blockers != ("private_host_directories",)):
         raise RuntimeError("preprovisioned_host_state_changed")
@@ -277,6 +280,8 @@ def main() -> None:
         first_pid = _wait_socket(uid, gid)
         _systemctl("restart", UNIT_NAME)
         second_pid = _wait_socket(uid, gid)
+        if second_pid == first_pid:
+            raise RuntimeError("managed_process_was_not_restarted")
         _baseline(expected)
         report = {
             "status": "MANAGED_DIAGNOSTICS_ACTIVE", "scope": "vl-ktk/ai-agent-engine",
