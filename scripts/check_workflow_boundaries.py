@@ -24,6 +24,7 @@ APPROVED_WORKFLOWS = {
     "netcup-owner-release-transfer.yml",
     "netcup-owner-release-activate.yml",
     "netcup-owner-diagnostics-activate.yml",
+    "netcup-owner-diagnostics-upgrade-v2.yml",
     "netcup-gitops-status.yml",
     "netcup-owner-admin.yml",
 }
@@ -43,6 +44,7 @@ MANUAL_CONFIRMATIONS = {
     "netcup-owner-release-transfer.yml": "TRANSFER_PREPARED_RELEASE",
     "netcup-owner-release-activate.yml": "ACTIVATE_VERIFIED_RELEASE",
     "netcup-owner-diagnostics-activate.yml": "ACTIVATE_SIGNED_DIAGNOSTICS_7_7",
+    "netcup-owner-diagnostics-upgrade-v2.yml": "UPGRADE_SIGNED_DIAGNOSTICS_7_7_V2",
 }
 
 
@@ -163,6 +165,28 @@ def inspect_workflow(name: str, source: str) -> list[str]:
         for forbidden in ("owner_release_operator.py", "promotion.py", "systemctl restart ae-controller"):
             if forbidden in source:
                 errors.append("diagnostic workflow attempts unrelated core promotion")
+
+    if name == "netcup-owner-diagnostics-upgrade-v2.yml":
+        for marker in (
+            "inputs.mode == 'check-signature'",
+            "inputs.confirmation == 'VERIFY_SIGNING_KEY'",
+            "inputs.mode == 'upgrade'",
+            "github.triggering_actor == 'vl-ktk'",
+            "github.run_attempt == 1",
+            "secrets.AE_RELEASE_SIGNING_PRIVATE_KEY",
+            "ssh-keygen -Y sign", "ssh-keygen -Y verify",
+            "3ef07c51ec287a24bd54d8fcea7c40a99e69b569",
+            "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+            "SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg",
+            "StrictHostKeyChecking=yes", "diagnostic_addon_operator.py",
+            'test "$(gh api',
+        ):
+            if marker not in source:
+                errors.append("v2 diagnostic signing boundary missing: " + marker)
+        for forbidden in ("owner_release_operator.py", "promotion.py",
+                          "systemctl restart ae-controller"):
+            if forbidden in source:
+                errors.append("v2 diagnostics must never promote the controller")
 
     if name == "release-preparation.yml":
         if SECRET_REFERENCE.search(source):
