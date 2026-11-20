@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "7b354439e5de1cb8393be71d9dc34842",
+  "source_sha": "f9e703d67a48aff1d354dc651eebfe2c046ec14a",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/bootstrap_diagnostic_signing_7_7.py",
+  "script_sha256": "6243adcdd132e141495293d473a5cae160526e6839ac6d43e1aa5c6525eaecd9"
+}
