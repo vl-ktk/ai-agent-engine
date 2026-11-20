@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "0f29c07f743d4ff0be8423e6ce59932f",
+  "source_sha": "607e9913cd8f551d8a86f5041d8ceb47a07a1853",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/vault_install_diagnose_7_7a.py",
+  "script_sha256": "383df87a579675cb1b25c030cdc373df34cc33a86e8ff4358b56ffaba44f0891"
+}
