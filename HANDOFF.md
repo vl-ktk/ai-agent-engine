@@ -6,6 +6,8 @@
 
 **Публикация offline ядра 7.7 №10:** код, тесты, дорожная карта и протокол в GitHub `main`; предыдущий SHA для адресного отката до публикации `a9406880cdb4807ee39ab1016cd264f140077629` (только `git revert` после проверки HEAD; без force-push). Новая версия Python-пакета `0.3.12a0`, исключительно исходники без deployment. **Windows и Netcup не менять:** ни запусков, ни live-проверок, ни расходов, ни правок workflows. Следующий шаг — отдельное согласование живой интеграции и замеров после приёмки offline ядра.
 
+**CI GitHub после публикации [f8f33fe](https://github.com/vl-ktk/ai-agent-engine/commit/f8f33fe0a8b3a166c11ce3c894a22e89cb705bd6):** [run 44693742817](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44693742817) — Ubuntu Python 3.11/3.12/3.13 **PASS**, Build and exercise isolated wheel **PASS**; Windows Python 3.12 **FAIL** (в логе `ModuleNotFoundError: fcntl`, всего 30 import errors и 1 failure), поэтому общий CI **не зелёный**. Windows не исправлять и workflow не менять без отдельного указания владельца. Для отката реализации требуется проверка HEAD и адресный revert feature-коммита `f8f33fe0a8b3a166c11ce3c894a22e89cb705bd6`; предыдущее состояние исходников `a9406880cdb4807ee39ab1016cd264f140077629`.
+
 ## Предыдущий выполненный этап 7.6
 
 ## Текущая задача
