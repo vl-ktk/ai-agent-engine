@@ -1,5 +1,36 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / isolated diagnostics ACTIVE, 7.7 PARTIAL
 
+## Current blocker — real managed FAILED→incident QA needs an authorized task producer
+
+**Read-only code assessment at source `60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23`, verified 20.11.2026:**
+`ai_agent_engine/diagnostic_managed_runtime.py:run_managed()` calls
+`open_singleton()` then `serve_local_intake()`; it **never** invokes
+`SingleProjectDiagnosticRunner.run_next()`, creates no task admission,
+does not issue `EXECUTE_TOOL` grants and has no automatic worker loop.
+`diagnostic_intake_service.process_local_event()` requires a previously
+durable *real* `FAILED` task and authenticated same-process owner; a forged
+socket failure must be rejected and must not count as a live incident.
+The standalone component's real subprocess FAIL tests were offline, not on
+Netcup. Latest installed release and first socket/restart live probes are
+documented below; no new Netcup test was performed by this read-only review.
+
+**Safe next implementation before meaningful live QA:** review and test a
+one-time trusted task admission + explicit owner-scoped grant/execution path
+**inside the same already-owned task process**, with provenance of a real
+verification failure and a verified incident/QA readback. Protect the
+previously registered single project, existing project Git source, runtime
+SQLite/registry and backups; never open a second task writer or inject a fake
+incident. Any new runtime code must pass offline tests and the separate
+owner-signed release process. **Permission boundary:** creating a task/grant
+writes into existing live SQLite; changing those working records needs the
+owner's specific consent to the exact controlled test. If no legitimate real
+failure occurs, report `NO_FAILURE_OBSERVED`, not a synthetic PASS.
+**Current status: 7.7 PARTIAL / LIVE QA BLOCKED**, no 7.8 or Windows/other
+project changes. Scheduled diagnostic backup observation remains `DEFERRED`
+only until the normal 21.11.2026 cycle as recorded below.
+
+---
+
 ## Owner-approved 7.7 sequence exception — 20.11.2026
 
 Owner explicitly answered **yes** to deferring **only** the first naturally
