@@ -26,7 +26,9 @@ import tempfile
 SOURCE = Path("/var/lib/ai-agent-engine-diagnostics")
 DESTINATION = Path("/var/backups/ai-agent-engine-diagnostics")
 DATABASES = {
-    "tasks.sqlite3": (0x4145494E, 14),
+    # The installed backup still encounters v14; the next orchestrator source
+    # uses v15. Both exact formats are allowed, not arbitrary future schemas.
+    "tasks.sqlite3": (0x4145494E, (14, 15)),
     "projects/project-leaders.sqlite3": (0x41454C52, 1),
     "projects/vl-ktk/ai-agent-engine/leader.sqlite3": (0x41454C50, 2),
 }
@@ -73,11 +75,19 @@ def _hash(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _database_check(path: Path, app: int, version: int) -> None:
+def _valid_schema(db: sqlite3.Connection, app: int,
+                  version: int | tuple[int, ...]) -> bool:
+    found = (db.execute("PRAGMA application_id").fetchone()[0],
+             db.execute("PRAGMA user_version").fetchone()[0])
+    return found[0] == app and found[1] in (
+        version if isinstance(version, tuple) else (version,))
+
+
+def _database_check(path: Path, app: int,
+                    version: int | tuple[int, ...]) -> None:
     _regular(path)
     with sqlite3.connect("file:" + str(path) + "?mode=ro&immutable=1", uri=True) as db:
-        if ((db.execute("PRAGMA application_id").fetchone()[0],
-             db.execute("PRAGMA user_version").fetchone()[0]) != (app, version)
+        if (not _valid_schema(db, app, version)
                 or db.execute("PRAGMA quick_check").fetchone() != ("ok",)):
             raise DiagnosticBackupError("unexpected diagnostic database")
 
@@ -290,10 +300,10 @@ class DiagnosticBackup:
                 "snapshot": manifest["snapshot"], "database_count": len(DATABASES)}
 
 
-def _database_check_recovered(path: Path, app: int, version: int) -> None:
+def _database_check_recovered(path: Path, app: int,
+                              version: int | tuple[int, ...]) -> None:
     with sqlite3.connect("file:" + str(path) + "?mode=ro&immutable=1", uri=True) as db:
-        if ((db.execute("PRAGMA application_id").fetchone()[0],
-             db.execute("PRAGMA user_version").fetchone()[0]) != (app, version)
+        if (not _valid_schema(db, app, version)
                 or db.execute("PRAGMA quick_check").fetchone() != ("ok",)):
             raise DiagnosticBackupError("recovered SQLite integrity failed")
 

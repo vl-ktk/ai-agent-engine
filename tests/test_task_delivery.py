@@ -181,7 +181,7 @@ class TaskDeliveryTests(unittest.TestCase):
         self.manager = TaskDeliveryManager(self.inbox)
         self.control = TaskProcessController(self.inbox)
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                             (14,))
+                             (15,))
         self.assertIs(self.inbox.state(task_id, OWNER), TaskState.ASSIGNED)
         self.assertTrue(self.reserve(task_id).should_execute)
 

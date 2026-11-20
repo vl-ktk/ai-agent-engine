@@ -133,6 +133,12 @@ class TaskPermissionGate:
                 reason = "task_not_running"
             elif self.inbox._store.emergency_held(scope.owner_id, record.project_id):
                 reason = "emergency_hold"
+            elif ((crisis := self.inbox._store.crisis_child_state(task_id))
+                  is not None and
+                  (crisis[0] != "assigned" or time.time() >= crisis[1])):
+                # An incident that reached HOLD/expired cannot retain its
+                # grants even when a worker process has not exited yet.
+                reason = "crisis_fenced"
             else:
                 identity = (task_id, actor_id, action)
                 pin = self.inbox._store.specialist_pin(task_id)

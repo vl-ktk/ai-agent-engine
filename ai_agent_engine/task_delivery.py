@@ -100,6 +100,13 @@ class TaskDeliveryManager:
             raise ValueError("max_attempts must be 1..5")
         with self.inbox._lock:
             self._owned(task_id, scope, actor_id)
+            crisis = self.inbox._store.crisis_child_state(task_id)
+            if crisis is not None:
+                if max_attempts != 1:
+                    # The ordinary worker's retry budget never applies.
+                    raise DeliveryRejected("crisis_one_attempt_only")
+                if crisis[0] != "assigned" or time.time() >= crisis[1]:
+                    raise DeliveryRejected("crisis_not_runnable")
             stored = self.inbox._store.delivery(task_id)
             if stored is not None and stored[0] != max_attempts:
                 raise DeliveryRejected("delivery retry policy is immutable")

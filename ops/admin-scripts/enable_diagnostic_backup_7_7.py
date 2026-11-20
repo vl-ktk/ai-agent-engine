@@ -34,7 +34,7 @@ DROPIN_DIR = Path("/etc/systemd/system/ae-backup.service.d")
 DROPIN = DROPIN_DIR / "70-diagnostic-project.conf"
 BACKUP_ROOT = Path("/var/backups/ai-agent-engine-diagnostics")
 SOURCE_ROOT = Path("/var/lib/ai-agent-engine-diagnostics")
-REVIEWED_BACKUP_SHA256 = "9930b6d4d34d751cc661fe7e20c2527508715056e35139d7a59ea2db554cdb5a"
+REVIEWED_BACKUP_SHA256 = "6ef4e3d0de703a20b6ffaee1968ad78f8dcef022283809e32466d72bdc94304d"
 SERVICES = ("ae-controller.service", "ae-backup.timer", "ae-host-check.timer")
 
 
