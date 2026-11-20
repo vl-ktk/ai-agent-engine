@@ -1,0 +1,1 @@
+{"schema":1,"request_id":"33d5329ce87dbef211fb6f3b005c7c81","source_sha":"3bc86cf7ae7b07cce1654e3c13d4a074034b8e8f","expected_current":"0e04af007375d82daf8f7d3b36c71abb0c784e0b","script":"ops/admin-scripts/diagnostic_host_audit_7_7.py","script_sha256":"59e19500a90445cf4ecd6255d4aace0760c67eacdd72b9e6b101c3344061ff3c"}
