@@ -199,13 +199,17 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
             "source_bindings": {"alpha": str(self.repo)},
         }))
         config.chmod(0o600)
+        # The trusted owner prepares the binding before starting the socket
+        # intake thread; the thread never creates a second task DB owner.
+        bound_adapter, bound_path = bind_inprocess_diagnostics(
+            config, inbox=self.inbox, scope=SCOPE, leaders=self.leaders)
+        self.assertEqual(bound_path, path)
         stopped = Event()
         faults = []
 
         def run():
             try:
-                run_configured_service(config, stopped, inbox=self.inbox,
-                                       scope=SCOPE, leaders=self.leaders)
+                serve_local_intake(bound_adapter, path, stopped)
             except Exception as exc:
                 faults.append(exc)
 

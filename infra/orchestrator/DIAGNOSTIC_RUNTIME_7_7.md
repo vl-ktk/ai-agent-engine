@@ -11,13 +11,15 @@ requires **exactly one** project and fails closed on multi-project config.
 This is a selection of scope, **not** an authenticated `OwnerDecision`, grant,
 or proof that the workspace exists on Netcup.
 
-**Source-only update `0.3.16a0`:** the standalone diagnostic CLI now returns
+**Source-only update `0.3.16a0` (test hotfix `0.3.16a1`):** the standalone diagnostic CLI returns
 `standalone_task_owner_forbidden` and **does not** open a second task SQLite.
 The trusted task-process owner must call
 `bind_inprocess_diagnostics(config, inbox=inbox, scope=scope, leaders=leaders)`
-to get an adapter for synchronous `record_failed_task` calls, or start
+on the owner thread to get an adapter and socket path for synchronous
+`record_failed_task` calls, then run `serve_local_intake(adapter, path, stopped)`
+on a thread **inside the same process**. The optional
 `run_configured_service(config, stopped, inbox=inbox, scope=scope, leaders=leaders)`
-on a thread **inside the same process** for private socket intake. Both
+requires these same trusted references. Both
 methods use the existing TaskInbox and ProjectLeaderStore objects; neither
 opens another TaskInbox/registry. The binding is refused if owner/project,
 task database inode, workspace root, registry root, source directory or
@@ -83,7 +85,7 @@ real GPT/Claude QA.
    Last observed read-only at 20.11.2026: `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
    (`0.3.11a0`), not a standing guarantee.
 4. Build a candidate from the precise deployed source with approved 7.5/7.7
-   dependency closure. GitHub `main` `0.3.16a0` contains additional offline
+   dependency closure. GitHub `main` `0.3.16a1` contains additional offline
    stages and must **not** simply be promoted blindly as a live orchestrator.
 5. Have the GitHub owner manually run pinned `release-preparation.yml`, then
    `netcup-owner-release-transfer.yml` and
