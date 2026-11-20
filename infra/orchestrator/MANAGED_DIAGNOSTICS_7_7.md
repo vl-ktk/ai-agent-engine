@@ -33,6 +33,36 @@ and not acceptance of the full 7.7 failure-to-incident/QA requirements.
 
 ## Activation gate — HOLD
 
+### Dedicated signed add-on path (prepared source; NOT installed)
+
+The owner authorized a distinct release-signing identity and restricted
+diagnostic activation on 20.11.2026. The dedicated **private** key was stored
+in the GitHub repository Actions secret `AE_RELEASE_SIGNING_PRIVATE_KEY`;
+its matching **public-only** allowed signer is pinned by the reviewed
+`bootstrap_diagnostic_signing_7_7.py` source. The new fixed
+`infra/deploy/diagnostic_addon_operator.py` refuses every source except
+`60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23`, every live controller
+except `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, and any absent,
+invalid, expired or mismatched owner signature. The signed intent uses a
+separate `activate-managed-diagnostics-7-7` operation. Only its exactly
+digested prepared wheel's Python source can reach the pinned root installer.
+
+This path reuses the existing **manual** release-preparation and
+wheel-transfer workflows; it has a separate owner-manual
+`netcup-owner-diagnostics-activate.yml` with an offline `check-signature`
+mode. It does not invoke the generic controller promotion operator or change
+the existing controller symlink. The one-time public trust bootstrap is a
+separately reviewed owner-admin request and **must not activate diagnostics**.
+It does not modify sudoers: previously authorized Netcup admin permissions
+already exist. A GitHub secret existing is not yet proof its OpenSSH encoding
+and the Netcup trust path verify successfully; the offline signed check is
+mandatory before installing any root files.
+
+As of source publication preparation, **none of these new Netcup files is
+installed**, and the service is still **HOLD** until the signing self-test,
+separate bootstrap, prepared wheel, transfer, owner-manual signed activation,
+and live probes each pass.
+
 The source-reviewed candidate `ops/admin-scripts/activate_managed_diagnostics_7_7.py`
 describes an **additive** isolated service installation, not an existing
 production package release. No request under `ops/admin-requests/` has been
