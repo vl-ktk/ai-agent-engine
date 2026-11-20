@@ -8,6 +8,7 @@ start a second independent writer against an active TaskInbox database.
 
 from __future__ import annotations
 
+from contextlib import closing
 import argparse
 import json
 import os

@@ -13,6 +13,7 @@ import time
 import unittest
 from unittest.mock import patch
 
+from ai_agent_engine import diagnostic_intake_service as intake_module
 from ai_agent_engine.diagnostic_intake_service import (
     IntakeUnavailable, MAX_EVENT_BYTES, _private_config, bind_inprocess_diagnostics,
     process_local_event, run_configured_service, serve_local_intake,
@@ -227,20 +228,7 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
             client.connect(str(path))
             client.sendall(self.event())
             with client.makefile("rb") as response:
-                try:
-                    answer = json.loads(response.readline())
-                except TimeoutError:
-                    # CI-only triage: report code locations, never event bytes.
-                    frame = sys._current_frames().get(thread.ident)
-                    frames: list[str] = []
-                    while frame is not None:
-                        frames.append(f"{frame.f_code.co_name}:{frame.f_lineno}")
-                        frame = frame.f_back
-                    print("INPROCESS_SOCKET_THREAD_STACK " + " <- ".join(frames[:12]),
-                          file=sys.stderr)
-                    stopped.set()
-                    thread.join(timeout=5)
-                    raise
+                answer = json.loads(response.readline())
         self.assertEqual(answer["status"], "RECORDED")
         self.assertEqual(answer["ok"], True)
         with self.assertRaises(IntakeUnavailable):
@@ -257,6 +245,19 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
         public.mkdir(mode=0o755)
         with self.assertRaises(IntakeUnavailable):
             serve_local_intake(self.adapter, public / "intake.sock", Event())
+
+    def test_socket_cleanup_dependency_without_af_unix(self):
+        """Regression for missing contextlib.closing (CI timeout on accept)."""
+        class Connection:
+            closed = False
+
+            def close(self):
+                self.closed = True
+
+        connection = Connection()
+        with intake_module.closing(connection):
+            pass
+        self.assertTrue(connection.closed)
 
     def test_runtime_configuration_is_private_and_does_not_create_task_db(self):
         config = self.base / "runtime.json"
