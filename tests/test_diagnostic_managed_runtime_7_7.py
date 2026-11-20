@@ -12,15 +12,16 @@ from threading import Event
 import unittest
 from unittest.mock import patch
 
-from ai_agent_engine.diagnostic_managed_runtime import (
-    ManagedRuntimeHold, open_singleton, run_managed,
-)
-from ai_agent_engine.main_orchestrator import OwnerDecision
-from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
-from ai_agent_engine.single_project_diagnostic_runner import SINGLE_SCOPE
-from ai_agent_engine.task_api import TaskInbox
-from ai_agent_engine.task_assignment import WorkspaceRoot
-from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
+if sys.platform.startswith("linux"):
+    from ai_agent_engine.diagnostic_managed_runtime import (
+        ManagedRuntimeHold, open_singleton, run_managed,
+    )
+    from ai_agent_engine.main_orchestrator import OwnerDecision
+    from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
+    from ai_agent_engine.single_project_diagnostic_runner import SINGLE_SCOPE
+    from ai_agent_engine.task_api import TaskInbox
+    from ai_agent_engine.task_assignment import WorkspaceRoot
+    from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Linux-only managed task owner")
