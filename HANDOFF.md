@@ -1,3 +1,28 @@
+# HANDOFF — 20.11.2026, AI Agent Engine / Secure Vault P1 roadmap insertion, DOCS ONLY
+
+**Owner request:** plan, do not implement, the new Secure Vault module.
+Added independent **7.7A** between existing 7.7 and 7.8, without changing
+their wording, renumbering the historical 169 direct subtasks, or introducing
+third-level task numbering. Full nine-section requirements, five unchecked
+phases and ten acceptance checks are in
+`infra/security/SECURE_VAULT_PLAN.md`; the compact parent task is in
+`IMPLEMENTATION_ROADMAP.md`. No Vault runtime, secret migration, permissions,
+password changes, Netcup/Windows deployment, paid API or other project changed.
+Source baseline before these **documentation-only** edits:
+`7e2e92aab280bb1b08bd411516c76216c1a20515` (source rollback reference).
+
+**Independent historical status after the older notes below:** Netcup signed
+one-shot real FAILED→QA incident [run 44749623203](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44749623203)
+PASS; read-only live resource snapshot [run 44751047718](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44751047718)
+PASS (0.037% one CPU core in 3 s, cgroup RAM 17,043,456 bytes, one process).
+Core `0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
+unchanged. First *naturally scheduled* diagnostic backup on 21.11.2026
+~03:00–03:06 UTC remains `DEFERRED`, **7.7 not marked complete**. Owner
+explicitly allowed moving to 7.8 meanwhile; source-only 7.8 work had **not**
+started when the owner switched to this Vault documentation request.
+
+---
+
 # HANDOFF — 20.11.2026, AI Agent Engine / owner-requested future release updater improvement (DOCS ONLY)
 
 **Current scoped task:** record, without implementing, a permanent signed release
