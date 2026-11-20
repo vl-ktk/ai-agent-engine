@@ -1,5 +1,38 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
 
+## 7.7 — первый проект НА СЕРВЕРЕ УТВЕРЖДЁН, независимая проверка PASS
+
+**Актуальная проверенная точка перед продолжением:** GitHub `main`
+`bda7eb55644d2b16c762ae2ee66c39ad598aa1c0` (source rollback baseline
+для следующей source-правки; всегда перечитать HEAD до отката).
+Только для `vl-ktk/ai-agent-engine`, точный proposal
+`proposal_8950a54bb02d4537943c5ed6f3286696`, digest
+`8443ee2fd8de2cb0c893a39420b0229b463a055b014f3bf93c571952f573dd56`:
+
+- Fresh [Netcup audit 44722400997](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44722400997)
+  **SUCCESS**: runtime `0.3.11a0`, exact deployed rollback SHA
+  `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, baseline units active;
+  host-wide CPU 0.0%, RAM 7.6%, диск 1.9% (не diagnostic overhead).
+- Защищённый authenticated owner [registration 44722888936](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44722888936)
+  **SUCCESS**: `APPROVED_INERT`, `approval_record_created=true`, leader SQLite
+  v2, точный project scope, prepared Git `741fc1a4e62b52922611e1e28d4805d727dffe4d`,
+  `service_activated=false`.
+- [Independent read-only verification 44724070020](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44724070020)
+  **SUCCESS**: `APPROVAL_VERIFIED_READ_ONLY`, exact registry/leader identity,
+  schema/app IDs/SQLite integrity, zero tasks, immutable prepared Git checkout,
+  no diagnostic socket, existing baseline services active. Открыт только
+  `private_host_directories` (пока нет socket parent). Новый скрипт и тесты
+  опубликованы через PR #66/#67; `860 unittest OK (2 skipped)` локально,
+  столько же проверено на GitHub owner-admin Ubuntu. Windows CI отдельно FAIL;
+  Windows не меняли.
+
+**Что осталось в том же 7.7:** backup coverage *новой* частной ветки
+`/var/lib/ai-agent-engine-diagnostics` (нынешний `ae-backup.py` копирует только
+`/var/lib/ai-agent-engine`), проверка изолированного восстановления,
+private socket/один runtime, живой failure→incident→verified QA,
+CPU/RAM/disk overhead. Диагностику не запускать до backup/QA gates, другие
+проекты/секреты не менять; 7.7 `[ ] PARTIAL / LIVE HOLD`, 7.8 не начинать.
+
 ## Текущий шаг после переноса чата — owner proposal / offline registration gate
 
 **Исходная ветка для этого изменения:** GitHub `vl-ktk/ai-agent-engine` `main`
