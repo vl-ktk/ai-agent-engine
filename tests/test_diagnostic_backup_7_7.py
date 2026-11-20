@@ -59,6 +59,12 @@ class DiagnosticBackupTests(unittest.TestCase):
                                  proposal.sha256, "button")
         APPROVAL.register_approved_project(
             self.live, proposal, decision, prepared_source_sha=self.commit)
+        # The real reviewed backup hook permits v14/v15, not source-only v16.
+        # After owner registration, model a genuine v15 disposable DB for
+        # these legacy backup tests; never edit the signed backup script.
+        with sqlite3.connect(self.live / "tasks.sqlite3") as db:
+            db.execute("DROP TABLE global_direction_decisions")
+            db.execute("PRAGMA user_version=15")
 
     def test_complete_snapshot_and_disposable_restore_preserve_live_databases(self):
         self.approve()
@@ -97,6 +103,9 @@ class DiagnosticBackupTests(unittest.TestCase):
         self.assertEqual(names.count("runtime.json"), 1)
 
     def test_unapproved_project_refused_without_new_snapshot(self):
+        with sqlite3.connect(self.live / "tasks.sqlite3") as db:
+            db.execute("DROP TABLE global_direction_decisions")
+            db.execute("PRAGMA user_version=15")
         with self.assertRaises(DiagnosticBackupError):
             self.store.create()
         self.assertEqual(self.store._snapshots(), [])
