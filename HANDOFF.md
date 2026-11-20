@@ -1,5 +1,33 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / isolated diagnostics ACTIVE, 7.7 PARTIAL
 
+## Owner-approved 7.7 sequence exception — 20.11.2026
+
+Owner explicitly answered **yes** to deferring **only** the first naturally
+scheduled diagnostic backup observation until the next `ae-backup.timer`
+cycle, while preparing the independent **real managed FAILED → incident →
+verified QA** path inside 7.7. The reason is timing: diagnostic backup hook
+installed after 03:00 UTC today, next 03:00–03:06 UTC on 21.11.
+**Risk:** scheduled `ExecStartPost` could still fail; first manual snapshot,
+SHA verification and three-DB restore-smoke PASSED but do not replace this
+evidence. No destructive live data change until a scoped owner-approved test
+and safe recovery are established. **Return condition:** after next cycle,
+read-only inspect timer/service history and independently verify a *new*
+private diagnostic snapshot; keep `DEFERRED` until then, not `[x]`.
+`IMPLEMENTATION_ROADMAP.md` updated in docs-only SHA
+`e7d92e8462b0a1f26c9aa20e0cb6dc3b42b889ba`.
+
+**Exact installed runtime boundary:** pinned source
+`60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23` opens one `TaskInbox`
+and serves a private socket but deliberately never calls `run_next()`,
+never admits tasks or creates `EXECUTE_TOOL` grants.
+The live socket `HOLD` probe and a restart are **not** real FAIL→incident QA.
+The next independent 7.7 step is to review a safe, bounded, authenticated
+real-worker QA path without a second SQLite writer or fake failures.
+Baseline core rollback still `0e04af007375d82daf8f7d3b36c71abb0c784e0b`;
+Windows, other projects, 7.8 and paid APIs remain untouched.
+
+---
+
 ## Current gate — awaiting first scheduled diagnostic backup (20.11.2026)
 
 **This is not yet PASS.** Exact reviewed source `infra/systemd/ae-backup.timer`
