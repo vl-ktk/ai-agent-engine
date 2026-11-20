@@ -1,5 +1,35 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
 
+## Текущий шаг после переноса чата — owner proposal / offline registration gate
+
+**Исходная ветка для этого изменения:** GitHub `vl-ktk/ai-agent-engine` `main`
+`2d53c804adba6de3dd54bd432c36b31c3e1fec04`. Следующий шаг — получить
+внешнее аутентифицированное подтверждение **точной** заявки
+`proposal_8950a54bb02d4537943c5ed6f3286696`, SHA-256
+`8443ee2fd8de2cb0c893a39420b0229b463a055b014f3bf93c571952f573dd56`.
+Ссылка на предложение и процедуру: [HOST_OWNER_APPROVAL_7_7.md](./infra/orchestrator/HOST_OWNER_APPROVAL_7_7.md).
+
+**Подготовлено только в исходнике:** жёстко закреплённый payload, новый
+однопроектный `approve_single_project_7_7.py` для **уже созданного** приватного
+каталога Netcup и offline tests. Он не стартует сервис, не создаёт задачи,
+grants, сокет и не подключает модели. Owner-admin JSON **не создавался**,
+workflow **не запускался**, запись в реальный project registry **не внесена**.
+Digest owner-admin script:
+`59d4c99aebbd7b0c611a33ffbe27e126216f4ccf4c65645645df45b4b8bfd742`.
+Проверено локально на текущих исходниках: **8 новых targeted PASS**,
+**855 unittest OK (2 skipped)**, `compileall`, public-source scan,
+workflow-boundary scan, staged diff и wheel `0.3.19a0` **PASS**. GitHub CI
+для новой правки до её публикации ещё не запускался.
+Актуальная live Netcup версия до нового read-only подтверждения — прежний
+зафиксированный `0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+Разрешение на новый host write и точное owner approval нужно получить отдельно.
+
+**Статус 7.7:** `[ ] PARTIAL / LIVE HOLD`. Следом после подтверждения заявки:
+fresh GitHub/Netcup checks, owner-admin scoped registration, backup coverage,
+private socket, один управляемый runtime, затем E2E failure→incident→verified QA
+и реальные CPU/RAM/disk замеры. Windows/другие проекты/платные API не изменять;
+7.8 не начинать.
+
 ## Подтверждено: первый приватный проект на Netcup подготовлен, сервис не запущен
 
 **Реальный результат 20.11.2026:** опубликованы [исходники provisioning](https://github.com/vl-ktk/ai-agent-engine/commit/741fc1a4e62b52922611e1e28d4805d727dffe4d) и отдельный immutable owner-admin request `f31b7ab510cb2141a4170a7cc775c36b` в GitHub `main` **`578c1406cbfa667363075b43e57f441fb1ced832`**. [Netcup owner-admin run 44713790672](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44713790672) завершился **SUCCESS**, журнал host вернул `PROVISION_7_7.status=PREPARED_INERT`, `schema=1`, `task_schema=14`, `registry_schema=1`, `scope=vl-ktk/ai-agent-engine`, `source_commit=741fc1a4e62b52922611e1e28d4805d727dffe4d`. Это подтверждает фактическое создание выделенного приватного пространства `/var/lib/ai-agent-engine-diagnostics`, пустой TaskInbox v14, пустого project registry v1, `runtime.json` и checkout проверенного Git SHA. Новая структура принадлежит `ae-runtime` и проверяется на private permissions; существующее рабочее хранилище не мигрировали.
