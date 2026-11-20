@@ -1,3 +1,11 @@
+# HANDOFF — 20.11.2026 / решение владельца: веб-ChatGPT adapter в текущую разработку
+
+**Поручено только зафиксировать в действующем плане.** На текущем 7.11 владелец выбрал направление `chatgpt_web` как приоритет для следующей source-only/offline разработки. Референсы: Octo-Lex/ChatGPT-Web2API и cromat/chatgpt-web-session-proxy; использовать только как образцы, не считать готовым production API. Первый шаг после новой команды: отключённый по умолчанию provider adapter с mocked browser, отдельными агентными сессиями и проверкой TaskInbox/SharedCapacity/TaskPermissionGate, без реального ChatGPT-вызова. Риск неофициальной автоматизации и точный лимит обычного Chat/Instant не сняты; любой live-тест и эксплуатация — отдельное решение владельца. Сохранить официальный SIWC, не трогать токены, cookies, Netcup, production SQLite, GitHub Actions owner jobs.
+
+**Состояние до и после этой документационной правки:** источник до правки `5dbbaba06c59e340d7fe8c83e3c7490fcb32ec88`; live core `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite `v14`. 7.11 `[ ] PARTIAL`; 7.12 не начинать. Никаких тестов моделей или production-выкладки по этому решению не выполнено.
+
+---
+
 # HANDOFF — 20.11.2026 / 7.11, изолированный Netcup GPT+Claude E2E LIVE PASS
 
 **Источник на входе:** GitHub `vl-ktk/ai-agent-engine/main`
