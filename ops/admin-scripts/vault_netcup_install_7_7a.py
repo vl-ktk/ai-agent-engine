@@ -229,9 +229,15 @@ def main() -> int:
           "--home-dir", "/nonexistent", "--shell", "/usr/sbin/nologin", "ae-vault"])
     vault_user = pwd.getpwnam("ae-vault")
     RELEASE_ROOT.mkdir(parents=True, mode=0o755, exist_ok=True)
+    # umask 077 intentionally protects credentials, but code directories must
+    # remain traversable by the dedicated unprivileged service account.
+    for public_code_parent in (RELEASE_ROOT.parent, RELEASE_ROOT):
+        os.chmod(public_code_parent, 0o755)
     release.mkdir(mode=0o755, exist_ok=False)
+    os.chmod(release, 0o755)
     package = release / "ai_agent_engine"
     package.mkdir(mode=0o755)
+    os.chmod(package, 0o755)
     _write_new(package / "__init__.py", b'"""Private Netcup Vault adapter."""\n')
     for filename in ("secure_vault.py", "vault_runtime.py"):
         _write_new(package / filename, (source / "ai_agent_engine" / filename).read_bytes())

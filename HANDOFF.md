@@ -1,3 +1,30 @@
+# HANDOFF — 20.11.2026, Secure Vault 7.7A / pinpointed installer umask bug
+
+**Verified read-only remote result:** [owner-admin audit
+44762212832](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44762212832)
+SUCCESS after failed install. The existing controller SHA is unchanged.
+`ae-vault` user exists, encrypted `master.cred`/`backup.cred` exist privately,
+private state/backup directories exist, `ae-vault.socket` **active**,
+`ae-vault.service` **restart-loop / ExecMainStatus=2**, timer inactive.
+Installed Python code release directory has mode **0700** (root-only).
+The source installer ran under `umask(0o077)` and created source directories
+with `mkdir(mode=0755)` *without a later chmod*; root's effective 0700
+blocks the `ae-vault` process before Python can launch. This is a focused,
+reproducible code error, not a missing secret or owner authorization.
+
+**Fix:** future installs now explicitly chmod ONLY new source directories
+0755. For this partially installed release, the reviewed
+`ops/admin-scripts/vault_netcup_repair_code_dirs_7_7a.py` checks the old
+controller SHA, root ownership/modes and installed module hashes, chmods
+only four fixed paths under `/opt/ai-agent-engine-vault`, then tests socket,
+project initialization, live encrypted backup/restore and daily timer.
+It does not modify `/etc` keys, `/var/lib` SQLite, `/var/backups` content,
+Windows or core service. **Do not rerun full installer**: collision guard
+correctly rejects the already-created paths. Vault still `[ ] PARTIAL`
+until verified live success and owner-chat ingress integration.
+
+---
+
 # HANDOFF — 20.11.2026, Secure Vault 7.7A / failed install, read-only diagnosis
 
 **Результат проверен:** Netcup-only source [PR
