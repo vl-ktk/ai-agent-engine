@@ -1,5 +1,30 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / signed add-on gate, live HOLD
 
+## Latest — reviewed bootstrap umask fix, Netcup untouched
+
+**Source baseline:** GitHub `main` `8a492158bb3c46f7bfe61d341d6bc8622720c189`
+(recheck HEAD before any request); active Netcup core last observed
+`0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+Owner-manual, no-VPS signature check [run 44735340945](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44735340945)
+**PASS**, including exact public key match, OpenSSH Ed25519 signature and
+verification; both VPS SSH/install steps **SKIPPED**.
+
+**Safety fix awaiting source publication:** the authenticated owner-admin
+runner sets `umask(077)`, so initial root file creation for modes `0644` and
+`0444` would actually result in `0600` and `0400`. The additive bootstrap
+`bootstrap_diagnostic_signing_7_7.py` now calls `fchmod` on the *same newly
+opened descriptor* before checking the final inode; it tracks the newly
+created path immediately for private rollback of partial writes. Eight
+focused signing tests PASS including restrictive umask, no-clobber and
+signature-rejection cases; full regression **895 OK (2 skipped)**,
+source/workflow scans and compileall PASS.
+**No root bootstrap, diagnostic unit, socket or model has been installed**.
+Next: merge tested narrow fix, recheck fresh `main`/Netcup SHA, submit one
+owner-admin bootstrap for public signer and trusted operator; then owner-only
+manual release-preparation/transfer/signed activation. Do not use generic
+controller promotion, Windows, other projects or paid APIs. 7.7 PARTIAL,
+7.8 HOLD.
+
 ## Latest — isolated signed activation path, owner-approved, source preparation
 
 **Exact source baseline for this change:** GitHub `vl-ktk/ai-agent-engine`

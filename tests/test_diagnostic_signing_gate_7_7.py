@@ -5,7 +5,9 @@ from hashlib import sha256
 from io import BytesIO
 import importlib.util
 import json
+import os
 from pathlib import Path
+import stat
 import sys
 import tempfile
 import time
@@ -159,6 +161,27 @@ class DiagnosticSigningGateTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "target_already_present"):
                     boot.bootstrap(expected=boot.LIVE_SHA, evidence=evidence)
                 self.assertEqual((evidence / "already-here").read_bytes(), b"do not replace")
+
+    def test_bootstrap_preserves_exact_modes_under_restrictive_owner_umask(self):
+        boot = self.boot
+        with tempfile.TemporaryDirectory() as temp:
+            for mode in (0o444, 0o644):
+                target = Path(temp) / ("new-" + oct(mode))
+                tracked = []
+                previous = os.umask(0o077)
+                try:
+                    boot._exclusive_root_file(target, b"reviewed", mode,
+                                              created=tracked,
+                                              expected_uid=os.getuid())
+                finally:
+                    os.umask(previous)
+                self.assertEqual(stat.S_IMODE(target.stat().st_mode), mode)
+                self.assertEqual(tracked, [target])
+                self.assertEqual(target.read_bytes(), b"reviewed")
+                with self.assertRaises(FileExistsError):
+                    boot._exclusive_root_file(target, b"overwrite", mode,
+                                              expected_uid=os.getuid())
+                self.assertEqual(target.read_bytes(), b"reviewed")
 
 
 if __name__ == "__main__":
