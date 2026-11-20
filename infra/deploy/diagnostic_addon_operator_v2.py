@@ -236,8 +236,8 @@ def main() -> int:
     if args.confirmation != CONFIRMATION or os.geteuid() != 0:
         parser.error("owner confirmation and root operator required")
     try:
-        activate(source_sha=args.source_sha, expected_current=args.expected_current,
-                 wheel_sha256=args.wheel_sha256)
+        upgrade(source_sha=args.source_sha, expected_current=args.expected_current,
+                wheel_sha256=args.wheel_sha256)
     except (AddonRefused, OSError, ValueError, subprocess.SubprocessError) as exc:
         parser.error(str(exc))
     print("PASS: signed isolated diagnostic add-on upgraded; controller release unchanged")
