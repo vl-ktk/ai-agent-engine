@@ -1,3 +1,22 @@
+# HANDOFF — 20.11.2026, Secure Vault 7.7A / failed install, read-only diagnosis
+
+**Результат проверен:** Netcup-only source [PR
+#86](https://github.com/vl-ktk/ai-agent-engine/pull/86), merged main
+`38d0e960d63f725ee5d5de5fbf71c8e03052ce52`; все 939 offline тестов
+PASS (2 skipped). Владелец разрешил отдельную Vault установку; единственный
+owner-admin install request commit `61c1e21c3d516908a28b017cf578ee18dfba2cd5`
+вызвал [run 44760958926](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44760958926).
+Доверенные GH source/checks PASS; **серверный шаг FAILED** с безопасным
+`VAULT_INSTALL=HOLD_OR_FAILED_CHECK_SERVICE_STATE`. Причина и оставшиеся
+Vault файлы/службы пока неизвестны; **не повторять установку вслепую**.
+Следующее действие — только metadata диагностика
+`ops/admin-scripts/vault_install_diagnose_7_7a.py` через тот же
+owner-admin канал. Не читать ключи/секреты и не печатать журналы целиком.
+Старый контроллер установленно не заменялся этим script, но его актуальное
+состояние требуется перепроверить. Vault 7.7A остаётся `[ ] PARTIAL`.
+
+---
+
 # HANDOFF — 20.11.2026, Secure Vault 7.7A / Netcup-only service rollout
 
 **Последнее поручение:** «Всё на сервере, делай дальше». Владелец отказался
