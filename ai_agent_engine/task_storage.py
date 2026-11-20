@@ -14,7 +14,7 @@ import stat
 
 
 APPLICATION_ID = 0x4145494E  # "AEIN": separate from the existing engine DB.
-SCHEMA_VERSION = 14  # v14: owner-approved reassignment attempts and checkpoints.
+SCHEMA_VERSION = 15  # v15: one-shot owner-scoped crisis escalation ledger.
 
 
 class StorageUnavailable(RuntimeError):
@@ -105,9 +105,10 @@ class SQLiteTaskStore:
                 self._create_plan_table(db)
                 self._create_specialist_tables(db)
                 self._create_transfer_tables(db)
+                self._create_crisis_tables(db)
                 db.execute(f"PRAGMA application_id={APPLICATION_ID}")
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+        elif app_id == APPLICATION_ID and version in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
             # Migrate only our own private database. Explicit BEGIN makes DDL
             # and backfill a single rollback-safe transaction.
             if (db.execute("PRAGMA integrity_check").fetchone() != ("ok",)
@@ -142,9 +143,9 @@ class SQLiteTaskStore:
                 self._create_source_version_table(db)
                 self._create_owner_approval_table(db)
                 self._create_plan_table(db)
-                if version <= 13:
-                    # v14 adds a fail-closed denial after transfer approval;
-                    # v13 and earlier permission audit CHECK lacks that reason.
+                if version <= 14:
+                    # v14 adds transfer_reassigned; v15 adds crisis_fenced.
+                    # Older permission audit CHECKs cannot accept both.
                     db.execute("ALTER TABLE task_permission_audit "
                                "RENAME TO task_permission_audit_v12")
                     self._create_permission_audit_table(db)
@@ -155,6 +156,7 @@ class SQLiteTaskStore:
                     db.execute("DROP TABLE task_permission_audit_v12")
                 self._create_specialist_tables(db)
                 self._create_transfer_tables(db)
+                self._create_crisis_tables(db)
                 db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
         elif (app_id, version) != (APPLICATION_ID, SCHEMA_VERSION):
             raise StorageUnavailable("unexpected task database schema")
@@ -234,7 +236,8 @@ class SQLiteTaskStore:
             reason_code TEXT NOT NULL CHECK(reason_code IN
                 ('granted','grant_missing','grant_expired','grant_revoked',
                  'emergency_hold','role_policy_denied',
-                 'worker_mismatch','task_not_running','transfer_reassigned')),
+                 'worker_mismatch','task_not_running','transfer_reassigned',
+                 'crisis_fenced')),
             principal_kind TEXT NOT NULL CHECK(principal_kind IN
                 ('assigned_worker','other_worker')),
             occurred_at TEXT NOT NULL DEFAULT
@@ -674,6 +677,108 @@ class SQLiteTaskStore:
             reason_code TEXT NOT NULL,
             occurred_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
         )""")
+
+    @staticmethod
+    def _create_crisis_tables(db: sqlite3.Connection) -> None:
+        """v15: exactly one crisis subtask per independently recorded defect."""
+        db.execute("""CREATE TABLE IF NOT EXISTS task_crisis_escalations (
+            incident_id TEXT PRIMARY KEY,
+            owner_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            parent_task_id TEXT NOT NULL REFERENCES tasks(task_id),
+            child_task_id TEXT NOT NULL UNIQUE REFERENCES tasks(task_id),
+            original_agent TEXT NOT NULL,
+            crisis_agent TEXT NOT NULL,
+            crisis_provider TEXT NOT NULL,
+            crisis_role TEXT NOT NULL,
+            plan_sha256 TEXT NOT NULL CHECK(length(plan_sha256)=64),
+            team_sha256 TEXT NOT NULL CHECK(length(team_sha256)=64),
+            catalog_sha256 TEXT NOT NULL CHECK(length(catalog_sha256)=64),
+            step_id TEXT NOT NULL,
+            manifest_sha256 TEXT NOT NULL CHECK(length(manifest_sha256)=64),
+            stop_reason TEXT NOT NULL CHECK(stop_reason IN ('stalled','exhausted')),
+            deadline_at REAL NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('reserved','assigned','ready_for_parent','hold')),
+            outcome_sha256 TEXT CHECK(outcome_sha256 IS NULL OR length(outcome_sha256)=64),
+            reason_code TEXT,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            CHECK(parent_task_id <> child_task_id)
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS task_crisis_audit (
+            event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            incident_id TEXT NOT NULL REFERENCES task_crisis_escalations(incident_id),
+            action TEXT NOT NULL,
+            evidence_sha256 TEXT NOT NULL CHECK(length(evidence_sha256)=64),
+            occurred_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        )""")
+
+    def crisis_row(self, incident_id: str) -> tuple | None:
+        try:
+            return self._db().execute("""SELECT incident_id,owner_id,project_id,
+                parent_task_id,child_task_id,original_agent,crisis_agent,
+                crisis_provider,crisis_role,plan_sha256,team_sha256,
+                catalog_sha256,step_id,manifest_sha256,stop_reason,deadline_at,
+                status,outcome_sha256,reason_code
+                FROM task_crisis_escalations WHERE incident_id=?""",
+                (incident_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read crisis escalation") from exc
+
+    def crisis_child(self, task_id: str) -> bool:
+        try:
+            return self._db().execute("""SELECT 1 FROM task_crisis_escalations
+                WHERE child_task_id=?""", (task_id,)).fetchone() is not None
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect crisis child") from exc
+
+    def crisis_child_state(self, task_id: str) -> tuple[str, float] | None:
+        try:
+            return self._db().execute("""SELECT status,deadline_at
+                FROM task_crisis_escalations WHERE child_task_id=?""",
+                (task_id,)).fetchone()
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot inspect crisis permissions") from exc
+
+    def insert_crisis(self, row: tuple, evidence_sha256: str) -> None:
+        try:
+            with self._db() as db:
+                db.execute("""INSERT INTO task_crisis_escalations
+                    (incident_id,owner_id,project_id,parent_task_id,child_task_id,
+                     original_agent,crisis_agent,crisis_provider,crisis_role,
+                     plan_sha256,team_sha256,catalog_sha256,step_id,
+                     manifest_sha256,stop_reason,deadline_at,status)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'reserved')""", row)
+                db.execute("""INSERT INTO task_crisis_audit
+                    (incident_id,action,evidence_sha256) VALUES (?,?,?)""",
+                    (row[0], "reserved", evidence_sha256))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot reserve crisis escalation") from exc
+
+    def advance_crisis(self, incident_id: str, *, from_status: str,
+                       to_status: str, outcome_sha256: str,
+                       reason_code: str) -> None:
+        try:
+            with self._db() as db:
+                updated = db.execute("""UPDATE task_crisis_escalations
+                    SET status=?,outcome_sha256=?,reason_code=?
+                    WHERE incident_id=? AND status=?""",
+                    (to_status,outcome_sha256,reason_code,incident_id,
+                     from_status)).rowcount
+                if updated != 1:
+                    raise StorageUnavailable("crisis transition changed")
+                db.execute("""INSERT INTO task_crisis_audit
+                    (incident_id,action,evidence_sha256) VALUES (?,?,?)""",
+                    (incident_id,to_status,outcome_sha256))
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot commit crisis transition") from exc
+
+    def crisis_audit(self, incident_id: str) -> tuple[tuple, ...]:
+        try:
+            return tuple(self._db().execute("""SELECT action,evidence_sha256
+                FROM task_crisis_audit WHERE incident_id=? ORDER BY event_id""",
+                (incident_id,)).fetchall())
+        except sqlite3.Error as exc:
+            raise StorageUnavailable("cannot read crisis audit") from exc
 
     def transfer_has_started(self, task_id: str) -> bool:
         """Whether v14 has superseded the immutable legacy assignment."""

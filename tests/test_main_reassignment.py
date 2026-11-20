@@ -241,7 +241,7 @@ class ReassignmentTests(unittest.TestCase):
             db.execute("DROP TABLE task_transfer_audit")
         self.restart(first=True)
         self.assertEqual(self.inbox._store._db().execute(
-            "PRAGMA user_version").fetchone()[0],14)
+            "PRAGMA user_version").fetchone()[0],15)
         self.assertEqual(self.inbox.state(self.task_id,OWNER),TaskState.ASSIGNED)
         self.assertEqual(transfer_history(self.inbox,OWNER,self.task_id),())
 

@@ -73,6 +73,19 @@ class DiagnosticBackupTests(unittest.TestCase):
         self.assertTrue(all(f.stat().st_mode & 0o777 == 0o600
                             for f in snapshot.iterdir()))
 
+    def test_backup_accepts_exact_v14_and_v15_not_unknown_task_schema(self):
+        self.approve()
+        target = self.live / "tasks.sqlite3"
+        with sqlite3.connect(target) as db:
+            db.execute("PRAGMA user_version=14")
+        name, _ = self.store.create()
+        self.assertEqual(self.store.restore_smoke(self.backups / name)
+                         ["status"],"RESTORE_SMOKE_PASS")
+        with sqlite3.connect(target) as db:
+            db.execute("PRAGMA user_version=16")
+        with self.assertRaises(DiagnosticBackupError):
+            self.store.create()
+
     def test_archive_contains_workspace_and_config_not_live_sqlite(self):
         self.approve()
         name, _ = self.store.create()

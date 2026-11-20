@@ -264,7 +264,9 @@ class TaskInbox:
                  workspace_root: WorkspaceRoot | None = None) -> None:
         if type(max_pending) is not int or not 1 <= max_pending <= 4096:
             raise ValueError("invalid inbox capacity")
-        self._lock = Lock()
+        # Stage 7.8 must atomically validate existing task/approval state and
+        # call the scoped admission/assignment APIs under the same mutex.
+        self._lock = RLock()
         # v14: serialize transfer approval against already authorized,
         # potentially long-running sensitive callbacks for the same task.
         self._transfer_barriers: dict[str, RLock] = {}

@@ -478,7 +478,7 @@ class SpecialistSQLiteTests(unittest.TestCase):
         self.inbox=TaskInbox(store=SQLiteTaskStore(self.db),
                              workspace_root=WorkspaceRoot(self.workspaces))
         self.assertEqual(self.inbox._store._db().execute("PRAGMA user_version").fetchone(),
-                         (14,))
+                         (15,))
         self.assertIsNotNone(self.inbox.latest_approved_plan(original_plan,OWNER))
         self.assertIsNone(load_catalog(self.inbox,OWNER))
         self.assertIsNone(load_team(self.inbox,OWNER,"team_engine"))
