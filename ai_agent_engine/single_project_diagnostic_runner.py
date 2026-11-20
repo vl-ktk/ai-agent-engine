@@ -30,6 +30,11 @@ from .task_versions import _git, SourceVersionRejected
 SINGLE_SCOPE = OwnerScope("vl-ktk", frozenset({"ai-agent-engine"}))
 WORKER_ID = "diagnostic-7-7"
 COMMAND_ID = "git_diff_check"
+QA_NEGATIVE_COMMAND_ID = "git_owner_qa_missing_marker"
+# A fixed path, never read from a task, signed request or model output. The
+# negative probe proves real nonzero-exit handling on an otherwise clean Git
+# source. It is a *test* incident, not evidence of a production regression.
+QA_REQUIRED_MARKER = ".ae/qa-7-7/owner-approved-required-marker"
 RUN_TIMEOUT = 15
 _REGISTRY_LOCK = Lock()
 _BOUND_INBOXES: WeakSet[TaskInbox] = WeakSet()
@@ -46,14 +51,23 @@ class RunnerOutcome:
     incident_id: str | None
 
 
-def _trusted_git_check() -> tuple[str, ...]:
+def _trusted_git_base() -> tuple[str, ...]:
     git = shutil.which("git", path="/usr/bin:/bin")
     if git is None:
         raise RunnerHold("trusted_git_unavailable")
     return (git, "--no-pager", "-c", "core.fsmonitor=false",
             "-c", "core.hooksPath=/dev/null", "-c", "diff.external=",
-            "-c", "submodule.recurse=false", "diff", "--no-ext-diff",
-            "--check", "--")
+            "-c", "submodule.recurse=false")
+
+
+def _trusted_git_check() -> tuple[str, ...]:
+    return (*_trusted_git_base(), "diff", "--no-ext-diff", "--check", "--")
+
+
+def _trusted_qa_negative_check() -> tuple[str, ...]:
+    """Read-only, deliberately absent tracked-file probe for owner QA only."""
+    return (*_trusted_git_base(), "cat-file", "-e",
+            "HEAD:" + QA_REQUIRED_MARKER)
 
 
 def _isolated_worker_env() -> dict[str, str]:
@@ -79,10 +93,13 @@ class SingleProjectDiagnosticRunner:
 
     def __init__(self, *, inbox: TaskInbox, scope: OwnerScope,
                  leaders: ProjectLeaderStore, config: Path,
-                 gate: TaskPermissionGate) -> None:
+                 gate: TaskPermissionGate,
+                 owner_qa_negative_check: bool = False) -> None:
         if (scope != SINGLE_SCOPE or not isinstance(gate, TaskPermissionGate)
                 or gate.inbox is not inbox):
             raise RunnerHold("single_approved_project_and_grants_required")
+        if type(owner_qa_negative_check) is not bool:
+            raise RunnerHold("invalid_trusted_qa_mode")
         try:
             adapter, _socket_path = bind_inprocess_diagnostics(
                 config, inbox=inbox, scope=scope, leaders=leaders)
@@ -91,6 +108,7 @@ class SingleProjectDiagnosticRunner:
         self.inbox = inbox
         self.scope = scope
         self.gate = gate
+        self.owner_qa_negative_check = owner_qa_negative_check
         self.adapter = adapter
         self.delivery = TaskDeliveryManager(inbox)
         self.controller = TaskProcessController(inbox, permission_gate=gate)
@@ -123,13 +141,22 @@ class SingleProjectDiagnosticRunner:
         if choice is None:
             return None
         task_id = choice.task_id
-        command = _trusted_git_check()
+        command = (_trusted_qa_negative_check() if self.owner_qa_negative_check
+                   else _trusted_git_check())
         # Observe a trustworthy pre-execution commit and source identity
         # before claiming or launching anything. Task prompts are not read.
         try:
             baseline = _git(str(self.source),
                             ("rev-parse", "--verify", "HEAD^{commit}")).decode("ascii").strip()
             pinned_source = capture_git_source(self.source, baseline)
+            if self.owner_qa_negative_check:
+                # If the marker ever becomes tracked, refuse the negative QA
+                # before claiming a task or emitting a false failure.
+                found = _git(str(self.source), (
+                    "ls-tree", "--name-only", baseline, "--", QA_REQUIRED_MARKER,
+                ))
+                if found.strip():
+                    raise RunnerHold("negative_qa_marker_exists")
         except (SourceVersionRejected, DiagnosticHold, OSError, UnicodeError) as exc:
             raise RunnerHold("source_unverifiable") from exc
         self.inbox.claim_task(task_id, WORKER_ID, self.source.name, self.scope)
@@ -167,9 +194,18 @@ class SingleProjectDiagnosticRunner:
             if ack.status != "exhausted":
                 raise RunnerHold("unexpected_delivery_retry_state")
             self.controller.finalize_exhausted(task_id, self.scope)
-            signal = FailureSignal(task_id, "tool_failure", "GitDiffCheckFailed",
-                                   COMMAND_ID, "exit 0", "nonzero exit",
-                                   "Trusted read-only Git diff check failed")
+            if self.owner_qa_negative_check:
+                signal = FailureSignal(
+                    task_id, "tool_failure", "ExpectedQaMissingMarker",
+                    QA_NEGATIVE_COMMAND_ID, "exit 0", "nonzero exit",
+                    "Owner-approved negative test: fixed tracked marker absent",
+                )
+            else:
+                signal = FailureSignal(
+                    task_id, "tool_failure", "GitDiffCheckFailed",
+                    COMMAND_ID, "exit 0", "nonzero exit",
+                    "Trusted read-only Git diff check failed",
+                )
             incident = self.adapter.record_failed_task(
                 task_id, signal=signal, baseline_commit=baseline)
             return RunnerOutcome(task_id, TaskState.FAILED, incident.incident_id)

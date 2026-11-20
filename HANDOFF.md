@@ -1,3 +1,58 @@
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / owner-confirmed QA candidate 0.3.20a0, NOT DEPLOYED
+
+## Current code candidate — controlled managed QA without a second task owner
+
+Owner explicitly authorized **one** bounded test task and a scoped
+`EXECUTE_TOOL` grant for the already registered `vl-ktk/ai-agent-engine` and
+asked to complete the safe remaining work together. The isolated worktree is
+based on GitHub `main` `220d8b84a25e231de464d2e947142319df26205b`;
+the original user's dirty checkout was not changed.
+
+The source-only candidate adds a trusted `OwnerConfirmedDiagnosticQA` Python
+argument to `open_singleton()` and `run_managed()` (not a CLI/socket feature):
+
+- Default deployed path remains **inert**, zero grants/tasks/models/network.
+- Exact trusted owner receipt and fixed proposal digest are required, with
+  separate approval content for success and intentionally negative QA.
+- One idempotent fixed task is admitted **only if the owner-scoped inbox is
+  empty**; one expiring `EXECUTE_TOOL` grant targets only
+  `diagnostic-7-7`; the very same exclusive task owner invokes `run_next()`.
+- Normal clean Git `diff --check` produces genuine `SUCCEEDED`, no incident.
+  The optional **explicitly expected negative QA**, bound to a distinct
+  approval digest, invokes real read-only `git cat-file -e` on one hard-coded
+  absent marker. On nonzero exit it records genuine `FAILED` and a clearly
+  QA-labelled incident with evidence, without dirtying the project Git source.
+  If that marker is actually present, the task is refused before admission;
+  changes in source identity fail closed. No artificial socket failure.
+- No task is retried automatically. Unknown/crashed active work still needs
+  trusted owner review before service restart; **live rollout is not cleared**.
+
+**Tests verified in isolated local fixtures:**
+`python3 -m unittest tests.test_diagnostic_managed_runtime_7_7
+tests.test_single_project_diagnostic_runner -v`: real Git subprocess
+SUCCESS/FAILED→incident, one exclusive SQLite owner, exact approval, no
+replay/dirty source checks PASS. Whole local suite: **900 tests OK, 2 skipped**;
+source and workflow security scans and compileall PASS; isolated wheel
+`ai_agent_engine-0.3.20a0` built successfully (local SHA-256
+`803df55b46224f2ccb081991f344e2117a8b577bd86b862b6eb51f1b14ed9fe4`).
+These tests did not touch Netcup. The candidate code has **not been installed**
+and must not be used as a live release until a distinct source/checkpoint
+and signed release gate are approved and evidenced; the currently installed
+root operator is pinned to older source `60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23`
+and cannot accept this candidate. Do **not** route this runtime change through
+the generic owner-admin workflow as a shortcut. New separate signer/installer
+review, crash recovery plan and host resource checks are still required.
+
+**Latest verified live rollback reference (unchanged by this candidate):**
+core `0.3.11a0`, SHA `0e04af007375d82daf8f7d3b36c71abb0c784e0b`;
+add-on source `60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23`, active
+`ae-managed-diagnostics.service` per signed owner run `44737886631`.
+Scheduled backup first natural cycle still `DEFERRED` to 21.11.2026 03:00
+UTC. **7.7 remains PARTIAL; do not advance to 7.8 or touch Windows/other
+projects.**
+
+---
+
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / isolated diagnostics ACTIVE, 7.7 PARTIAL
 
 ## Current blocker — real managed FAILED→incident QA needs an authorized task producer
