@@ -1,3 +1,40 @@
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / isolated diagnostics ACTIVE, 7.7 PARTIAL
+
+## Latest verified — signed isolated diagnostics ACTIVE on Netcup, core unchanged
+
+**Current source before this docs-only handoff update:** GitHub `main` `f1969a042d78f292302c1f189676fb8ce93ae4e7`.
+**Prepared artifact:** exact reviewed source `60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23`, wheel `ai_agent_engine-0.3.19a0-py3-none-any.whl`, SHA-256
+`86ee06520edcb68e5cc160a68822977fe3b27c7c1a412f58f92e653bbb6c3900`
+(independently recalculated from downloaded run artifact; matches manifest).
+[Preparation run 44737117973](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44737117973) **SUCCESS**.
+[Unprivileged Netcup transfer run 44737411751](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44737411751) **SUCCESS**, including exact artifact and on-host SHA-256 verification.
+**Owner explicitly confirmed service activation in chat.**
+[Separately signed add-on activation run 44737886631](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44737886631) **SUCCESS**, server installer output
+`MANAGED_DIAGNOSTICS_7_7.status=MANAGED_DIAGNOSTICS_ACTIVE` at 2026-11-20 12:41:49 UTC.
+The service `ae-managed-diagnostics.service` was installed/enabled/started, restart probe **PASS**, local Unix socket probe **HOLD_EXPECTED**, owner PID/UID check **PASS**, 56 Python source files validated. It reported `baseline_services_unchanged=true`,
+`old_controller_restarted=false`, `live_release_changed=false`,
+`no_tasks_or_grants_created=true`, `model_or_network_enabled=false`.
+Isolated project source pinned at `741fc1a4e62b52922611e1e28d4805d727dffe4d`.
+
+**Existing controller/rollback reference:** package `0.3.11a0`, live symlink SHA
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`; no core promotion.
+The new diagnostic unit can be **stopped** independently with
+`systemctl disable --now ae-managed-diagnostics.service` through the approved Netcup admin channel (not executed).
+This is a stop procedure, **not** a verified full uninstall/rollback.
+The previously active baseline `ae-controller.service`, `ae-backup.timer`,
+`ae-host-check.timer` remained active during installer checks.
+
+**Still required to finish 7.7:** observe a genuinely scheduled backup cycle;
+conduct a controlled real managed FAILED → diagnostic incident → owner-verified QA
+without synthesizing incidents or changing live customer/project data;
+measure CPU, RAM and disk consumption during operation.
+First diagnostic service lifecycle/socket verification is finished.
+**7.7 PARTIAL; 7.8 HOLD.** Leave Windows and other projects untouched.
+For the next step, verify the then-current `main`, service/core state and source
+before any release or live test; no generic controller promotion.
+
+---
+
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / signed add-on gate, live HOLD
 
 ## Latest — Netcup public signing trust installed, activation still HOLD
