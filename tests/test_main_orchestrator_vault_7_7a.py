@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from ai_agent_engine.task_api import OwnerScope
 from ai_agent_engine.vault_client import VaultUnixClient
 
 
+@unittest.skipUnless(os.name == "posix", "Netcup internal transport requires POSIX")
 class MainOrchestratorVaultTests(unittest.TestCase):
     def setUp(self) -> None:
         self.scope = OwnerScope("vl-ktk", frozenset({"ai-agent-engine"}))

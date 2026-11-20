@@ -141,6 +141,48 @@ class VaultClientTests(unittest.TestCase):
             self.assertEqual(client.get_secret(sid), b"UPDATED-ONLY-FAKE")
         self.assertNotIn(fake, (self.root / "db/vault.sqlite3").read_bytes())
 
+    def test_systemd_pid1_listener_accepted_but_other_root_rejected(self) -> None:
+        service_uid = 12121
+        sock_meta = SimpleNamespace(st_mode=stat.S_IFSOCK | 0o660,
+                                    st_uid=service_uid)
+        client = VaultUnixClient(socket_path=self.socket_path,
+                                 expected_service_uid=service_uid)
+
+        class Connection:
+            def __init__(self, pid: int):
+                self.pid = pid
+                self.reply = b'{"ok":true,"status":"ready"}\n'
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def settimeout(self, timeout):
+                return None
+
+            def connect(self, path):
+                return None
+
+            def getsockopt(self, level, option, size):
+                return struct.pack("3i", self.pid, 0, 0)
+
+            def sendall(self, data):
+                return None
+
+            def recv(self, size):
+                reply, self.reply = self.reply, b""
+                return reply
+
+        with (patch.object(client_module.os, "lstat", return_value=sock_meta),
+              patch.object(client_module.socket, "socket", side_effect=lambda *args: Connection(1))):
+            self.assertTrue(client.status())
+        with (patch.object(client_module.os, "lstat", return_value=sock_meta),
+              patch.object(client_module.socket, "socket", side_effect=lambda *args: Connection(999))):
+            with self.assertRaises(VaultUnavailable):
+                client.status()
+
     def test_deny_invalid_secret_and_sanitize_transport_failure(self) -> None:
         client = VaultUnixClient(socket_path=self.socket_path,
                                  expected_service_uid=os.geteuid())

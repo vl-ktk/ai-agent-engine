@@ -16,7 +16,6 @@ import binascii
 import json
 import os
 from pathlib import Path
-import pwd
 import socket
 import stat
 import struct
@@ -55,8 +54,9 @@ class VaultUnixClient:
             raise VaultUnavailable()
         if expected_service_uid is None:
             try:
+                import pwd  # POSIX-only; imported only for a real Netcup client.
                 expected_service_uid = pwd.getpwnam("ae-vault").pw_uid
-            except KeyError:
+            except (ImportError, KeyError):
                 raise VaultUnavailable() from None
         if type(expected_service_uid) is not int or expected_service_uid < 0:
             raise VaultUnavailable()
@@ -82,8 +82,13 @@ class VaultUnixClient:
                 conn.connect(str(self._socket_path))
                 peer_info = conn.getsockopt(
                     socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i"))
-                _, uid, _ = struct.unpack("3i", peer_info)
-                if uid != self._expected_uid:
+                pid, uid, _ = struct.unpack("3i", peer_info)
+                # With systemd socket activation the listening FD was
+                # created by PID 1 (root) before being inherited by ae-vault.
+                # Linux SO_PEERCRED snapshots credentials at listen(2), not
+                # necessarily those of the process now calling accept(2).
+                # The filesystem socket itself must STILL be owned by ae-vault.
+                if uid != self._expected_uid and not (uid == 0 and pid == 1):
                     raise VaultUnavailable()
                 conn.sendall(request)
                 reply = bytearray()
