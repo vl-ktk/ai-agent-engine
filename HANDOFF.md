@@ -1,6 +1,8 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
 
-## Текущая работа — единый процесс TaskInbox + диагностика, source-only `0.3.16a1`
+## Текущая работа — единый процесс TaskInbox + диагностика, source-only `0.3.16a2` (CI triage)
+
+**CI диагностика `0.3.16a2` (временная):** повторный Ubuntu CI `0.3.16a1` [run 44704227901](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44704227901) опять **FAIL** в том же socket timeout (3 s) несмотря на binding на owner thread. Это **не** подтверждает причину, только наблюдение. Добавлена безопасная печать имён функций/строк текущего сокетного потока **лишь при timeout**, без raw events, токенов или путей. Следующая публикация — измерительно-диагностическая, **не** исправление; до выяснения причины нельзя считать Linux CI и 7.7 PASS. SHA перед диагностической публикацией `88919cbb769fc5959c487a3673981e19e2158494` для точечного отката.
 
 **CI correction:** первая публикация этой привязки `0.3.16a0` (`8bb65d7f2158d560f35e6c1d5b556d431c08798e`) прошла wheel/Ansible checks, но GitHub Ubuntu Python 3.11/3.12/3.13 **FAIL** в единственном AF_UNIX-тесте (socket read timeout 3 s; [CI run 44703465223](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44703465223)); локальная среда этот socket test пропускает из-за sandbox EPERM. Исправление `0.3.16a1`: доверенную binding-конфигурацию создавать на owner thread **до** запуска socket thread, а затем использовать готовый in-process адаптер в уже проверенном socket loop. Проверка CI новой версии ещё должна подтвердить результат; не объявлять E2E PASS заранее. Windows по прежнему Linux-only `fcntl` FAIL, не менять.
 

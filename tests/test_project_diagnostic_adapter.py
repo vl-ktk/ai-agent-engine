@@ -227,7 +227,20 @@ class TaskDiagnosticAdapterTests(unittest.TestCase):
             client.connect(str(path))
             client.sendall(self.event())
             with client.makefile("rb") as response:
-                answer = json.loads(response.readline())
+                try:
+                    answer = json.loads(response.readline())
+                except TimeoutError:
+                    # CI-only triage: report code locations, never event bytes.
+                    frame = sys._current_frames().get(thread.ident)
+                    frames: list[str] = []
+                    while frame is not None:
+                        frames.append(f"{frame.f_code.co_name}:{frame.f_lineno}")
+                        frame = frame.f_back
+                    print("INPROCESS_SOCKET_THREAD_STACK " + " <- ".join(frames[:12]),
+                          file=sys.stderr)
+                    stopped.set()
+                    thread.join(timeout=5)
+                    raise
         self.assertEqual(answer["status"], "RECORDED")
         self.assertEqual(answer["ok"], True)
         with self.assertRaises(IntakeUnavailable):
