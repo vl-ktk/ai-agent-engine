@@ -1,3 +1,28 @@
+# HANDOFF — 20.11.2026, AI Agent Engine / owner-requested future release updater improvement (DOCS ONLY)
+
+**Current scoped task:** record, without implementing, a permanent signed release
+update mechanism in `IMPLEMENTATION_ROADMAP.md`, after acceptance of 7.7 and
+before the next diagnostic-code upgrade. The new unchecked unnumbered backlog
+item specifies owner approval, immutable signed manifest, arbitrary successive
+reviewed versions without root-operator rewrites, exact release pin, safe
+rollback and negative signature/TOCTOU tests. The 169 numbered subtasks and
+current 7.7 acceptance requirements are unchanged. No host, workflows, keys,
+sudo grants, databases or runtime code are changed by this documentation task.
+
+**Fresh previously verified evidence (20.11):** Netcup owner-signed v2 gate
+[44746313425](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44746313425)
+SUCCESS after reviewed source merge `f4baca74c7e2f487a892f184a3048096d1179e12`;
+admin request commit `9e92750d84d68ce757e3197260cfdb6464c7c610`.
+Prepared `0.3.20a0` wheel [44745909554](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44745909554)
+and staged transfer [44746144569](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44746144569)
+SUCCESS. Old signed operator preserved privately, controller rollback reference
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b` / `0.3.11a0` unchanged.
+**The signed one-shot live QA has NOT been dispatched**; resource measurements
+and first scheduled diagnostic backup remain open: 7.7 PARTIAL / 7.8 HOLD.
+Previous source-only notes below are historical, not the latest live status.
+
+---
+
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / signed v2 gate and one-shot QA candidate, NOT DEPLOYED
 
 ## Authorized exact trust-gate update — still source-only
