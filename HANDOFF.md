@@ -1,5 +1,41 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
 
+## 7.7 — single-process managed diagnostic candidate, SOURCE ONLY / activation HOLD
+
+**Источник перед этой правкой:** GitHub `vl-ktk/ai-agent-engine` `main`
+`50c593e03d9ac4956cddcd54dfaaa82abec41f5d`; source-revert только после
+повторной сверки актуальной ветки. Последний действительно проверенный Netcup
+active/rollback: `0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+В рамках этой source-only работы новой живой проверки Netcup нет.
+
+**Подготовлено:** `ai_agent_engine/diagnostic_managed_runtime.py` держит один
+approved TaskInbox (эксклюзивный Linux `flock`), один registry, закрытый
+AF_UNIX socket и инертный `SingleProjectDiagnosticRunner` без grants и запуска
+задач. Проверяет строгую private config, ноль незавершённых задач и точную
+подготовленную Git-версию проекта `741fc1a4e62b52922611e1e28d4805d727dffe4d`.
+Отдельный проверяемый кандидат systemd/installer:
+`ops/admin-scripts/activate_managed_diagnostics_7_7.py`, протокол
+[`MANAGED_DIAGNOSTICS_7_7.md`](./infra/orchestrator/MANAGED_DIAGNOSTICS_7_7.md).
+Модуль pinned SHA-256
+`dcf077701d2fd92fe6cef5cebcd8966e0fd3217c7c8c5a88eb3de447ec4e769b`.
+Не заменяет текущий `/opt/ai-agent-engine/current`, controller, backup,
+секреты/доступ и чужие проекты.
+
+**Локальные проверки:** 11 новых offline tests PASS; полный регресс
+**883 OK (2 skipped)**, `compileall`, public-source scan и workflow-boundary
+scan PASS. Wheel из текущих исходников собран; это **не** согласованная живая
+выкладка. Локальное AF_UNIX bind возвращает `EPERM`; настоящий socket/restart
+QA остаётся Netcup-действием после release gate. GitHub CI отдельно проверить.
+
+**Блокер запуска:** действующий протокол 7.7 требует ручной подписанный
+owner-controlled release gate для нового runtime-кода. **Не создавать
+`ops/admin-requests` для обхода этого порядка.** Нужно выбрать и подтвердить
+способ signed deployment отдельного add-on либо узкий candidate через
+существующие `release-preparation`/`transfer`/`activate`; нельзя слепо
+продвигать весь `0.3.19a0` поверх live `0.3.11a0`. Ни installer, ни socket,
+ни diagnostic service в этой итерации **не запускались**. 7.7 `[ ] PARTIAL`,
+failure→incident→QA/overhead ещё не проверены, 7.8 HOLD.
+
 ## 7.7 — приватный диагностический бэкап на Netcup LIVE PASS
 
 **Источник перед следующим шагом:** GitHub `main`
