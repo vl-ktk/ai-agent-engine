@@ -7,6 +7,7 @@ from hashlib import sha256
 import importlib.util
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -20,6 +21,7 @@ ACTIVATE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(ACTIVATE)
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"), "Linux-only owner host installer")
 class ManagedActivationAdminTests(unittest.TestCase):
     def test_exact_reviewed_new_runtime_module_digest_is_pinned(self):
         source = (Path(__file__).resolve().parents[1] / "ai_agent_engine"
