@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "c71711fad314dd90d4fa8711b821e749",
+  "source_sha": "8a3fc7031244c823d076adffc60298e1f00c8ff6",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/stage7_11_capacity_live_acceptance.py",
+  "script_sha256": "98097dca1118424840ddf691171996aa1684c8d6c7a37e63a5ca99d9719ce446"
+}
