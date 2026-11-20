@@ -1,4 +1,16 @@
-# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / live-интеграция BLOCKED
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / подключение к серверу ожидает инфраструктурной приёмки
+
+## Текущее состояние — отдельное разрешение на Netcup получено
+
+Владелец 20.11.2026 **разрешил адресные изменения существующего Netcup для подключения 7.7**. Прежние указания ниже «нет разрешения на Netcup» относятся к состоянию **до** нового согласия. Windows, новые расходы, секреты и права доступа, рабочие данные без дополнительного согласования остаются вне области изменений.
+
+**Факт live-статуса 20.11.2026:** штатный GitOps read-only workflow [44696209219](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44696209219) **PASS**: `ae-controller.service`, `ae-backup.timer`, `ae-host-check.timer` активны; `/opt/ai-agent-engine/current` → `releases/0e04af007375d82daf8f7d3b36c71abb0c784e0b`. Это зафиксированный **исходный серверный SHA для отката**, его необходимо повторно проверить непосредственно перед выкладкой. Источник этого SHA взят из GitHub для проверки; действующий `controller.py` обслуживает heartbeat/systemd и **не** запускает TaskInbox или GPT/Claude. Коммит `2210d0329f78f3ac9b35f1c575fbbeb0d4000f82` добавил исключительно GitOps status-request — без изменения Netcup.
+
+**Подготовленная интеграция, исходники `0.3.13a0`:** `ai_agent_engine/project_diagnostic_adapter.py` — вызываемый только доверенным runtime bridge между durable `TaskInbox` и `ProjectDiagnosticsStore`: требует подтверждённый `FAILED` transition именно назначенного worker, реальный Git baseline назначенного workspace, совпадающий owner/project source-binding и выводит idempotency key из ID события, а не текста модели. Добавлены offline тесты `tests/test_project_diagnostic_adapter.py`. Нет автозапуска, моделей, новых grants, API, правок runtime SQLite и автоматического восстановления действий. **Мост ещё не подключён к выполняемому серверному task runner**: его нет в развёрнутом контроллере; серверный пакет **не заменён**, 7.7 **[ ] PARTIAL / LIVE NOT DEPLOYED**.
+
+**Остаётся/блокер:** определить утверждённый host task runtime и отдельную допустимость его запуска и новой диагностической runtime SQLite (рабочие данные); подготовить host acceptance и rollback. Существующие owner-only GitHub release transfer/activation требуют **ручного `workflow_dispatch` от `vl-ktk`** и подписанного release intent — не обходить. Перед deployment сверить current SHA, взять исходник выложенной версии, проверить candidate и wheel/manifest, затем разрешённый запуск и read-only host приёмку. Windows и Netcup-сервисы не изменялись. GitHub rollback до кода адаптера: `main` `2210d0329f78f3ac9b35f1c575fbbeb0d4000f82`; после публикации использовать адресный revert feature-коммита без force-push.
+
+**Реальные offline-проверки:** новый bridge + core: `22 OK`; полный `unittest discover`: `807 OK (1 skipped)`; `compileall`, `check_public_source.py`, `check_workflow_boundaries.py` — PASS. `pip wheel --no-deps --no-build-isolation` собрал `ai_agent_engine-0.3.13a0-py3-none-any.whl` (`sha256 0011302c173cfc7e8b4ef3ce8d40c35816866c121b3f842dcdfb9fabada11c48`), архив содержит оба 7.7-модуля. В исходной среде отсутствует `python -m build`, поэтому сборка выполнена доступным `pip wheel`. Никаких серверных интеграционных тестов GPT/Claude и live-приёмки не было.
 
 ## Текущая задача 7.7
 
