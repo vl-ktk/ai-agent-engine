@@ -1,5 +1,15 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
 
+## Актуальный шаг — read-only проверка готовности host, source-only `0.3.19a0`
+
+**Задача/границы:** по «Давай» подготовить следующий безопасный шаг 7.7 для **единственного** проекта `vl-ktk/ai-agent-engine`; не трогать Netcup, Windows, секреты/права, существующие БД, сторонние проекты, платные сервисы и GPT/Claude. Источник до изменения: GitHub `main` `c15b2b9f71572001012ada42542aff066f6e54fa` (для адресного source-revert после проверки HEAD). Исторический Netcup rollback SHA `0e04af007375d82daf8f7d3b36c71abb0c784e0b` / пакет `0.3.11a0` — **не свежий** live замер.
+
+**Сделано в источнике:** [`diagnostic_host_preflight.py`](./ai_agent_engine/diagnostic_host_preflight.py) и [операторский протокол](./infra/orchestrator/HOST_PREFLIGHT_7_7.md). Отдельный CLI-флаг `--config` осматривает **только существующие** 0600/0700 host config/каталоги, registry v1, project SQLite v2, task SQLite v14 под безопасным read-only режимом/неблокирующим shared lock, scope, неактивность очереди и чистую локальную Git-версию; при недостаточном/неоднозначном состоянии — HOLD с ограниченными кодами. Не создаёт ничего, не запускает процессы/сервисы и не выдаёт owner approval. Проверка *внутренней согласованности* approval-row — не внешняя аутентификация владельца. На Netcup CLI **не запускался**; 7.7 **`[ ] PARTIAL / LIVE HOLD`**, 7.8 не начинать.
+
+**Проверки исходника:** 8 новых offline тестов; полный `python -m unittest discover -s tests -q` — **837 OK (2 skipped)**; `compileall`, `check_public_source.py`, `check_workflow_boundaries.py`, `git diff --cached --check` — **PASS**. Wheel `ai_agent_engine-0.3.19a0-py3-none-any.whl` собран, содержит `diagnostic_host_preflight.py`, SHA-256 `05f2769950936e587831e25ded931edc25b524190ce9eaf4cc2fbcb612c9d1fd`. GitHub source commit/CI проверять после публикации; local tests не доказывают Netcup host readiness.
+
+**Осталось:** owner-validated preprovisioning ровно одного проекта, допустимые runtime-grants и выбранный host process/unit, fresh read-only Netcup release SHA непосредственно перед будущим owner-controlled release, безопасный candidate/rollback, ручные release-preparation/transfer/activate, live QA и измерения CPU/RAM/disk. Отдельное согласие на server mutation обязательно; ресурсоёмкие архив/retention/cleanup пока открыты.
+
 ## Текущий шаг — первый настоящий однопроектный offline task runner, `0.3.18a0`
 
 **Источник до начала:** GitHub `vl-ktk/ai-agent-engine`, `main` `c8ba64d576c24eb46ae12bbd60ec700747fa79d7` (для адресного отката новой source-правки; перед `git revert` всегда снова проверить HEAD). Последняя подтверждённая live Netcup версия из прежнего read-only статуса `0.3.11a0`, SHA `0e04af007375d82daf8f7d3b36c71abb0c784e0b`; это **не** новый замер. Windows и Netcup не меняли.

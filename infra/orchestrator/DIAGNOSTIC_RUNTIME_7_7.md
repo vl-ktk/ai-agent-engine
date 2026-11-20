@@ -54,6 +54,13 @@ delivery ledger and process controller. Only one fixed read-only Git check
 is enabled; it never reads task prompts as instructions. This is **not** a
 production Netcup task-loop or a credential-bearing GPT/Claude executor.
 
+**Source-only `0.3.19a0`:** the separate
+[`diagnostic_host_preflight`](./HOST_PREFLIGHT_7_7.md) checks already
+provisioned single-project host state read-only before any authorized host
+action. It cannot open/migrate a writable database or approve a project;
+missing runtime state is HOLD. It does not attest the current Netcup release
+SHA, start a unit or bypass owner-only GitHub release gates.
+
 The non-secret source-only [configuration example](./diagnostic_runtime_7_7.single-project.example.json)
 illustrates the intended **future** private state directory. The example
 cannot be fed directly to a running service: the host operator must first
@@ -112,7 +119,7 @@ real GPT/Claude QA.
    Last observed read-only at 20.11.2026: `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
    (`0.3.11a0`), not a standing guarantee.
 4. Build a candidate from the precise deployed source with approved 7.5/7.7
-   dependency closure. GitHub `main` `0.3.18a0` contains additional offline
+   dependency closure. GitHub `main` `0.3.19a0` contains additional offline
    stages and must **not** simply be promoted blindly as a live orchestrator.
 5. Have the GitHub owner manually run pinned `release-preparation.yml`, then
    `netcup-owner-release-transfer.yml` and

@@ -59,3 +59,7 @@ exact runner unit and private SQLite; inspect the installed SHA and rollback;
 perform host resource measurements and security QA; then use the **manual**
 owner GitHub release workflows. No changes to Windows or Netcup from this
 source-only substep. Stage 7.7 remains `[ ] PARTIAL / LIVE HOLD`, 7.8 not begun.
+
+An additional [read-only host preflight](./HOST_PREFLIGHT_7_7.md) is available
+from source `0.3.19a0` to report missing provisioning and unsafe/inconsistent
+local state; it does not perform that provisioning or activate the runner.
