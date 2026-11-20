@@ -1,5 +1,40 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
 
+## 7.7 — приватный диагностический бэкап на Netcup LIVE PASS
+
+**Источник перед следующим шагом:** GitHub `main`
+`47315de0deaf35528c95be55a37b7f2ea64fd7d1` (проверить HEAD перед
+source revert); Netcup рабочий пакет остался `0.3.11a0`, active/rollback SHA
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+
+**Фактически выполнено:** через source [PR #70](https://github.com/vl-ktk/ai-agent-engine/pull/70)
+и аутентифицированный owner-admin [run 44726722286](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44726722286)
+подключён отдельный one-project backup `/var/lib/ai-agent-engine-diagnostics`
+→ `/var/backups/ai-agent-engine-diagnostics` к уже активному
+`ae-backup.timer` через один обратимый `.service.d` drop-in (`ExecStartPost`).
+Оригинальные `/usr/local/libexec/ae-backup.py`, `ae-backup.service`,
+`ae-backup.timer` не заменены; новый диагностический сервис не запущен.
+Сервер вернул `DIAGNOSTIC_BACKUP_ENABLED`, exact scope
+`vl-ktk/ai-agent-engine`, снимок
+`20261120T112114.457886Z-dac25d75`, `retained=1`, независимый
+`verify PASS` и изолированный `RESTORE_SMOKE_PASS` трёх SQLite.
+`systemd-analyze verify`, эффективный `ExecStartPost`, три базовых сервиса
+и прежний live release проверены в том же owner-admin run. Код: [протокол](./infra/backup/DIAGNOSTIC_BACKUP_7_7.md),
+12 новых disposable backup tests; локальный регресс **872 OK (2 skipped)**,
+GitHub Ubuntu Python 3.11/3.12/3.13 и wheel PASS,
+Windows CI FAIL без изменений Windows.
+
+**Ограничение:** ещё не наблюдалось первое **автоматическое** выполнение
+нового шага в следующем цикле `ae-backup.timer`; ручной первый снимок и
+test-only restore действительно прошли. Это только локальные копии на том же
+VPS, не off-host DR. Не перезапускать/перезаписывать старый backup service
+и не удалять снимки для «проверки».
+
+**Следующий ход в том же 7.7:** отдельный private Unix socket parent и ровно
+один управляемый диагностический процесс, затем живые failure→incident→QA,
+CPU/RAM/disk overhead, подтверждение сохранности старых сервисов; без
+Windows/других проектов/платных API. 7.7 `[ ] PARTIAL / LIVE HOLD`, 7.8 HOLD.
+
 ## 7.7 — первый проект НА СЕРВЕРЕ УТВЕРЖДЁН, независимая проверка PASS
 
 **Актуальная проверенная точка перед продолжением:** GitHub `main`
