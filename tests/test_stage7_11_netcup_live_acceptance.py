@@ -95,7 +95,40 @@ class NetcupStage711ReviewTests(unittest.TestCase):
             (source / "unsafe").symlink_to(source / "module.py")
             with patch.object(ADMIN, "SOURCE", source):
                 with self.assertRaisesRegex(RuntimeError, "symlink"):
-                    ADMIN._prepare_disposable_source(root / "scratch")
+                    ADMIN._prepare_disposable_source(
+                        root / "scratch", owner_uid=12345, owner_gid=12345)
+
+    def test_root_owned_disposable_copy_is_recursively_owned_by_runtime(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            source = root / "protected-source"
+            source.mkdir(mode=0o700)
+            (source / "__init__.py").write_text("# private fixture\n")
+            nested = source / "nested"
+            nested.mkdir(mode=0o700)
+            (nested / "worker.py").write_text("ready=True\n")
+            scratch = root / "scratch"
+            scratch.mkdir()
+            with patch.object(ADMIN, "SOURCE", source):
+                with patch.object(ADMIN.os, "chown") as chown:
+                    self.assertEqual(ADMIN._prepare_disposable_source(
+                        scratch, owner_uid=12345, owner_gid=54321), scratch)
+            target = scratch / "ai_agent_engine"
+            expected = {target, target / "__init__.py", target / "nested",
+                        target / "nested/worker.py"}
+            self.assertEqual({call.args[0] for call in chown.call_args_list},
+                             expected)
+            self.assertEqual(chown.call_count, len(expected))
+            for call in chown.call_args_list:
+                self.assertEqual(call.args[1:], (12345, 54321))
+                self.assertIs(call.kwargs["follow_symlinks"], False)
+            self.assertTrue((target / "nested/worker.py").is_file())
+
+    def test_disposable_copy_rejects_root_runtime_identity(self):
+        with tempfile.TemporaryDirectory() as name:
+            with self.assertRaisesRegex(RuntimeError, "non-root"):
+                ADMIN._prepare_disposable_source(
+                    Path(name), owner_uid=0, owner_gid=0)
 
     def test_main_refuses_ownerless_request_before_server_access(self):
         with patch.object(ADMIN.os, "geteuid", return_value=1000):

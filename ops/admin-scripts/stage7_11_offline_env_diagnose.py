@@ -126,7 +126,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="ae-711-offline-probe-", dir="/var/tmp") as tmp:
         directory = Path(tmp)
         os.chown(directory, runtime.pw_uid, runtime.pw_gid)
-        source = helper._prepare_disposable_source(directory)
+        source = helper._prepare_disposable_source(
+            directory, owner_uid=runtime.pw_uid, owner_gid=runtime.pw_gid)
         # Independent POSIX access check: works even when Python exits before
         # it can print the offline receipt. No file contents leave Netcup.
         runtime_file_readable = helper._owner_command(runtime,

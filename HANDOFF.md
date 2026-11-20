@@ -1,3 +1,34 @@
+# HANDOFF — 20.11.2026 / 7.11, причина импорта подтверждена, fix source-only
+
+**Источник на входе:** GitHub `vl-ktk/ai-agent-engine/main`
+`79a694389d6a1ae4b6ea90ad95baebb47322ed07` (source rollback до этой
+правки). Владелец разрешил фиксировать повторяемые проблемы и сразу
+закрывать их причины и регрессионные проверки. Новый реестр:
+`docs/KNOWN_ISSUES.md`.
+
+**Подтверждение:** [Netcup owner run #44805647740](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44805647740)
+вернул `missing_module=ai_agent_engine.task_stage7_11_acceptance`,
+`runtime_file_readable=false`, `runtime_package_traversable=false`:
+нечитаемый root-owned каталог временного пакета для `ae-runtime`.
+Никаких вызовов моделей, обновления OAuth, live SQLite или сервисов.
+Live controller core **v0.3.11a0**, неизменный release/rollback id
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14,
+backup hook проверен на совместимость v14–v17.
+
+**Изменение в этой source-правке:**
+`ops/admin-scripts/stage7_11_capacity_live_acceptance.py` после копирования
+разрешённого пакета во временную директорию рекурсивно назначает владельцем
+**только этой копии** точные uid/gid `ae-runtime`, без изменения источника,
+production, modes и секретов. Обновлён его вызов в offline diagnostic.
+Два регрессионных теста проверяют рекурсивное владение и отказ от uid 0;
+старый symlink guard сохранён. После GitHub CI запускать только изолированную
+**OFFLINE** диагностику на Netcup, убедиться в `OFFLINE_PASS`, затем отдельным
+решением повторить не более одной live GPT+Claude acceptance. Не путать
+исправление чтения пакета с приёмкой 7.11 целиком. `7.11 [ ] PARTIAL`,
+7.12 не начинать.
+
+---
+
 # HANDOFF — 20.11.2026, 7.11 / Python import probe must never fail before receipt
 
 **Источник при принятии:** GitHub `vl-ktk/ai-agent-engine/main`
