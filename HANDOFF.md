@@ -1,3 +1,52 @@
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / signed v2 gate and one-shot QA candidate, NOT DEPLOYED
+
+## Authorized exact trust-gate update — still source-only
+
+The owner explicitly authorized changing **only** the installed protected
+diagnostic signing allowlist to accept source
+`3ef07c51ec287a24bd54d8fcea7c40a99e69b569`, retaining old trusted
+operator bytes for rollback. This does not authorize other projects,
+production controller promotion, new sudo/SSH rights, new secrets or paid API.
+
+Separate new reviewed files (old v1 gate files remain unchanged):
+
+- `infra/deploy/diagnostic_addon_operator_v2.py`: same Ed25519 trust, fixed
+  source `3ef07c51`, pinned `0e04af00` controller, new one-operation intent
+  `upgrade-managed-diagnostics-7-7-v2`, exact candidate wheel/runtime digest,
+  new root installer digest.
+- `ops/admin-scripts/authorize_diagnostic_v2_gate.py`: **authenticated**
+  owner-admin bootstrap, validates exact root old operator SHA-256, signer and
+  baseline, preserves old operator in private evidence, atomically updates only
+  the existing sudo-target file, adds new immutable installer file. Does not
+  deploy code, restart a service, or change an SQLite database.
+- `ops/admin-scripts/upgrade_managed_diagnostics_7_7_v2.py`: root-pinned
+  signed installer stages **new isolated** source tree; stops only
+  `ae-managed-diagnostics.service`, runs one owner-confirmed expected-negative
+  real Git subprocess inside a hardened transient singleton systemd unit,
+  confirms one durable FAILED task, one allowed scoped grant, exhausted
+  delivery and one QA-labelled diagnostic occurrence, then switches/restarts
+  only the isolated diagnostic unit. Keeps the v1 code and old unit in private
+  evidence. Unexpected task/process state is HOLD; never restores/deletes
+  live SQLite or restarts the old core. Potential task crash requires owner
+  recovery; this **is not live-proven** yet.
+- `.github/workflows/netcup-owner-diagnostics-upgrade-v2.yml`: manual owner
+  dispatch, pre/post `main` SHA checks, host SSH pin, independent Ed25519
+  signing key, fixed source and remote pinned sudo path. Old signed v1
+  workflow unchanged. Workflow security allowlist extended narrowly.
+
+**Do not dispatch any root bootstrap or signed upgrade until** source passes
+the full Linux CI/wheel and a fresh live preflight confirms old core/unit,
+runtime code and private task state. Separate commits are required:
+source-only reviewed code → immutable owner-admin request for gate bootstrap →
+reviewed preparation/transfer of exact `3ef07c51` artifact → fresh manual
+signed upgrade. If bootstrap/upgrade cannot be proven safe, HOLD and record
+the reason; no generic admin-runner bypass. Existing rollback core
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`; old signed operator SHA-256
+`7d2779ccdf55c464ea31e6e52f340dae0cbdaee23d009298e08cf7a760582207`.
+No server change has occurred for v2 yet; 7.7 PARTIAL / 7.8 HOLD.
+
+---
+
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / owner-confirmed QA candidate 0.3.20a0, NOT DEPLOYED
 
 ## Current code candidate — controlled managed QA without a second task owner
