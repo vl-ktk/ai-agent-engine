@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "1a27e9bf966d45f9829da11590592a4a",
+  "source_sha": "38d0e960d63f725ee5d5de5fbf71c8e03052ce52",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/vault_netcup_install_7_7a.py",
+  "script_sha256": "662d09f5b418d787d2441207ce496bf1f27eee13a567a470491402a45a794472"
+}
