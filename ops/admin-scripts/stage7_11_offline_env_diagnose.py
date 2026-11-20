@@ -19,33 +19,35 @@ import tempfile
 
 _PATH = Path("ops/admin-scripts/stage7_11_capacity_live_acceptance.py")
 _CODE = r"""
-import importlib.util,json,os,re,sys
-from pathlib import Path
-expected = Path('ai_agent_engine/__init__.py').resolve()
+import json,sys
+report = {'status':'OFFLINE_BLOCKED','exception':'unknown',
+          'function':'unknown','line':0,'source':'unknown',
+          'missing_module':'none','private_package_visible':False,
+          'source_file_readable':False}
 try:
+    import importlib.util,os
+    report['source_file_readable'] = (os.path.isfile(
+        'ai_agent_engine/task_stage7_11_acceptance.py') and os.access(
+        'ai_agent_engine/task_stage7_11_acceptance.py',os.R_OK))
     spec = importlib.util.find_spec('ai_agent_engine')
-except (ImportError, AttributeError, ValueError):
-    spec = None
-private_package_visible = bool(spec and spec.origin and
-                               Path(spec.origin).resolve() == expected)
-source_file_readable = (Path('ai_agent_engine/task_stage7_11_acceptance.py').is_file()
-                        and os.access('ai_agent_engine/task_stage7_11_acceptance.py',os.R_OK))
-missing_module = 'none'
-try:
+    report['private_package_visible'] = bool(spec and spec.origin and
+        os.path.realpath(spec.origin) == os.path.realpath('ai_agent_engine/__init__.py'))
     from ai_agent_engine.task_stage7_11_acceptance import run_acceptance
     out = run_acceptance(live=False)
     if out.get('status') != 'OFFLINE_PASS':
         raise RuntimeError('offline_receipt_unexpected')
-    report = {'status':'OFFLINE_PASS', 'exception':'none',
-              'function':'none', 'line':0, 'source':'none'}
+    report.update(status='OFFLINE_PASS',exception='none',
+                  function='none',line=0,source='none')
 except BaseException as exc:
     if isinstance(exc, ModuleNotFoundError):
         name = getattr(exc,'name',None)
-        if isinstance(name,str) and len(name) <= 80 and re.fullmatch(
-                r'[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,5}',name):
-            missing_module = name
+        if (isinstance(name,str) and len(name) <= 80 and
+                1 <= len(name.split('.')) <= 6 and
+                all(part.isidentifier() and part.isascii()
+                    for part in name.split('.'))):
+            report['missing_module'] = name
         else:
-            missing_module = 'unknown'
+            report['missing_module'] = 'unknown'
     stack = []
     tb = exc.__traceback__
     while tb is not None:
@@ -55,11 +57,8 @@ except BaseException as exc:
             stack.append((frame.f_code.co_name,tb.tb_lineno,filename.rsplit('/',1)[-1]))
         tb=tb.tb_next
     name,number,source = stack[-1] if stack else ('unknown',0,'unknown')
-    report={'status':'OFFLINE_BLOCKED','exception':type(exc).__name__,
-            'function':name,'line':number,'source':source}
-report['missing_module']=missing_module
-report['private_package_visible']=private_package_visible
-report['source_file_readable']=source_file_readable
+    report.update(status='OFFLINE_BLOCKED',exception=type(exc).__name__,
+                  function=name,line=number,source=source)
 print('STAGE7_11_OFFLINE_METADATA '+json.dumps(report,sort_keys=True),flush=True)
 sys.exit(0 if report['status']=='OFFLINE_PASS' else 2)
 """
@@ -128,6 +127,15 @@ def main() -> None:
         directory = Path(tmp)
         os.chown(directory, runtime.pw_uid, runtime.pw_gid)
         source = helper._prepare_disposable_source(directory)
+        # Independent POSIX access check: works even when Python exits before
+        # it can print the offline receipt. No file contents leave Netcup.
+        runtime_file_readable = helper._owner_command(runtime,
+            ["/usr/bin/test", "-r", str(source / "ai_agent_engine" /
+                                    "task_stage7_11_acceptance.py")],
+            source=source, timeout=8)[0]
+        runtime_pkg_traversable = helper._owner_command(runtime,
+            ["/usr/bin/test", "-x", str(source / "ai_agent_engine")],
+            source=source, timeout=8)[0]
         ran, stdout = helper._owner_command(
             runtime, [str(helper.PYTHON), "-c", _CODE],
             source=source, timeout=80)
@@ -140,6 +148,8 @@ def main() -> None:
         report = {"schema": 1, "scope": "vl-ktk/ai-agent-engine",
                   "live_release": helper.EXPECTED_RELEASE,
                   "offline": result, "model_calls": False,
+                  "runtime_file_readable": runtime_file_readable,
+                  "runtime_package_traversable": runtime_pkg_traversable,
                   "oauth_refresh": False, "working_sqlite_modified": False,
                   "services_modified": False, "credentials_printed": False}
         with (evidence / "stage7-11-offline-diagnose.json").open("x", encoding="utf-8") as f:

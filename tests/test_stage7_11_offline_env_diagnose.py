@@ -70,6 +70,15 @@ class OfflineMetadataTests(unittest.TestCase):
         self.assertIn("find_spec('ai_agent_engine')", diag._CODE)
         self.assertIn("ModuleNotFoundError", diag._CODE)
 
+    def test_import_introspection_cannot_abort_receipt_before_exception_handler(self):
+        self.assertLess(diag._CODE.index("try:"),
+                        diag._CODE.index("import importlib.util,os"))
+        self.assertIn("report.update(status='OFFLINE_BLOCKED'", diag._CODE)
+        self.assertIn('"runtime_file_readable"',
+                      Path(diag.__file__).read_text(encoding="utf-8"))
+        self.assertIn('"runtime_package_traversable"',
+                      Path(diag.__file__).read_text(encoding="utf-8"))
+
     def test_actual_offline_child_metadata_without_provider_models(self):
         process = subprocess.run(
             [sys.executable, "-c", diag._CODE],

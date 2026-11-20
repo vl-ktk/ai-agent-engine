@@ -1,3 +1,29 @@
+# HANDOFF — 20.11.2026, 7.11 / Python import probe must never fail before receipt
+
+**Источник при принятии:** GitHub `vl-ktk/ai-agent-engine/main`
+`7715c25e2eb886a749d25e986116c9094acf11eb` (source rollback до этой
+правки). Source-only PR #104 `154d47f10fceb35112e7514e39941365c725588c`
+прошёл Linux 3.11/3.12/3.13 + wheel CI; Windows остался с прежними POSIX
+ошибками. Owner one-shot [run 44804634344](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44804634344)
+**PASS в выполнении диагностики**, но ребёнок вернул **пустой stdout**,
+отчёт `ProcessUnavailable`, `missing_module=unknown`. Значения
+`private_package_visible=false` и `source_file_readable=false` в этом
+случае — **заглушки по умолчанию, не фактическое доказательство прав**.
+`model_calls=false`, `oauth_refresh=false`, рабочая БД и службы без изменений.
+
+**Текущая правка:** обернуть все проверки `find_spec`/пути в перехват ошибок
+внутри одноразового subprocess; до запуска Python независимо проверить
+`/usr/bin/test -r` исходного файла и `-x` пакета от имени `ae-runtime`,
+вывести только два boolean. Если Python упадёт при introspection, безопасный
+JSON всё равно должен объяснить тип исключения. Локальные тесты офлайн,
+без вызовов моделей. После source CI — только одно новое owner offline-only
+задание, затем исправить строго установленную причину отдельной правкой.
+`7.11 [ ] PARTIAL`, 7.12 не начинать. Production release/rollback id
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`, core 0.3.11a0,
+рабочая task SQLite v14; никаких production изменений.
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.11 / уточнение отсутствующего Python-модуля
 
 **Источник:** `vl-ktk/ai-agent-engine/main` `4de869831bc3c886c040a937d56ca29863d95263`
