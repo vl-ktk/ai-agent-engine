@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "request_id": "a59387421fba8193c35abb75bfcd2265",
+  "source_sha": "c39e12a40bb42f4a0a28e8d24c6c1e20653e90f4",
+  "expected_current": "0e04af007375d82daf8f7d3b36c71abb0c784e0b",
+  "script": "ops/admin-scripts/upgrade_diagnostic_backup_v17_7_11.py",
+  "script_sha256": "66da6eb90300a81583ec76f04707b02b45ffff64a1167a2bffaf79b64785a743"
+}
