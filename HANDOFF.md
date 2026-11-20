@@ -3,7 +3,7 @@
 **Owner request:** plan, do not implement, the new Secure Vault module.
 Added independent **7.7A** between existing 7.7 and 7.8, without changing
 their wording, renumbering the historical 169 direct subtasks, or introducing
-third-level task numbering. Full nine-section requirements, five unchecked
+third-level task numbering. The full requirements, five unchecked
 phases and ten acceptance checks are in
 `infra/security/SECURE_VAULT_PLAN.md`; the compact parent task is in
 `IMPLEMENTATION_ROADMAP.md`. No Vault runtime, secret migration, permissions,
