@@ -1,6 +1,43 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / signed add-on gate, live HOLD
 
-## Latest — reviewed bootstrap umask fix, Netcup untouched
+## Latest — Netcup public signing trust installed, activation still HOLD
+
+**Owner-approved exact host action:** GitHub `main` parent source
+`f9e703d67a48aff1d354dc651eebfe2c046ec14a`, one immutable owner-admin
+request `7b354439e5de1cb8393be71d9dc34842`, committed as
+`2487cf95cb29fe5837670b4621aed318eb86ca61`.
+The authenticated [Netcup owner-admin run 44736497987](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44736497987)
+**SUCCESS**. Server evidence:
+`DIAGNOSTIC_SIGNING_7_7.status=DIAGNOSTIC_SIGNING_BOOTSTRAPPED`,
+`scope=vl-ktk/ai-agent-engine`, `signer_public_only=true`,
+`restricted_addon_operator_installed=true`, `trusted_installer_pinned=true`,
+`new_sudo_or_ssh_permissions=false`, `diagnostic_service_started=false`,
+`core_release_changed=false`.
+
+**Exactly installed root files:** `/etc/ai-agent-engine/release-signers`
+(public key only, `0644`),
+`/usr/local/libexec/ae-release/diagnostic_addon_operator.py` (`0444`),
+`/usr/local/libexec/ae-release/activate_managed_diagnostics_7_7.py` (`0444`).
+Bootstrap checked the reviewed SHA-256 of both Python files and exact file
+modes after the restrictive admin `umask(077)`, checked the current release
+and all three old baseline units before/after writes; existing files were
+not overwritten. The prior and still-active controller version/rollback ID
+is `0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+The previous no-Netcup signature validation
+[run 44735340945](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44735340945)
+also passed. No new service, socket, tasks, permissions or models activated.
+
+**Next single step:** manually owner-dispatch the exact
+`release-preparation.yml` for reviewed source
+`60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23` under a freshly checked
+`main`; capture full wheel SHA-256 and successful run ID, then separately
+owner-dispatch the verified transfer, recheck Netcup core SHA and finally
+signed add-on activation. Do not invoke generic core release promotion.
+Live diagnostic restart/socket, scheduled backup observation, real
+FAILED→incident→verified QA and CPU/RAM/disk measurements still remain.
+**7.7 PARTIAL, 7.8 HOLD.**
+
+## Previous — reviewed bootstrap umask fix, before Netcup installation
 
 **Source baseline:** GitHub `main` `8a492158bb3c46f7bfe61d341d6bc8622720c189`
 (recheck HEAD before any request); active Netcup core last observed

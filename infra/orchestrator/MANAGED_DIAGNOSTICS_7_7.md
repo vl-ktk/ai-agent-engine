@@ -58,10 +58,16 @@ already exist. A GitHub secret existing is not yet proof its OpenSSH encoding
 and the Netcup trust path verify successfully; the offline signed check is
 mandatory before installing any root files.
 
-As of source publication preparation, **none of these new Netcup files is
-installed**, and the service is still **HOLD** until the signing self-test,
-separate bootstrap, prepared wheel, transfer, owner-manual signed activation,
-and live probes each pass.
+**Netcup update (20.11.2026):** the owner-manual signing self-test
+[run 44735340945](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44735340945)
+passed. The separately authorized, authenticated
+[bootstrap run 44736497987](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44736497987)
+reported `DIAGNOSTIC_SIGNING_BOOTSTRAPPED`: the root-only public allowed
+signer, fixed add-on operator and pinned installer are present; the controller
+release and old services remained unchanged, no new sudo/SSH rights granted.
+**The diagnostic service itself is still NOT installed or running.** It remains
+on HOLD until manual wheel preparation, verified transfer, separate signed
+activation and live probes each pass.
 
 The source-reviewed candidate `ops/admin-scripts/activate_managed_diagnostics_7_7.py`
 describes an **additive** isolated service installation, not an existing
