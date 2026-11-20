@@ -61,17 +61,28 @@ def _source_bytes(path: Path, sha: str) -> bytes:
     return content
 
 
-def _exclusive_root_file(path: Path, content: bytes, mode: int) -> None:
+def _exclusive_root_file(path: Path, content: bytes, mode: int, *,
+                         created: list[Path] | None = None,
+                         expected_uid: int = 0) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    if created is not None:
+        # Track the new inode immediately, so even a mid-write failure is
+        # moved into the private recovery directory by bootstrap().
+        created.append(path)
     try:
         with os.fdopen(os.dup(fd), "wb") as handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
+        # netcup_admin_remote.py correctly applies umask(077). Its masked
+        # creation modes are not the reviewed final modes; set them on the
+        # newly opened inode, without opening or following the path again.
+        os.fchmod(fd, mode)
+        os.fsync(fd)
     finally:
         os.close(fd)
     info = path.lstat()
-    if (info.st_uid != 0 or not stat.S_ISREG(info.st_mode)
+    if (info.st_uid != expected_uid or not stat.S_ISREG(info.st_mode)
             or info.st_nlink != 1 or stat.S_IMODE(info.st_mode) != mode):
         raise RuntimeError("privileged_file_permissions_wrong")
     if hashlib.sha256(path.read_bytes()).digest() != hashlib.sha256(content).digest():
@@ -101,8 +112,7 @@ def bootstrap(*, expected: str, evidence: Path) -> dict:
     try:
         for path, data, mode in targets:
             _root_parent(path, create=True)
-            _exclusive_root_file(path, data, mode)
-            created.append(path)
+            _exclusive_root_file(path, data, mode, created=created)
         _baseline(expected)
         report = {"status": "DIAGNOSTIC_SIGNING_BOOTSTRAPPED",
                   "scope": "vl-ktk/ai-agent-engine", "live_release": LIVE_SHA,
