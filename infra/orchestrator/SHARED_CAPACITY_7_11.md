@@ -1,9 +1,11 @@
-# 7.11 — Shared controller capacity (source-only contract)
+# 7.11 — Shared controller capacity (source and isolated live acceptance)
 
-**Status on 20.11.2026: `[ ] PARTIAL`.** Source GPT/Claude task adapters now
-have a pinned-specialist admission bridge (offline E2E verified), but the
-live Netcup controller and provider sessions are **not** wired to it. No
-production model execution, new paid API or unattended account use is authorized.
+**Status on 20.11.2026: `[ ] PARTIAL`.** Source GPT/Claude task adapters
+have a pinned-specialist admission bridge; isolated **Netcup LIVE E2E PASS**
+for one existing personal GPT and one Claude login is now verified, after
+fixing disposable source ownership. The **persistent Netcup controller**
+still does not dispatch production tasks through this gate. No new paid API,
+production task-database mutation or unattended subscription use is authorized.
 
 ## Single pool, not one process per avatar
 
@@ -107,6 +109,16 @@ the live core package, working task DB and systemd services stay untouched.
 No client/provider output or tokens enter its GitHub Actions logs. A failed
 preflight stops before model requests; a failed live run is never retried.
 
+**Confirmed live evidence 20.11.2026:**
+[owner #44807319708](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44807319708)
+verified `OFFLINE_PASS` with readable runtime source; then
+[owner #44808394097](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44808394097)
+reported `LIVE_PASS` for one GPT and one Claude, shared CPU admission and
+provider quota waits, durable disposable SQLite v17 and no automatic retries.
+Existing subscription sign-ins were valid, paid API fallback was false.
+Production core/services/task SQLite remained unchanged. The only test
+policy numbers remain acceptance-only; they are not a live quota decision.
+
 To complete 7.11 as **live** work, the trusted orchestrator must instantiate
 the same policy for *every* provider dispatch, select machine-appropriate
 numeric limits based on actually authorized subscription modes, recover
@@ -115,6 +127,9 @@ root-installed diagnostic backup hook was upgraded to v14–v17 compatibility
 with an existing snapshot verify + isolated restore PASS (owner Actions run
 `44796580391`). The live **core remains `0.3.11a0`**, its task SQLite remains
 v14, and no live GPT/Claude orchestration or v17 migration has been performed.
-Do **not** migrate the live DB solely to claim a milestone; first review
-release/source/rollback and obtain limited true provider E2E with approved
-accounts. This source work does not close 7.7/7.7A/7.8/7.9 or initiate 7.12.
+Do **not** migrate the live DB solely to claim a milestone. The limited true
+provider E2E is now verified, but remaining mandatory work is an owner-approved
+numeric capacity policy, a reviewable persistent trusted dispatcher,
+independent backup/restore and rollout/rollback checks before **any**
+v14→v17 working SQLite migration or production promotion. This does not
+close 7.7/7.7A/7.8/7.9 or initiate 7.12.
