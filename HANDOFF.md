@@ -19,7 +19,14 @@ Digest owner-admin script:
 Проверено локально на текущих исходниках: **8 новых targeted PASS**,
 **855 unittest OK (2 skipped)**, `compileall`, public-source scan,
 workflow-boundary scan, staged diff и wheel `0.3.19a0` **PASS**. GitHub CI
-для новой правки до её публикации ещё не запускался.
+для исходной правки [run 44720757706](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44720757706):
+Ubuntu Python 3.11/3.12/3.13 и wheel **PASS**; Windows **FAIL**
+(`fcntl` и один дополнительный `AssertionError`; Windows не меняли). PR
+[#62](https://github.com/vl-ktk/ai-agent-engine/pull/62) объединён в
+`main` **`f217d100a70672e64966fe83f3d9c14a13d47c8f`**.
+Предыдущий source SHA для адресного отката — **`2d53c804adba6de3dd54bd432c36b31c3e1fec04`**;
+откат исходника только после проверки текущего `main` через `git revert`
+в GitHub без force-push. Изменений Netcup/Windows и админ-запросов не было.
 Актуальная live Netcup версия до нового read-only подтверждения — прежний
 зафиксированный `0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
 Разрешение на новый host write и точное owner approval нужно получить отдельно.
