@@ -1,3 +1,42 @@
+# HANDOFF — 20.11.2026, Secure Vault 7.7A / internal orchestrator adapter
+
+**Последнее поручение:** продолжить после успешного запуска Vault и
+**не придумывать новые подсистемы**. Владелец отдельно уточнил: MCP и
+подключение именно этого ChatGPT-чата **не нужны**. Делать только внутреннюю
+связь главного оркестратора с Netcup Vault.
+
+**Проверенный live результат предыдущего шага:** [owner GitOps job
+44762952328](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44762952328)
+SUCCESS: отдельные `ae-vault.socket`, `ae-vault.service` и
+`ae-vault-backup.timer` ACTIVE, первый encrypted Netcup backup проверен
+изолированным restore; старый контроллер SHA
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b` не менялся. Установленный
+Vault source SHA `38d0e960d63f725ee5d5de5fbf71c8e03052ce52`.
+Весь Vault и локальные копии на Netcup, **без off-host DR** по решению
+владельца. Последний GitHub `main` перед текущей задачей
+`3c7f54526da59f2ae081451e9dfc1fbfea2d824d`.
+
+**Исходный код текущего дополнения:** `ai_agent_engine/vault_client.py`
+подключается к `/run/ae-vault.sock`, проверяет системные UID сокета и
+обслуживающей службы, Save/Get/Update/List возвращают только ограниченные
+данные и не логируют секреты. `MainOrchestratorVault` в
+`ai_agent_engine/main_orchestrator.py` передаёт уже аутентифицированное
+владельцем значение в `VaultUnixClient`, без второго подтверждения;
+исполнитель получает доступ только по существующему server-side grant.
+Нет новых HTTP/MCP endpoints, пользователей, ACL/секретов, серверных unit,
+платных сервисов и изменений Windows/других проектов.
+
+**Главная граница:** это интеграция **в исходниках**, а действующий Netcup
+controller `0.3.11a0` — heartbeat, не живой главный оркестратор. Поэтому
+ни реального owner-message intake, ни автоматической работы с паролем
+через управляющего агента пока нет; не объявлять 7.7A `[x]` без этого.
+Не подменять старый подписанный release новым по админ-скрипту Vault.
+Откат источника — предыдущий main SHA выше, откат live Vault при инциденте:
+отдельно остановить `ae-vault.service`, `.socket`, `.timer` без удаления
+ключей/данных; core rollback SHA указан выше.
+
+---
+
 # HANDOFF — 20.11.2026, Secure Vault 7.7A / pinpointed installer umask bug
 
 **Verified read-only remote result:** [owner-admin audit

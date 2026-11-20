@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
+from typing import TYPE_CHECKING, Callable
 from uuid import uuid4
 
 from .task_api import (
@@ -18,6 +19,9 @@ from .task_api import (
     TaskInbox, TaskRecord, TaskSubmission, _PROJECT_ID, _TASK_ID,
     parse_submission,
 )
+
+if TYPE_CHECKING:
+    from .vault_client import VaultUnixClient
 
 
 CONTEXT_VERSION = 1
@@ -232,3 +236,33 @@ def admit_approved_main_task(inbox: TaskInbox, scope: OwnerScope,
     return inbox.accept(proposal.submission, scope,
                         idempotency_key=proposal.proposal_id,
                         owner_approval=proof)
+
+
+class MainOrchestratorVault:
+    """Trusted in-process path from the main orchestrator to Netcup Vault.
+
+    The hosting orchestrator authenticates owner chat BEFORE calling this
+    object. This is not a model tool, an HTTP endpoint or a chat authenticator.
+    The daemon separately enforces actual Linux UID and scoped Vault grants.
+    """
+
+    def __init__(self, scope: OwnerScope, client: "VaultUnixClient") -> None:
+        from .vault_client import VaultUnixClient, VaultOrchestratorTasks
+        if (not isinstance(scope, OwnerScope)
+                or scope.owner_id != "vl-ktk"
+                or "ai-agent-engine" not in scope.project_ids
+                or not isinstance(client, VaultUnixClient)):
+            raise InvalidOrchestratorRequest("trusted Vault scope unavailable")
+        self._tasks = VaultOrchestratorTasks(client)
+
+    def save_from_authenticated_owner(self, *, category_id: str,
+                                      label: str, kind: str,
+                                      value: bytes) -> str:
+        """One owner instruction -> one Vault save; no second confirmation."""
+        return self._tasks.save_supplied_secret(
+            category_id=category_id, label=label, kind=kind, value=value)
+
+    def use_for_approved_task(self, secret_id: str,
+                              consume: Callable[[bytes], bool]) -> bool:
+        """Pass approved secret to trusted task, report only a success bit."""
+        return self._tasks.use_approved_secret(secret_id, consume)
