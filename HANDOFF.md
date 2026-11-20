@@ -1,3 +1,40 @@
+# HANDOFF — 20.11.2026, Secure Vault 7.7A / source-only реализация 0.3.21a0
+
+**Поручение:** после согласования owner-chat сценария начать реализацию всего
+7.7A непрерывно, не навязывать отдельную форму/повторное подтверждение,
+не менять секреты, права других проектов, Netcup/Windows до безопасной
+приёмки. Источник: GitHub `vl-ktk/ai-agent-engine`, исходный `main`
+`0b7bca075ef28fdd3577be31419ab06ccb5b985d` для точечного отката.
+
+**Готовый результат в исходниках:** новый `ai_agent_engine/secure_vault.py`,
+`tests/test_secure_vault.py`, версия пакета `0.3.21a0` с зависимостью PyCA
+`cryptography`, [описание](./infra/security/VAULT_IMPLEMENTATION_7_7A.md)
+и актуализация 7.7A в `IMPLEMENTATION_ROADMAP.md`. AES-256-GCM в private
+SQLite, произвольные категории, per-project области, scoped grants,
+общие secret IDs, автоматическое сохранение новых ключей исполнителями
+при действующем grant, Get/Update/Revoke/List, архив/перемещение,
+защищённые зашифрованные in-memory backup и тестовый offline restore.
+`VaultOrchestratorBridge` принимает байты от **уже аутентифицированного**
+owner adapter, без отдельного подтверждения; он не подключён к ChatGPT.
+
+**Открыто `[ ] PARTIAL / SOURCE ONLY`:** нет реальной ChatGPT/MCP инжекции,
+host key provider с unattended unseal и аварийным owner key, внешней
+зашифрованной копии с проверенным off-host restore, production ACL/определения
+подлинной роли, master-key rotation, real QA, подписанного Netcup release.
+Ни одна фаза 7.7A и общая приёмка ещё не `[x]`. Никаких настоящих паролей,
+ключей, secret migration, новых прав, рабочих данных, Netcup/Windows,
+других проектов и расходов не касались. Предыдущий известный Netcup core:
+`0.3.11a0` / `0e04af007375d82daf8f7d3b36c71abb0c784e0b`
+(не свежий замер, перед любым live release проверить заново).
+
+**Offline проверки:** отдельные security/backup/ACL тесты и общий `unittest`,
+workflow scanner, public-source scan, wheel build, diff check — точные
+результаты публикуются в итоговом отчёте; это не live E2E. При приёмке
+сначала подключить реальный owner-authenticated ingress, утвердить отдельно
+режим ключей/новые права, off-host backup и проверить подписанный rollout.
+
+---
+
 # HANDOFF — 20.11.2026, Secure Vault 7.7A / устранение лишних ограничений, DOCS ONLY
 
 **Текущее поручение владельца:** убрать четыре мешающих требования Secure Vault:
