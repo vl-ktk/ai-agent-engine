@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import closing
 import os
 from pathlib import Path
 import subprocess
@@ -14,13 +15,16 @@ from unittest.mock import patch
 
 if sys.platform.startswith("linux"):
     from ai_agent_engine.diagnostic_managed_runtime import (
-        ManagedRuntimeHold, open_singleton, run_managed,
+        ManagedRuntimeHold, OwnerConfirmedDiagnosticQA, QA_PROPOSAL_SHA256,
+        QA_NEGATIVE_PROPOSAL_SHA256,
+        open_singleton, run_managed,
     )
     from ai_agent_engine.main_orchestrator import OwnerDecision
     from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
     from ai_agent_engine.single_project_diagnostic_runner import SINGLE_SCOPE
-    from ai_agent_engine.task_api import TaskInbox
+    from ai_agent_engine.task_api import OwnerApprovalProof, TaskInbox
     from ai_agent_engine.task_assignment import WorkspaceRoot
+    from ai_agent_engine.task_state import TaskState
     from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
 
 
@@ -119,6 +123,126 @@ class ManagedRuntimeTests(unittest.TestCase):
                 SQLiteTaskStore(self.db)
         with patch("ai_agent_engine.diagnostic_managed_runtime.serve_local_intake", observe):
             run_managed(self.config, Event(), expected_project_source=self.sha)
+
+    def owner_qa(self):
+        return OwnerConfirmedDiagnosticQA(OwnerApprovalProof(
+            "proposal_" + "a" * 32, "message", QA_PROPOSAL_SHA256,
+        ))
+
+    def negative_owner_qa(self):
+        return OwnerConfirmedDiagnosticQA(OwnerApprovalProof(
+            "proposal_" + "c" * 32, "message", QA_NEGATIVE_PROPOSAL_SHA256,
+        ), negative_check=True)
+
+    def test_exact_owner_qa_runs_one_real_git_child_in_same_process(self):
+        observed = []
+
+        def after_real_child(adapter, path, stopped):
+            self.assertEqual(path, self.socket_dir / "intake.sock")
+            records = adapter._inbox.snapshot(SINGLE_SCOPE)
+            self.assertEqual(len(records), 1)
+            task_id = records[0].task_id
+            self.assertEqual(adapter._inbox.state(task_id, SINGLE_SCOPE),
+                             TaskState.SUCCEEDED)
+            observed.append(task_id)
+            with self.assertRaises(StorageUnavailable):
+                SQLiteTaskStore(self.db)
+
+        with patch("ai_agent_engine.diagnostic_managed_runtime.serve_local_intake",
+                   after_real_child):
+            run_managed(self.config, Event(), expected_project_source=self.sha,
+                        qa=self.owner_qa())
+        self.assertEqual(len(observed), 1)
+        with closing(TaskInbox(store=SQLiteTaskStore(self.db),
+                               workspace_root=WorkspaceRoot(self.workspaces))) as inbox:
+            task_id = observed[0]
+            self.assertEqual(inbox.state(task_id, SINGLE_SCOPE), TaskState.SUCCEEDED)
+            approval = inbox._store.owner_approval(task_id)
+            self.assertEqual(approval[2:], (
+                "proposal_" + "a" * 32, "message", QA_PROPOSAL_SHA256,
+            ))
+            audit = inbox._store.permission_history(task_id)
+            self.assertEqual(len(audit), 1)
+            self.assertEqual((audit[0][2], bool(audit[0][3])), ("execute_tool", True))
+
+    def test_qa_requires_exact_owner_receipt_and_no_replay(self):
+        with self.assertRaisesRegex(ManagedRuntimeHold, "exact_owner_qa_proposal"):
+            OwnerConfirmedDiagnosticQA(OwnerApprovalProof(
+                "proposal_" + "b" * 32, "button", QA_PROPOSAL_SHA256))
+        with self.assertRaisesRegex(ManagedRuntimeHold, "exact_owner_qa_proposal"):
+            OwnerConfirmedDiagnosticQA(OwnerApprovalProof(
+                "proposal_" + "b" * 32, "message", "0" * 64))
+        with self.assertRaisesRegex(ManagedRuntimeHold, "exact_owner_qa_proposal"):
+            OwnerConfirmedDiagnosticQA(OwnerApprovalProof(
+                "proposal_" + "b" * 32, "message", QA_PROPOSAL_SHA256,
+            ), negative_check=True)
+        with self.assertRaisesRegex(ManagedRuntimeHold, "owner_qa_operator"):
+            with open_singleton(self.config, expected_project_source=self.sha,
+                                qa="untrusted socket content"):
+                self.fail("invalid QA must not open a database writer")
+
+        with patch("ai_agent_engine.diagnostic_managed_runtime.serve_local_intake"):
+            run_managed(self.config, Event(), expected_project_source=self.sha,
+                        qa=self.owner_qa())
+        with self.assertRaisesRegex(ManagedRuntimeHold,
+                                    "owner_qa_requires_empty_task_inbox"):
+            run_managed(self.config, Event(), expected_project_source=self.sha,
+                        qa=self.owner_qa())
+
+    def test_expected_negative_qa_records_real_failure_without_dirty_source(self):
+        observed = []
+
+        def after_real_child(adapter, _path, _stopped):
+            records = adapter._inbox.snapshot(SINGLE_SCOPE)
+            self.assertEqual(len(records), 1)
+            task_id = records[0].task_id
+            self.assertEqual(adapter._inbox.state(task_id, SINGLE_SCOPE),
+                             TaskState.FAILED)
+            with adapter._diagnostics._db(SINGLE_SCOPE, "ai-agent-engine") as db:
+                incidents = db.execute("SELECT incident_id FROM incidents").fetchall()
+            self.assertEqual(len(incidents), 1)
+            incident_id = incidents[0][0]
+            evidence = adapter._diagnostics.occurrences(
+                SINGLE_SCOPE, "ai-agent-engine", incident_id,
+            )
+            self.assertEqual(len(evidence), 1)
+            self.assertEqual(evidence[0].check_name,
+                             "git_owner_qa_missing_marker")
+            observed.append((task_id, incident_id))
+
+        with patch("ai_agent_engine.diagnostic_managed_runtime.serve_local_intake",
+                   after_real_child):
+            run_managed(self.config, Event(), expected_project_source=self.sha,
+                        qa=self.negative_owner_qa())
+        self.assertEqual(len(observed), 1)
+        self.assertTrue(observed[0][1].startswith("inc_"))
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_negative_qa_refuses_when_fixed_marker_is_committed(self):
+        from ai_agent_engine.single_project_diagnostic_runner import QA_REQUIRED_MARKER
+
+        marker = self.source / QA_REQUIRED_MARKER
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("present\n", encoding="utf-8")
+        self.git("add", QA_REQUIRED_MARKER)
+        self.git("-c", "user.name=Offline", "-c", "user.email=offline@example.invalid",
+                 "commit", "-qm", "baseline with QA marker")
+        updated_sha = self.git("rev-parse", "HEAD").strip()
+        with self.assertRaisesRegex(ManagedRuntimeHold, "negative_qa_marker_exists"):
+            run_managed(self.config, Event(), expected_project_source=updated_sha,
+                        qa=self.negative_owner_qa())
+        with closing(TaskInbox(store=SQLiteTaskStore(self.db),
+                               workspace_root=WorkspaceRoot(self.workspaces))) as inbox:
+            self.assertEqual(len(inbox.snapshot(SINGLE_SCOPE)), 0)
+
+    def test_qa_fails_closed_if_source_is_modified(self):
+        (self.source / "README.md").write_text("verified source  \n")
+        with self.assertRaisesRegex(ManagedRuntimeHold, "private_host_not_ready"):
+            run_managed(self.config, Event(), expected_project_source=self.sha,
+                        qa=self.owner_qa())
+        with closing(TaskInbox(store=SQLiteTaskStore(self.db),
+                               workspace_root=WorkspaceRoot(self.workspaces))) as inbox:
+            self.assertEqual(len(inbox.snapshot(SINGLE_SCOPE)), 0)
 
     def test_foreign_socket_path_and_live_task_owner_hold(self):
         self.payload["socket_path"] = str(self.root / "outside" / "intake.sock")

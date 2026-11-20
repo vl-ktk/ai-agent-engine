@@ -127,11 +127,20 @@ class DiagnosticSigningGateTests(unittest.TestCase):
     def test_extract_only_reviewed_python_package_and_reject_duplicate(self):
         op = self.op
         package = ROOT / "ai_agent_engine"
+        # The installed v1 signed operator intentionally remains pinned to
+        # the historical runtime. Never weaken it to accept a future 7.7 QA
+        # candidate merely because main now has a different module body.
+        reviewed_v1 = (ROOT / "tests/fixtures/diagnostic_managed_runtime_v1.py.txt").read_bytes()
+        self.assertEqual(sha256(reviewed_v1).hexdigest(), op.RUNTIME_SHA256)
         with tempfile.TemporaryDirectory() as temp:
             buffer = BytesIO()
             with ZipFile(buffer, "w") as archive:
                 for source in sorted(package.glob("*.py")):
-                    archive.write(source, "ai_agent_engine/" + source.name)
+                    target = "ai_agent_engine/" + source.name
+                    if source.name == "diagnostic_managed_runtime.py":
+                        archive.writestr(target, reviewed_v1)
+                    else:
+                        archive.write(source, target)
                 archive.writestr("ai_agent_engine-0.3.19a0.dist-info/entry_points.txt", "ignored")
             count = op._extract_package(buffer.getvalue(), Path(temp))
             self.assertGreaterEqual(count, 20)

@@ -28,9 +28,12 @@ class ManagedActivationAdminTests(unittest.TestCase):
     def test_exact_reviewed_new_runtime_module_digest_is_pinned(self):
         source = (Path(__file__).resolve().parents[1] / "ai_agent_engine"
                   / "diagnostic_managed_runtime.py")
-        self.assertEqual(sha256(source.read_bytes()).hexdigest(), ACTIVATE.RUNTIME_SHA)
-        _, files = ACTIVATE._reviewed_source()
-        self.assertIn(source, files)
+        fixture = (Path(__file__).resolve().parents[1] / "tests" / "fixtures"
+                   / "diagnostic_managed_runtime_v1.py.txt")
+        self.assertEqual(sha256(fixture.read_bytes()).hexdigest(), ACTIVATE.RUNTIME_SHA)
+        self.assertNotEqual(sha256(source.read_bytes()).hexdigest(), ACTIVATE.RUNTIME_SHA)
+        with self.assertRaisesRegex(RuntimeError, "runtime_source_not_reviewed"):
+            ACTIVATE._reviewed_source()
 
     def test_separate_systemd_unit_never_replaces_live_release(self):
         unit = ACTIVATE.unit_text()

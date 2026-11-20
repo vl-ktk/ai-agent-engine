@@ -24,7 +24,13 @@ start paid providers or turn task prompts into executable commands.
 - The worker is the fixed ID `diagnostic-7-7`. At the moment the trusted
   runner claims its pinned Git workspace it rechecks exact commit and dirty
   tree. The task title and prompt are **not interpreted**.
-- Its only enabled task action is a *read-only*, fixed `git diff --check`.
+- Its default enabled task action is a *read-only*, fixed `git diff --check`.
+  A separately owner-confirmed, startup-only QA candidate also permits one
+  second **hard-coded** negative check, `git cat-file -e` for
+  `.ae/qa-7-7/owner-approved-required-marker`, after proving that file is
+  not tracked by the approved clean HEAD. Its real nonzero exit is recorded
+  explicitly as an **expected QA test incident**, never a production defect.
+  Neither mode accepts arbitrary paths or commands from a prompt.
   No shell, dynamic argv, Git network operation, repository source execution,
   remote model, write tool, arbitrary test, patch or deployment. The Git
   binary is from trusted `/usr/bin:/bin` and runs with a scrubbed environment,
@@ -63,3 +69,18 @@ source-only substep. Stage 7.7 remains `[ ] PARTIAL / LIVE HOLD`, 7.8 not begun.
 An additional [read-only host preflight](./HOST_PREFLIGHT_7_7.md) is available
 from source `0.3.19a0` to report missing provisioning and unsafe/inconsistent
 local state; it does not perform that provisioning or activate the runner.
+
+## Subsequent source-only owner QA candidate (20 November 2026)
+
+`diagnostic_managed_runtime.py` now has an **optional Python-only**
+`OwnerConfirmedDiagnosticQA` argument. It is not accepted by the existing
+CLI, local socket or original deployed service. A future independently signed
+owner operator must authenticate the exact receipt/proposal digest *before*
+passing that argument. The currently installed signed v1 operator and
+installer are pinned to the older runtime and **cannot** deploy this revision.
+Within the single owner process it admits one task only if the inbox is empty,
+constructs one 90-second `EXECUTE_TOOL` grant and invokes `run_next()` once;
+normal startup still has zero grants. Source pin, runtime DB lock, no replay,
+the intentional negative case and actual diagnostic occurrence have local
+Linux fixture tests. Abrupt-kill recovery, signed v2 rollout and Netcup E2E
+are **not verified**, so 7.7 stays PARTIAL and server task data remains untouched.
