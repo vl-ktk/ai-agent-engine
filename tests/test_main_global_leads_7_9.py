@@ -5,22 +5,25 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 import unittest
 
-from ai_agent_engine.main_global_leads import (
-    GlobalLeadDenied, approve_global_lead, draft_global_lead,
-    draft_global_lead_removal, global_lead_audit, load_global_lead,
-)
-from ai_agent_engine.main_orchestrator import OwnerDecision
-from ai_agent_engine.main_specialists import approve_catalog, draft_catalog
-from ai_agent_engine.task_api import OwnerScope, TaskInbox
-from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
-from tests.test_main_specialists import catalog, role
+if sys.platform.startswith("linux"):
+    # Private task storage requires fcntl; skip before importing it on Windows.
+    from ai_agent_engine.main_global_leads import (
+        GlobalLeadDenied, approve_global_lead, draft_global_lead,
+        draft_global_lead_removal, global_lead_audit, load_global_lead,
+    )
+    from ai_agent_engine.main_orchestrator import OwnerDecision
+    from ai_agent_engine.main_specialists import approve_catalog, draft_catalog
+    from ai_agent_engine.task_api import OwnerScope, TaskInbox
+    from ai_agent_engine.task_storage import SQLiteTaskStore, StorageUnavailable
+    from tests.test_main_specialists import catalog, role
 
 
-OWNER = OwnerScope("vlady",frozenset({"engine","other"}))
-OTHER = OwnerScope("other_owner",frozenset({"engine"}))
+    OWNER = OwnerScope("vlady",frozenset({"engine","other"}))
+    OTHER = OwnerScope("other_owner",frozenset({"engine"}))
 
 
 def owner_decision(proposal, channel="message"):
@@ -28,6 +31,7 @@ def owner_decision(proposal, channel="message"):
                          proposal.sha256,channel)
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"), "Linux private SQLite only")
 class GlobalLeadTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="ae-79-")
