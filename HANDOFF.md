@@ -1,3 +1,40 @@
+# HANDOFF — 20.11.2026, этап 7.11 / первый Netcup E2E: OFFLINE BLOCKED
+
+**Источник перед диагностикой:** `vl-ktk/ai-agent-engine/main`
+`ffe4676e4c26058952720ce124973e8bd2c97438` (source rollback до
+этой source-правки), без нового production release. Одноразовая
+owner-request по исходнику `2ee9f65e7b6774a2a0ca60ea46c329d4465a08fc`
+прошла через protected Netcup Actions
+[run 44801162100](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44801162100)
+и завершилась **FAIL** с точным санитарным исключением
+`RuntimeError: stage 7.11 disposable offline acceptance blocked`.
+
+**Достоверно установлено:** скрипт прошёл проверку текущей release
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`, активных системных
+служб, v17-compatible backup hook и рабочей SQLite v14, а также
+`_authorize_existing_sessions` (штатный GPT OAuth refresh/проверка
+разрешённой GPT-модели и личный Claude CLI). После этого попытался
+выполнить только **OFFLINE** disposable тест под `ae-runtime` и был
+остановлен. **Реальных запросов GPT/Claude в этом run не было.**
+Рабочий core/SQLite не выкладывались и не мигрировались; лог содержит
+только общий fail, так что причина offline ошибки пока **не установлена**.
+
+**Текущая source-правка:** новый безопасный, только offline
+`ops/admin-scripts/stage7_11_offline_env_diagnose.py` повторно запускает
+тот же reviewed source в личном временном каталоге, но выводит **только**
+тип Python-исключения, имя функции и номер строки. Не вызывает моделей,
+не проверяет/не обновляет OAuth, не читает содержимое секретов и не
+мутирует live SQLite/службы. Тесты для формата и защиты от раскрытия
+`tests/test_stage7_11_offline_env_diagnose.py`.
+
+**Следующий шаг:** опубликовать reviewed script через PR и CI, выполнить
+one-shot root owner read-only диагностику; исправлять только проверенную
+причину в новом source PR, повторять live test **не** автоматически.
+7.11 `[ ] PARTIAL`, 7.12 не начинать. Прежний live core для отката тот
+же `0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+
+---
+
 # HANDOFF — 20.11.2026, этап 7.11 / подготовлен приватный Netcup provider E2E
 
 **Источник при принятии:** GitHub `vl-ktk/ai-agent-engine/main`
