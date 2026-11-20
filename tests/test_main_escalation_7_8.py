@@ -11,31 +11,33 @@ import tempfile
 import time
 import unittest
 
-from ai_agent_engine.main_escalation import CrisisDenied, CrisisEscalationCoordinator
-from ai_agent_engine.main_orchestrator import OwnerDecision
-from ai_agent_engine.main_plan import approve_plan, decompose_for_review
-from ai_agent_engine.main_specialists import (
-    SpecialistDenied, TrustedStepRequirements, approve_catalog, approve_team,
-    assign_specialist, draft_catalog, draft_team, parse_candidate,
-)
-from ai_agent_engine.project_diagnostics import (
-    FailureSignal, ProjectDiagnosticsStore, capture_git_source,
-)
-from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
-from ai_agent_engine.task_api import OwnerScope, TaskInbox, TaskSubmission
-from ai_agent_engine.task_assignment import WorkspaceRoot
-from ai_agent_engine.task_delivery import TaskDeliveryManager, DeliveryRejected
-from ai_agent_engine.task_permissions import ActionGrant, ProtectedAction
-from ai_agent_engine.task_permissions import TaskPermissionGate, PermissionDenied
-from ai_agent_engine.task_state import TaskState
-from ai_agent_engine.task_storage import SQLiteTaskStore
+if sys.platform.startswith("linux"):
+    # These modules deliberately require fcntl/POSIX. Import *after* the
+    # platform gate so an unrelated Windows CI run skips rather than errors.
+    from ai_agent_engine.main_escalation import CrisisDenied, CrisisEscalationCoordinator
+    from ai_agent_engine.main_orchestrator import OwnerDecision
+    from ai_agent_engine.main_plan import approve_plan, decompose_for_review
+    from ai_agent_engine.main_specialists import (
+        SpecialistDenied, TrustedStepRequirements, approve_catalog, approve_team,
+        assign_specialist, draft_catalog, draft_team, parse_candidate,
+    )
+    from ai_agent_engine.project_diagnostics import (
+        FailureSignal, ProjectDiagnosticsStore, capture_git_source,
+    )
+    from ai_agent_engine.project_leader import ProjectLeaderStore, draft_project
+    from ai_agent_engine.task_api import OwnerScope, TaskInbox, TaskSubmission
+    from ai_agent_engine.task_assignment import WorkspaceRoot
+    from ai_agent_engine.task_delivery import TaskDeliveryManager, DeliveryRejected
+    from ai_agent_engine.task_permissions import ActionGrant, ProtectedAction
+    from ai_agent_engine.task_permissions import TaskPermissionGate, PermissionDenied
+    from ai_agent_engine.task_state import TaskState
+    from ai_agent_engine.task_storage import SQLiteTaskStore
+    from test_main_specialists import (OnePlanModel, catalog, decision, encoded,
+                                       role, team)
 
-from test_main_specialists import OnePlanModel, catalog, decision, encoded, role, team
-
-
-SCOPE = OwnerScope("owner78", frozenset({"engine"}))
-OTHER = OwnerScope("other78", frozenset({"engine"}))
-EXECUTE = ProtectedAction.EXECUTE_TOOL
+    SCOPE = OwnerScope("owner78", frozenset({"engine"}))
+    OTHER = OwnerScope("other78", frozenset({"engine"}))
+    EXECUTE = ProtectedAction.EXECUTE_TOOL
 
 
 @unittest.skipUnless(sys.platform.startswith("linux"), "Linux private SQLite only")
