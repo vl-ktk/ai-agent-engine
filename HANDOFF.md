@@ -1,5 +1,36 @@
 # HANDOFF — 20.11.2026, AI Agent Engine 7.7 / isolated diagnostics ACTIVE, 7.7 PARTIAL
 
+## Current gate — awaiting first scheduled diagnostic backup (20.11.2026)
+
+**This is not yet PASS.** Exact reviewed source `infra/systemd/ae-backup.timer`
+specifies `OnCalendar=*-*-* 03:00:00 UTC`, `RandomizedDelaySec=5min`,
+`AccuracySec=1min`, `Persistent=true`.
+The one-project diagnostic backup hook was installed and its first manual
+snapshot verified by Netcup owner-admin [run 44726722286](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44726722286)
+at 2026-11-20 11:21 UTC, **after** the daily 03:00 UTC event.
+The next ordinary combined backup is therefore due **2026-11-21 about
+03:00–03:06 UTC (05:00–05:06 Europe/Kyiv)** if the live timer retains the
+reviewed schedule. No subsequent scheduled diagnostic snapshot has been
+observed, so do not claim autonomous backup PASS.
+
+**Read-only evidence needed after this time:** fresh
+`systemctl show ae-backup.timer` / last trigger,
+`ae-backup.service` success after the scheduled trigger,
+a *new* verified diagnostic snapshot in
+`/var/backups/ai-agent-engine-diagnostics`, plus existing controller and
+three baseline units remaining healthy. Preserve the original backup files,
+drop-in and all snapshots. Existing GitOps read-only status workflow checks
+only three units and controller symlink, **not** backup chronology/private
+snapshots. A narrowly reviewed authenticated metadata-only Netcup query will
+be needed; do not pretend currently available status workflow proves it.
+**No forced backup, deployment, service restart or private data mutation
+was performed during this scheduling check.** The current gate remains
+`PARTIAL / WAIT_FOR_SCHEDULED_TIMER`; do not skip to the real failure QA
+without owner decision under the roadmap. Controller rollback stays
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`.
+
+---
+
 ## Latest verified — signed isolated diagnostics ACTIVE on Netcup, core unchanged
 
 **Current source before this docs-only handoff update:** GitHub `main` `f1969a042d78f292302c1f189676fb8ce93ae4e7`.
