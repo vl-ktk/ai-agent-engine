@@ -1,3 +1,34 @@
+# HANDOFF — 20.11.2026, Secure Vault 7.7A / owner-approved live preflight
+
+**Новое разрешение владельца:** полностью закончить 7.7A, включая
+создание выделенной Netcup-службы и новых Vault-ключей/разрешений, но
+без подмены существующего контроллера или чужих проектов и без платных
+ресурсов. Источник перед работой GitHub `main`
+`05c58048c7d04ac23b80ddd74ffa6a6d7f4bc20c` (rollback source baseline).
+Существующий подписанный механизм контроллера не обходить.
+
+**Свежий read-only Netcup факт:** [owner GitOps status run
+44757694597](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44757694597)
+PASS, три существующих сервиса active, `/opt/ai-agent-engine/current` всё ещё
+`releases/0e04af007375d82daf8f7d3b36c71abb0c784e0b` (`0.3.11a0`).
+Это **не** проверка Vault, ничего на сервере данным запросом не меняли.
+
+**Текущий следующий шаг:** отдельный source-only фиксированный metadata audit
+`ops/admin-scripts/vault_host_preflight_7_7a.py` (проверка systemd-creds,
+root-owned private путей, свободного диска и текущего controller SHA) и
+`tests/test_vault_host_preflight_7_7a.py`. Сначала опубликовать и проверить
+исходник, потом отдельно передать точный SHA-bound owner-admin request;
+доверенный admin wrapper пишет только своё audit evidence в `/root/ae-admin-jobs`,
+сам скрипт не создаёт Vault, не читает секреты и не пишет host конфигурацию.
+
+**7.7A `[ ] PARTIAL`:** ChatGPT ingress, unattended key provider, отдельный
+серверный service, off-host backup/recovery и реальный QA пока не готовы.
+До host mutation разработать установщик и отзыв/откат, проверить точную
+свежую версию, ревизию нового компонента и защищённость ключей. Ни Windows,
+ни другие проекты/рабочие службы сейчас не менять.
+
+---
+
 # HANDOFF — 20.11.2026, Secure Vault 7.7A / source-only реализация 0.3.21a0
 
 **Поручение:** после согласования owner-chat сценария начать реализацию всего
