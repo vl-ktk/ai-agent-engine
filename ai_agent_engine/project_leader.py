@@ -27,6 +27,7 @@ from .task_api import OwnerScope, ProjectForbidden, _PROJECT_ID, _SHA256
 REGISTRY_APPLICATION_ID = 0x41454C52  # AELR, distinct from task/engine SQLite.
 PROJECT_APPLICATION_ID = 0x41454C50  # AELP, per-project state.
 SCHEMA_VERSION = 1
+PROJECT_SCHEMA_VERSION = 2  # v1 management state; v2 adds offline 7.6 memory.
 KINDS = frozenset({"plan", "task", "decision_link", "qa_report", "error",
                    "checkpoint", "history", "context_link", "source_link"})
 _DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
@@ -193,7 +194,8 @@ def _project_schema(db: sqlite3.Connection, identity: tuple[str, ...],
             db.execute("INSERT INTO identity VALUES (1,?,?,?,?,?,?)", identity)
             db.execute(f"PRAGMA application_id={PROJECT_APPLICATION_ID}")
             db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-    elif (app, version) != (PROJECT_APPLICATION_ID, SCHEMA_VERSION):
+    elif (app, version) not in ((PROJECT_APPLICATION_ID, SCHEMA_VERSION),
+                               (PROJECT_APPLICATION_ID, PROJECT_SCHEMA_VERSION)):
         raise ProjectLeaderUnavailable("unrecognized project database")
     if db.execute("PRAGMA quick_check").fetchone() != ("ok",):
         raise ProjectLeaderUnavailable("damaged project database")
@@ -201,6 +203,34 @@ def _project_schema(db: sqlite3.Connection, identity: tuple[str, ...],
         proposal_sha256,approval_channel FROM identity WHERE singleton=1""").fetchone()
     if row != identity:
         raise ProjectLeaderUnavailable("project identity does not match approval")
+    if version == SCHEMA_VERSION or (app, version) == (0, 0):
+        # One atomic, backwards-compatible migration.  Never recreate identity
+        # or management_refs and never touch the central task database.
+        with db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("""CREATE TABLE memory_events (
+                event_id TEXT PRIMARY KEY,
+                event_kind TEXT NOT NULL CHECK(event_kind IN
+                    ('decision','plan','task','qa','error','checkpoint','lesson','source')),
+                body TEXT NOT NULL, source_ref TEXT NOT NULL,
+                source_sha256 TEXT,
+                status TEXT NOT NULL CHECK(status IN ('proposed','verified')),
+                supersedes_id TEXT UNIQUE REFERENCES memory_events(event_id),
+                revision INTEGER NOT NULL CHECK(revision >= 1),
+                idempotency_key TEXT NOT NULL UNIQUE,
+                payload_sha256 TEXT NOT NULL, created_at TEXT NOT NULL)""")
+            db.execute("""CREATE INDEX memory_lookup
+                ON memory_events(status,event_kind,created_at)""")
+            db.execute("""CREATE TABLE memory_summaries (
+                revision INTEGER PRIMARY KEY CHECK(revision >= 1),
+                body TEXT NOT NULL, event_ids TEXT NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                reason TEXT NOT NULL, created_at TEXT NOT NULL)""")
+            db.execute("""CREATE TABLE memory_audit (
+                audit_id TEXT PRIMARY KEY, action TEXT NOT NULL,
+                record_ref TEXT NOT NULL, created_at TEXT NOT NULL,
+                UNIQUE(action,record_ref))""")
+            db.execute(f"PRAGMA user_version={PROJECT_SCHEMA_VERSION}")
 
 
 class ProjectLeaderStore:

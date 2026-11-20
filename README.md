@@ -2,15 +2,25 @@
 
 Model-neutral, open-source agent runtime for personal self-hosted orchestration.
 
+**Stage 7.6 [x] (offline memory core, owner choice №10 / В):**
+The [per-project memory store](./infra/orchestrator/PROJECT_MEMORY_7_6.md)
+adds project SQLite v2, provenance-backed append-only events, versioned
+CAS summaries, scoped literal SQLite search, hard caller-tokenized context
+limits and adversarial isolation checks. The text is untrusted data, **never**
+an owner approval or action grant. FTS/semantic retrieval, background
+indexing, cross-project lessons and live model integration are **deferred**
+pending measurements and approval. No Netcup or Windows changes.
+
 **Stage 7.5 [x] (offline foundation, owner choice №11 / А):**
 The [project leader workspace](./infra/orchestrator/PROJECT_LEADER_7_5.md)
 has exact owner-approved, idempotent provisioning, a private project registry,
 separate owner/project-scoped folders and SQLite, and minimal references to
 management artifacts without a source-code checkout or another task queue.
 Its security, isolation and crash-retry cases are covered by offline tests.
-The other approved 7.5 architectural choices (specialist writes, project
-memory, merge/recovery, backup, cleanup and lifecycle) remain **unimplemented**
-until their later stages. No Netcup modification or live deployment.
+Other approved 7.5 capabilities (specialist writes, full merge/recovery,
+backup, cleanup and lifecycle) remain **unimplemented**. Minimal project
+memory is implemented separately in stage 7.6 above; this is not Netcup
+deployment.
 
 **Provider milestone (2026-11-18):** Stage **6.3 [x]** passed one real,
 explicitly owner-triggered Claude Pro task via the scoped SQLite queue and

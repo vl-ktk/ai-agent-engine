@@ -71,7 +71,7 @@ class ProjectLeaderTests(unittest.TestCase):
         with sqlite3.connect(workspace.database) as db:
             self.assertEqual(db.execute("PRAGMA application_id").fetchone()[0],
                              PROJECT_APPLICATION_ID)
-            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(db.execute("PRAGMA user_version").fetchone()[0], 2)
             self.assertEqual(db.execute("SELECT * FROM identity").fetchone(),
                              (1, "vl", "ktk-social", "KTK Social",
                               proposal.proposal_id, proposal.sha256, "button"))
