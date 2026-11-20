@@ -149,12 +149,26 @@ def _authorize_existing_sessions(runtime) -> bool:
     return True
 
 
-def _prepare_disposable_source(directory: Path) -> Path:
+def _prepare_disposable_source(directory: Path, *, owner_uid: int,
+                               owner_gid: int) -> Path:
+    if (type(owner_uid) is not int or owner_uid <= 0
+            or type(owner_gid) is not int or owner_gid < 0):
+        raise RuntimeError("non-root disposable runtime identity required")
     if not SOURCE.is_dir() or SOURCE.is_symlink():
         raise RuntimeError("reviewed source package missing")
     if any(path.is_symlink() for path in SOURCE.rglob("*")):
         raise RuntimeError("reviewed source package has unexpected symlink")
-    shutil.copytree(SOURCE, directory / "ai_agent_engine")
+    package = directory / "ai_agent_engine"
+    shutil.copytree(SOURCE, package)
+    # Root extracts the immutable payload under a private umask. copytree
+    # preserves its root-only modes and creates root-owned files. Chown ONLY
+    # the newly copied disposable package so the non-root runner can import
+    # it; never change the source payload, live release, home or task DB.
+    for path in package.rglob("*"):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            raise RuntimeError("disposable source has unexpected file type")
+        os.chown(path, owner_uid, owner_gid, follow_symlinks=False)
+    os.chown(package, owner_uid, owner_gid, follow_symlinks=False)
     return directory
 
 
@@ -198,7 +212,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="ae-711-disposable-", dir="/var/tmp") as tmp:
         directory = Path(tmp)
         os.chown(directory, runtime.pw_uid, runtime.pw_gid)
-        source = _prepare_disposable_source(directory)
+        source = _prepare_disposable_source(
+            directory, owner_uid=runtime.pw_uid, owner_gid=runtime.pw_gid)
         command = [str(PYTHON), "-m", "ai_agent_engine.task_stage7_11_acceptance"]
         offline_ok, offline = _owner_command(runtime, command,
                                              source=source, timeout=85)
