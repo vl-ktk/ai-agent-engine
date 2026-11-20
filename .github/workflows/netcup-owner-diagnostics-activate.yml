@@ -1,0 +1,153 @@
+name: Netcup owner-signed isolated diagnostics 7.7
+
+# Owner-only manual gate; check-signature does not connect to Netcup.
+# Activation does not promote/restart the existing controller package.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Check signing secret only, or activate prepared diagnostics"
+        required: true
+        type: choice
+        options: [check-signature, activate]
+      selected_source_sha:
+        description: "Exact reviewed diagnostics source commit"
+        required: true
+        type: string
+      expected_current_sha:
+        description: "Previously verified live Netcup controller commit"
+        required: true
+        type: string
+      expected_wheel_sha256:
+        description: "Independent prepared wheel SHA-256 (check mode: 64 zeros)"
+        required: true
+        type: string
+      expected_main_sha:
+        description: "Fresh GitHub main SHA"
+        required: true
+        type: string
+      confirmation:
+        description: "VERIFY_SIGNING_KEY or ACTIVATE_SIGNED_DIAGNOSTICS_7_7"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: netcup-owner-signed-diagnostics-7-7
+  cancel-in-progress: false
+
+jobs:
+  signed-diagnostics:
+    if: ${{ github.repository == 'vl-ktk/ai-agent-engine' && github.ref == 'refs/heads/main' && github.actor == 'vl-ktk' && github.triggering_actor == 'vl-ktk' && github.run_attempt == 1 && ((inputs.mode == 'check-signature' && inputs.confirmation == 'VERIFY_SIGNING_KEY') || (inputs.mode == 'activate' && inputs.confirmation == 'ACTIVATE_SIGNED_DIAGNOSTICS_7_7')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reviewed workflow with no stored credentials
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate owner-selected SHA and unchanged main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODE: ${{ inputs.mode }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_OLD: ${{ inputs.expected_current_sha }}
+          WHEEL_SHA: ${{ inputs.expected_wheel_sha256 }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$SOURCE_SHA" = '60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23'
+          test "$EXPECTED_OLD" = '0e04af007375d82daf8f7d3b36c71abb0c784e0b'
+          [[ "$WHEEL_SHA" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_MAIN"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+          git merge-base --is-ancestor "$SOURCE_SHA" "$EXPECTED_MAIN"
+          if [[ "$MODE" == check-signature ]]; then
+            test "$WHEEL_SHA" = "$(printf '0%.0s' {1..64})"
+          else
+            test "$MODE" = activate
+            test "$WHEEL_SHA" != "$(printf '0%.0s' {1..64})"
+          fi
+      - name: Validate separate key and verify exact signed intent offline
+        shell: bash
+        env:
+          RELEASE_SIGNING_KEY: ${{ secrets.AE_RELEASE_SIGNING_PRIVATE_KEY }}
+          MODE: ${{ inputs.mode }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_OLD: ${{ inputs.expected_current_sha }}
+          WHEEL_SHA: ${{ inputs.expected_wheel_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$RELEASE_SIGNING_KEY"
+          umask 077
+          key="$RUNNER_TEMP/ae-addon-signing-key"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key"
+          unset RELEASE_SIGNING_KEY
+          read -r pub_type pub_data _ <<< "$(ssh-keygen -y -f "$key")"
+          test "$pub_type $pub_data" = 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBY32VNMOtjzt2eaC81HWbyaHcudJyzBBYtN4yFk+P+C'
+          printf '%s\n' 'ai-agent-engine-owner ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBY32VNMOtjzt2eaC81HWbyaHcudJyzBBYtN4yFk+P+C' > "$RUNNER_TEMP/allowed-signers"
+          python3 - <<'PY'
+          import json, os, pathlib, time
+          tick = int(time.time())
+          intent = {"schema": 1, "operation": "activate-managed-diagnostics-7-7",
+                    "source_sha": os.environ["SOURCE_SHA"],
+                    "expected_current": os.environ["EXPECTED_OLD"],
+                    "wheel_sha256": os.environ["WHEEL_SHA"],
+                    "issued_at": tick, "expires_at": tick + 900}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "release-intent.json").write_text(
+              json.dumps(intent, sort_keys=True, separators=(",", ":")) + "\n")
+          PY
+          ssh-keygen -Y sign -f "$key" -n 'ai-agent-engine-release@vl-ktk' \
+            "$RUNNER_TEMP/release-intent.json" >/dev/null 2>&1
+          test -s "$RUNNER_TEMP/release-intent.json.sig"
+          ssh-keygen -Y verify -f "$RUNNER_TEMP/allowed-signers" \
+            -I 'ai-agent-engine-owner' -n 'ai-agent-engine-release@vl-ktk' \
+            -s "$RUNNER_TEMP/release-intent.json.sig" \
+            < "$RUNNER_TEMP/release-intent.json" >/dev/null
+          echo 'PASS: separate release key signs and verifies using pinned public key'
+      - name: Recheck exact main and pinned Netcup SSH identity
+        if: ${{ inputs.mode == 'activate' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+          DEPLOY_PRIVATE_KEY: ${{ secrets.AE_DEPLOY_PRIVATE_KEY }}
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+          test -n "$DEPLOY_PRIVATE_KEY"
+          umask 077
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$RUNNER_TEMP/ae-addon-deploy-key"
+          unset DEPLOY_PRIVATE_KEY
+          ssh-keygen -y -f "$RUNNER_TEMP/ae-addon-deploy-key" >/dev/null
+          ssh-keyscan -T 10 -p 22 -t ed25519 62.83.131.128 2>/dev/null > "$RUNNER_TEMP/host-key-pinned"
+          test "$(ssh-keygen -lf "$RUNNER_TEMP/host-key-pinned" | awk 'NR==1 {print $2}')" = 'SHA256:irOFPt5ymeILMXOe0cRyHYwY39XkmwxZ0OJkPh20QJg'
+      - name: Transfer only signed intent and invoke fixed diagnostic operator
+        if: ${{ inputs.mode == 'activate' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN: ${{ inputs.expected_main_sha }}
+          SOURCE_SHA: ${{ inputs.selected_source_sha }}
+          EXPECTED_OLD: ${{ inputs.expected_current_sha }}
+          WHEEL_SHA: ${{ inputs.expected_wheel_sha256 }}
+        run: |
+          set -Eeuo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+          options=( -i "$RUNNER_TEMP/ae-addon-deploy-key" -o IdentitiesOnly=yes \
+            -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$RUNNER_TEMP/host-key-pinned" -o ConnectTimeout=15 )
+          destination="/home/ae-deploy/ae-incoming/$SOURCE_SHA"
+          ssh -T "${options[@]}" ae-deploy@62.83.131.128 "test -f '$destination/release-manifest.json'"
+          scp "${options[@]}" "$RUNNER_TEMP/release-intent.json" \
+            "$RUNNER_TEMP/release-intent.json.sig" \
+            "ae-deploy@62.83.131.128:$destination/"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+          ssh -T "${options[@]}" ae-deploy@62.83.131.128 \
+            "sudo -n /usr/bin/python3 -I /usr/local/libexec/ae-release/diagnostic_addon_operator.py --source-sha '$SOURCE_SHA' --expected-current '$EXPECTED_OLD' --wheel-sha256 '$WHEEL_SHA' --confirmation ACTIVATE_SIGNED_DIAGNOSTICS_7_7"

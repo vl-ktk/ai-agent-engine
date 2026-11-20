@@ -1,4 +1,55 @@
-# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / in-process diagnostic bridge, deployment HOLD
+# HANDOFF — 20.11.2026, AI Agent Engine 7.7 / signed add-on gate, live HOLD
+
+## Latest — isolated signed activation path, owner-approved, source preparation
+
+**Exact source baseline for this change:** GitHub `vl-ktk/ai-agent-engine`
+`main` `df70bbd9989d25f18a0079acb125abbecd934ed2`; recheck before PR,
+request or deployment. **Last live Netcup SHA / rollback:**
+`0e04af007375d82daf8f7d3b36c71abb0c784e0b`, installed core `0.3.11a0`.
+Do not treat this older observation as a fresh host check.
+
+**Owner scope:** only the approved AI Agent Engine diagnostic stage 7.7.
+The owner approved a separate signing key and limited installation operator.
+GitHub UI confirmed a distinct `AE_RELEASE_SIGNING_PRIVATE_KEY` secret;
+the private key is not committed or printed. Matching public allowed-signer
+is hard-pinned in the owner-admin bootstrap. The existing Netcup full owner
+admin channel means **no new sudo/SSH rights are needed**.
+
+**Prepared source files:**
+- `infra/deploy/diagnostic_addon_operator.py`: root-only fixed add-on operator,
+  strict signed intent with bounded freshness and separate operation name;
+  source pinned to `60a53cb6f8654700ccb630ef0ad75f3fe1ff0c23`, core live
+  SHA pinned to `0e04af...`, exact wheel SHA, root-owned reviewed installer,
+  verified root-private wheel snapshot. No core promotion or controller restart.
+- `ops/admin-scripts/bootstrap_diagnostic_signing_7_7.py`: one-time owner-admin
+  additive install of public signer, trusted add-on operator and previously
+  reviewed diagnostics installer; creates no service/task, changes no sudoers.
+- `.github/workflows/netcup-owner-diagnostics-activate.yml`: owner manual
+  `check-signature` and `activate` modes; separate signing secret, pinned
+  SSH host identity, existing release-preparation/transfer artifact, strict
+  main/source/live SHA checks. The self-check is **read-only/no Netcup**.
+- `tests/test_diagnostic_signing_gate_7_7.py` and workflow boundary rules;
+  [`MANAGED_DIAGNOSTICS_7_7.md`](./infra/orchestrator/MANAGED_DIAGNOSTICS_7_7.md)
+  describes exact safety limits.
+
+**Offline verification of this candidate:** 7 targeted signing tests PASS;
+full suite **894 OK (2 skipped)**; workflow policy scanner,
+public-source scan, `compileall`, YAML parse and local wheel build
+`0.3.19a0` PASS. **Separate private signing key self-test on GitHub,
+root bootstrap and Netcup add-on activation have not run yet.**
+
+**Next mandatory order, no shortcut:** test Actions secret signing and matching
+public key with manual `check-signature` (64-zero wheel digest); only after
+PASS publish a single reviewed owner-admin request to install public trust;
+then owner-manual `release-preparation` for exact `60a53...`, transfer the
+independently verified wheel, recheck `main` and Netcup active SHA, and run
+the separate signed diagnostics activation with real wheel digest. Afterwards
+test socket/restart and one-project safety, scheduled backup, true failure →
+incident → verified QA and CPU/RAM/disk. Until actual Netcup checks,
+**service not installed, 7.7 PARTIAL, 7.8 HOLD**. Never start the obsolete
+standalone sidecar, update core/Windows/other projects or fake incidents.
+
+## Previous source checkpoint — in-process diagnostic bridge, deployment HOLD
 
 ## 7.7 — single-process managed diagnostic candidate, SOURCE ONLY / activation HOLD
 
