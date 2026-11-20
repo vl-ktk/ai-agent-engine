@@ -21,6 +21,7 @@ from ai_agent_engine.task_api import OwnerScope
 ROOT = Path(__file__).resolve().parents[1]
 APPROVAL_PATH = ROOT / "ops/admin-scripts/approve_single_project_7_7.py"
 PROVISION_PATH = ROOT / "ops/admin-scripts/provision_single_project_7_7.py"
+VERIFY_PATH = ROOT / "ops/admin-scripts/verify_registered_project_7_7.py"
 
 
 def load_script(name, path):
@@ -32,6 +33,7 @@ def load_script(name, path):
 
 APPROVAL = load_script("approve_single_project_7_7", APPROVAL_PATH)
 PROVISION = load_script("provision_single_project_7_7", PROVISION_PATH)
+VERIFY = load_script("verify_registered_project_7_7", VERIFY_PATH)
 
 
 class OwnerProjectRegistrationTests(unittest.TestCase):
@@ -168,6 +170,50 @@ class OwnerProjectRegistrationTests(unittest.TestCase):
         path.write_bytes((ROOT / APPROVAL.PROPOSAL_FILE).read_bytes() + b" ")
         with self.assertRaisesRegex(ValueError, "content changed"):
             APPROVAL.load_pinned_proposal(self.base)
+
+    def test_independent_verification_reads_approved_project_without_writing(self):
+        self.register()
+        paths = (
+            self.root / "runtime.json",
+            self.root / "tasks.sqlite3",
+            self.root / "projects/project-leaders.sqlite3",
+            self.root / "projects/vl-ktk/ai-agent-engine/leader.sqlite3",
+        )
+        before = tuple(path.read_bytes() for path in paths)
+        report = VERIFY.verify_registered_project(
+            self.root, prepared_source_sha=self.commit)
+        self.assertEqual(report["status"], "APPROVAL_VERIFIED_READ_ONLY")
+        self.assertEqual(report["project_schema"], PROJECT_SCHEMA_VERSION)
+        self.assertEqual(report["scope"], "vl-ktk/ai-agent-engine")
+        self.assertFalse(report["service_activated"])
+        self.assertEqual(tuple(path.read_bytes() for path in paths), before)
+
+    def test_independent_verification_refuses_unapproved_and_wrong_source(self):
+        with self.assertRaises(ValueError):
+            VERIFY.verify_registered_project(self.root, prepared_source_sha=self.commit)
+        self.register()
+        with self.assertRaises(ValueError):
+            VERIFY.verify_registered_project(self.root, prepared_source_sha="0" * 40)
+
+    def test_independent_verification_refuses_extra_approved_project(self):
+        self.register()
+        with sqlite3.connect(self.root / "projects/project-leaders.sqlite3") as db:
+            db.execute("INSERT INTO projects VALUES (?,?,?,?,?,?,'active')", (
+                "other", "other", "Other", "proposal_" + "a" * 32,
+                self.proposal.sha256, "button"))
+        with self.assertRaisesRegex(ValueError, "extra project approvals"):
+            VERIFY.verify_registered_project(self.root, prepared_source_sha=self.commit)
+
+    def test_independent_verification_refuses_unexpected_task(self):
+        self.register()
+        with sqlite3.connect(self.root / "tasks.sqlite3") as db:
+            db.execute(
+                "INSERT INTO tasks "
+                "(task_id,receipt,owner_id,project_id,title,prompt,submitted_priority,priority) "
+                "VALUES (?,?,?,?,?,?,?,?)",
+                ("task", 1, "vl-ktk", "ai-agent-engine", "check", "test", 50, 50))
+        with self.assertRaisesRegex(ValueError, "diagnostic tasks unexpectedly exist"):
+            VERIFY.verify_registered_project(self.root, prepared_source_sha=self.commit)
 
 
 if __name__ == "__main__":
