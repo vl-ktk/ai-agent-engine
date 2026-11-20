@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import pwd
 import subprocess
+import sys
 
 
 ROOT = Path("/var/lib/ai-agent-engine-diagnostics")
@@ -112,6 +113,15 @@ def _baseline_healthy(expected_release: str) -> None:
             raise RuntimeError("baseline service changed: " + service)
 
 
+def _bootstrap_runtime_imports() -> None:
+    """Load the reviewed source from cwd despite Python -I's path isolation."""
+    sys.path.insert(0, str(Path.cwd()))
+    from ai_agent_engine import (
+        diagnostic_host_preflight, diagnostic_intake_service,
+        project_diagnostics, project_leader, task_storage,
+    )
+
+
 def main() -> None:
     if os.geteuid() != 0:
         raise RuntimeError("authenticated GitHub owner-admin root channel required")
@@ -121,10 +131,7 @@ def main() -> None:
     _baseline_healthy(expected)
     # All project imports are loaded before lowering euid: the admin source
     # is root-private, whereas the target files belong only to ae-runtime.
-    from ai_agent_engine import (
-        diagnostic_host_preflight, diagnostic_intake_service,
-        project_diagnostics, project_leader, task_storage,
-    )
+    _bootstrap_runtime_imports()
     runtime = pwd.getpwnam("ae-runtime")
     with _as_runtime_user(runtime.pw_uid, runtime.pw_gid):
         report = verify_registered_project(ROOT)
