@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 import time
+from typing import Callable
 
 from .chatgpt_web import BrowserTurn
 from .chatgpt_web_sessions import WebAgentProfile
@@ -82,6 +83,16 @@ class WebFaultGuard:
         self._code: WebFaultCode | None = None
         self._observed_at: float | None = None
         self._retry_after: int | None = None
+        self._hold_sink: Callable[[WebFaultCode], None] | None = None
+
+    def attach_hold_sink(self, sink: Callable[[WebFaultCode], None]) -> None:
+        """WEB-15 opt-in trusted durable observer, installed only once."""
+        if not callable(sink):
+            raise ValueError("trusted fault persistence callback required")
+        with self._lock:
+            if self._hold_sink is not None or self._code is not None:
+                raise WebFaultHold("web fault persistence already bound or held")
+            self._hold_sink = sink
 
     def _scope(self, *, owner_id: str, project_id: str,
                agent_id: str) -> None:
@@ -116,6 +127,15 @@ class WebFaultGuard:
             raise ValueError("closed web fault code required")
         with self._lock:
             if self._code is None:
+                if self._hold_sink is not None:
+                    try:
+                        # Commit first: after restart a recorded fault must
+                        # not disappear even if this process exits now.
+                        self._hold_sink(code)
+                    except Exception:
+                        self._code = WebFaultCode.UNKNOWN_SEND
+                        self._observed_at = time.time()
+                        raise WebFaultHold("web fault persistence unavailable") from None
                 self._code = code
                 self._retry_after = retry_after_seconds
                 self._observed_at = time.time()
