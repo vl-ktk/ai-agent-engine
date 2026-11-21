@@ -23,6 +23,7 @@ from .chatgpt_web_failures import WebFaultCode, WebFaultGuard
 from .chatgpt_web_handoff import (
     ScopedCheckpointSnapshot, checkpoint_sha256, _safe_text,
 )
+from .chatgpt_web_rotation import WebRotationReceipt
 from .task_api import _TASK_ID
 from .task_permissions import ProtectedAction
 from .task_request import build_task_request
@@ -375,14 +376,17 @@ class WebRecoveryCoordinator:
                                           checkpoint, "HOLD", reason))
         return tuple(found)
 
-    def dispatch_next(self, *, task_id: str, worker_id: str):
+    def dispatch_next(self, *, task_id: str, worker_id: str,
+                      handoff_receipt: WebRotationReceipt | None = None):
         """Explicit caller action, not a background replay or scheduler."""
         profile = self.dispatcher.fault_guard.profile
         with self.queue.agent_dispatch_lock(profile.owner_id, profile.project_id,
                                             profile.agent_id):
-            return self._dispatch_next(task_id=task_id, worker_id=worker_id)
+            return self._dispatch_next(task_id=task_id, worker_id=worker_id,
+                                       handoff_receipt=handoff_receipt)
 
-    def _dispatch_next(self, *, task_id: str, worker_id: str):
+    def _dispatch_next(self, *, task_id: str, worker_id: str,
+                       handoff_receipt: WebRotationReceipt | None):
         core = self.dispatcher.core
         try:
             ready = self.inventory()
@@ -398,9 +402,33 @@ class WebRecoveryCoordinator:
             raw = build_task_request(core.inbox, core.scope, task_id,
                 role=identity.role,
                 required_actions=(ProtectedAction.EXTERNAL_REQUEST,)).to_bytes()
+            # A queued task continuing in its newly rotated mock chat must
+            # supply the exact WEB-10 receipt so WEB-11 can verify the
+            # checkpoint and memory. Without it, sending the raw task prompt
+            # would silently skip the scoped handoff after rotation.
+            handoff = core.models._handoff
+            if handoff is not None:
+                current = handoff._chats.active(
+                    owner_id=profile.owner_id, project_id=profile.project_id,
+                    agent_id=worker_id)
+                if current.rotation_id is not None and current.task_id == task_id:
+                    if (type(handoff_receipt) is not WebRotationReceipt
+                            or (handoff_receipt.owner_id,
+                                handoff_receipt.project_id,
+                                handoff_receipt.agent_id,
+                                handoff_receipt.task_id,
+                                handoff_receipt.chatgpt_project_id,
+                                handoff_receipt.conversation_id,
+                                handoff_receipt.rotation_id) !=
+                               (profile.owner_id, profile.project_id,
+                                worker_id, task_id, current.chatgpt_project_id,
+                                current.conversation_id, current.rotation_id)):
+                        raise WebRecoveryHold("rotated task handoff required")
+            core.verify_binding(raw, task_id=task_id, worker_id=worker_id,
+                                handoff_receipt=handoff_receipt)
             self.queue.transition(task_id, "PENDING", "IN_FLIGHT")
             result = self.dispatcher.dispatch(raw, task_id=task_id,
-                                              worker_id=worker_id)
+                worker_id=worker_id, handoff_receipt=handoff_receipt)
             if result.executed and result.receipt.state == "ACKED":
                 self.queue.transition(task_id, "IN_FLIGHT", "COMPLETED")
             elif result.receipt.state == "DEFERRED":
