@@ -302,6 +302,13 @@ duplicate conversation IDs do not change the recorded active chat. The mock
 does **not** create actual ChatGPT chats, preserve history across restart, or
 transfer task context. See [WEB-05 chat lifecycle](./infra/orchestrator/CHATGPT_WEB_WEB05_CHAT_LIFECYCLE.md).
 
+WEB-06 adds an explicitly owner-configured **per-agent model policy** with a
+default and per-task model override. The trusted Project catalog, adapter
+catalog, and mock selector must all agree on the exact model ID before the
+agent sends its turn; unsupported choices fail closed, with no silent
+fallback. No live UI model or reasoning-effort capability is implied. See
+[WEB-06 model-selection evidence](./infra/orchestrator/CHATGPT_WEB_WEB06_MODEL_SELECTION.md).
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.

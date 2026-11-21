@@ -260,12 +260,37 @@ class WebAgentSessionRegistry:
         while the agent-owned browser port and logical profile stay stable.
         This is not a persistent chat or an external side-effect lease.
         """
+        return self._run(owner_id=owner_id, project_id=project_id,
+                         agent_id=agent_id, model_id=model_id, prompt=prompt)
+
+    @property
+    def configured_models(self) -> tuple[str, ...]:
+        """Explicit offline model catalog, not verified live UI availability."""
+        return self._config.models
+
+    def run_with_model_verifier(self, *, owner_id: str, project_id: str,
+                                agent_id: str, model_id: str, prompt: str,
+                                model_verifier: Callable[[WebAgentProfile, str], None]
+                                ) -> AgentResult:
+        """WEB-06: check selection inside the same FIFO turn as sending."""
+        if not callable(model_verifier):
+            raise ValueError("trusted web model verifier required")
+        return self._run(owner_id=owner_id, project_id=project_id,
+                         agent_id=agent_id, model_id=model_id, prompt=prompt,
+                         model_verifier=model_verifier)
+
+    def _run(self, *, owner_id: str, project_id: str,
+             agent_id: str, model_id: str, prompt: str,
+             model_verifier: Callable[[WebAgentProfile, str], None] | None = None
+             ) -> AgentResult:
         slot = self._slot(owner_id=owner_id, project_id=project_id,
                           agent_id=agent_id)
         with slot.queue.turn():
             if self._project_registry is not None:
                 self._project_registry.verify_member(
                     profile=slot.profile, verifier=self._project_verifier)
+            if model_verifier is not None:
+                model_verifier(slot.profile, model_id)
             model = ChatGPTWebModel(self._config, model_id, slot.browser)
             context = SessionContext(slot.identity.project_id,
                                      slot.identity.agent_id,

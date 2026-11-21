@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-05 OFFLINE MOCK PASS → следующий WEB-06
+# HANDOFF — 21.11.2026 / WEB-06 OFFLINE MOCK PASS → следующий WEB-07
+
+**Единственный источник:** `vl-ktk/ai-agent-engine/main`. **Git baseline/source rollback до WEB-06:** `44e2904dc9f5f40784298a09936063d57a1daaf9` (откат только адресным revert при чужих новых изменениях). **Новый Python source `0.3.31a0`**, это не Netcup production. **Netcup не трогали:** последняя записанная версия controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, SQLite v14; текущий live VPS не проверялся.
+
+**WEB-06 [x] строго offline mock:** `ai_agent_engine/chatgpt_web_models.py` предоставляет `TrustedProjectModelCatalog`, `TrustedAgentModelPolicy`, `WebAgentModelRegistry` с моделью по умолчанию и разрешённым выбором для отдельной задачи. При регистрации обязательны WEB-04 trusted project binding и разрешение выбранных моделей как в проектном, так и в provider catalog. WEB-06 `run` вызывает свежий mock selector proof с точными project/agent/profile/mailbox/model внутри той же FIFO после membership proof, до browser-turn. Unknown/not-allowed/mismatch/error — отказ без silent fallback и без отправки, политика pinned. [WEB-06 контракт и тесты](./infra/orchestrator/CHATGPT_WEB_WEB06_MODEL_SELECTION.md). **Нет** живой UI модели, уровней рассуждений WEB-07, обычного ChatGPT allowance, авторизации, live ChatGPT.
+
+**Проверки:** 18/18 новых unit PASS, общий regression **1151 OK (3 skipped)**, `compileall`, diff check, wheel `ai_agent_engine-0.3.31a0-py3-none-any.whl` PASS (с `chatgpt_web_models.py`). GitHub CI уточнить после source publication; общий CI-WIN-001 остаётся открытым.
+
+**План:** WEB-01…06 [x] в доказанных source/offline рамках, **6/20**, WEB-07…20 [ ]; 169 прямых задач/86 ранее закрытых без изменений; 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 `POLICY_HOLD`. **Следующий только WEB-07 [ ]**, по новой команде владельца: reasoning effort и точный отказ при неподтверждённом уровне. Не начинать WEB-08…20.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-05 OFFLINE MOCK PASS → следующий WEB-06
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`. **Source baseline/rollback перед WEB-05:** `99069ed33b9894987dfad202a5e80353cccb22c2` (при новых чужих коммитах только адресный revert). **Новый исходный пакет:** `0.3.30a0`, **не** production. **Netcup не трогали:** последний записанный controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite v14; живой VPS не проверялся.
 

@@ -22,6 +22,10 @@ from .chatgpt_web_chats import (
     ChatPortFactory, CreatedProjectChat, ProjectChatManager, ProjectChatRecord,
     ScopedProjectChatPort,
 )
+from .chatgpt_web_models import (
+    ModelSelectionEvidence, ProjectModelSelector, TrustedAgentModelPolicy,
+    TrustedProjectModelCatalog, WebAgentModelRegistry, WebModelSelectionError,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -36,4 +40,6 @@ __all__ = [
     "TrustedChatGPTProjectBinding", "TrustedChatGPTProjectRegistry",
     "ChatPortFactory", "CreatedProjectChat", "ProjectChatManager",
     "ProjectChatRecord", "ScopedProjectChatPort",
+    "ModelSelectionEvidence", "ProjectModelSelector", "TrustedAgentModelPolicy",
+    "TrustedProjectModelCatalog", "WebAgentModelRegistry", "WebModelSelectionError",
 ]
