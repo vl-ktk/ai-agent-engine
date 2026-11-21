@@ -10,6 +10,10 @@ from .chatgpt_web import (
     BrowserPort, BrowserTurn, ChatGPTWebConfig, ChatGPTWebModel,
     ChatGPTWebUnavailable, chatgpt_web_provider_spec,
 )
+from .chatgpt_web_sessions import (
+    ScopedBrowserPort, WebAgentIdentity, WebAgentProfile, WebAgentScopeError,
+    WebAgentSessionRegistry,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -18,4 +22,6 @@ __all__ = [
     "ModelRouter", "ModelSetupError", "ProviderSpec", "TextOnlyModel",
     "BrowserPort", "BrowserTurn", "ChatGPTWebConfig", "ChatGPTWebModel",
     "ChatGPTWebUnavailable", "chatgpt_web_provider_spec",
+    "ScopedBrowserPort", "WebAgentIdentity", "WebAgentProfile", "WebAgentScopeError",
+    "WebAgentSessionRegistry",
 ]

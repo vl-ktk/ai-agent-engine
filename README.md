@@ -276,6 +276,17 @@ missing drivers and uncertain browser failures are refused without retry or
 fallback. The adapter is **not yet wired** to the durable task executor or
 ChatGPT Projects. See [WEB-02 boundaries and tests](./infra/orchestrator/CHATGPT_WEB_WEB02_ADAPTER.md).
 
+WEB-03 adds a separate, owner-scoped **mock-only**
+`WebAgentSessionRegistry`: each trusted `agent_id` is pinned to an immutable
+owner/project/role/instructions binding, a distinct logical profile/mailbox
+namespace, an exclusive injected browser port and a FIFO per-agent turn
+queue. A mock port must attest to the expected profile/mailbox keys. Two fake
+agents run independently; a mismatch or attempted port reuse fails closed.
+Declared action labels are private metadata, **not tool grants**.
+There are still **no on-disk ChatGPT profiles, live connections, durable
+mailboxes or project-chat membership checks**. See
+[WEB-03 isolation evidence](./infra/orchestrator/CHATGPT_WEB_WEB03_SESSIONS.md).
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.
