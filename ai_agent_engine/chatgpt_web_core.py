@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+from typing import Callable
 
 from .chatgpt_web_models import WebAgentModelRegistry
 from .chatgpt_web_rotation import WebRotationReceipt
@@ -41,8 +42,9 @@ class WebCoreTaskOutcome:
 class WebCoreTaskAdapter:
     """Use existing approved task/pin/permission/capacity and v1 contracts.
 
-    WEB-13 will add persisted delivery identity/ACK and recovery. Until then,
-    the first uncertain or interrupted call cannot be replayed automatically.
+    WEB-13's optional WebIdempotentDispatcher wraps this one-shot adapter
+    with a durable delivery identity/ACK. Uncertain results cannot be replayed
+    automatically; deeper reconciliation remains WEB-15.
     """
 
     def __init__(self, inbox: TaskInbox, scope: OwnerScope,
@@ -67,17 +69,13 @@ class WebCoreTaskAdapter:
         self.gate = gate
         self.capacity = capacity
 
-    def execute(self, raw_request: bytes, *, task_id: str,
-                worker_id: str, requested_model_id: str | None = None,
-                requested_reasoning_effort: str | None = None,
-                handoff_receipt: WebRotationReceipt | None = None
-                ) -> WebCoreTaskOutcome:
-        """Dispatch at most one local attempt; return only verified response.
+    def verify_binding(self, raw_request: bytes, *, task_id: str,
+                       worker_id: str, requested_model_id: str | None = None,
+                       handoff_receipt: WebRotationReceipt | None = None):
+        """Read-only trusted gate for WEB-13 before reserving a delivery.
 
-        The caller supplies the v1 request as data; all authoritative fields
-        are reconstructed from the persisted inbox/assignment and trusted
-        agent registration. The task's role instructions come from WEB-08,
-        never from this request. A capacity denial leaves it ASSIGNED.
+        It does not issue authority, reserve a capacity slot or touch a browser.
+        All facts are reconstructed from the persisted inbox and approved pin.
         """
         try:
             record = self.inbox.get(task_id, self.scope)
@@ -110,10 +108,33 @@ class WebCoreTaskAdapter:
             model_id = self.models.selected_model(
                 owner_id=self.scope.owner_id, project_id=record.project_id,
                 agent_id=worker_id, requested_model_id=requested_model_id)
+        except Exception:
+            raise WebCoreTaskError("web task admission unverified") from None
+        return record, request, pin, model_id
+
+    def execute(self, raw_request: bytes, *, task_id: str,
+                worker_id: str, requested_model_id: str | None = None,
+                requested_reasoning_effort: str | None = None,
+                handoff_receipt: WebRotationReceipt | None = None,
+                response_verified: Callable[[TaskExecutionResponse], None] | None = None
+                ) -> WebCoreTaskOutcome:
+        """Dispatch at most one local attempt; return only verified response.
+
+        The task's role instructions come from WEB-08, never from input JSON.
+        A capacity denial leaves it ASSIGNED; WEB-13's trusted callback may
+        durably pin a response digest before marking SUCCEEDED.
+        """
+        if response_verified is not None and not callable(response_verified):
+            raise WebCoreTaskError("untrusted response observer")
+        record, request, pin, model_id = self.verify_binding(
+            raw_request, task_id=task_id, worker_id=worker_id,
+            requested_model_id=requested_model_id,
+            handoff_receipt=handoff_receipt)
+        try:
             decision = self.capacity.acquire(
                 task_id, self.scope, worker_id=worker_id)
         except Exception:
-            raise WebCoreTaskError("web task admission unverified") from None
+            raise WebCoreTaskError("web task capacity admission unavailable") from None
 
         if not decision.admitted:
             return WebCoreTaskOutcome(task_id, False, decision.reason, None)
@@ -159,6 +180,8 @@ class WebCoreTaskAdapter:
             ).encode("utf-8"))
             if response.task_id != task_id or response.provider != pin.provider_id:
                 raise WebCoreTaskError("web response scope mismatch")
+            if response_verified is not None:
+                response_verified(response)
             self.inbox.transition_state(
                 task_id, TaskState.SUCCEEDED, self.scope, actor_id=worker_id)
             self.capacity.release(
