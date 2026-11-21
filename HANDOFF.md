@@ -6,6 +6,8 @@
 
 **Проверки:** 14/14 новых unit PASS, в том числе реальный параллельный threading mock с двумя агентами, FIFO и fault/recovery queue; `python -m unittest discover -s tests -q`: **1102 OK, 3 skipped**; `compileall`, `git diff --check` и wheel `ai_agent_engine-0.3.28a0-py3-none-any.whl` PASS. Старые SIWC/GPTTaskExecutor/TaskInbox/SharedCapacity/TaskPermissionGate не менялись; никакого ChatGPT login/cookies/web/paid API/Netcup. Общая CI Windows-проблема CI-WIN-001 из предыдущего шага остаётся открыта, не выдавать общую матрицу за зелёную без её результата на новом коммите.
 
+**GitHub WEB-03:** code source commit [`04f8ab543b16b08bc2a9d355bde1cb93e1d61f72`](https://github.com/vl-ktk/ai-agent-engine/commit/04f8ab543b16b08bc2a9d355bde1cb93e1d61f72), опубликованные 9/9 Git blobs и точный tree SHA подтверждены. [CI #44884522475](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44884522475): Ubuntu Python 3.11/3.12/3.13 **PASS**, isolated wheel **PASS**, **Windows Python 3.12 FAIL** по известному [CI-WIN-001](./docs/KNOWN_ISSUES.md) (`fcntl`/`pwd`/`grp`, POSIX-only функции; 4 failures + 44 errors). Все **14 новых WEB-03 тестов Windows PASS** по job log. Общая матрица остаётся **красной**, Windows-совместимость не объявлять готовой.
+
 **Статус плана:** WEB-01/02/03 [x] в своих границах, **3/20**, WEB-04…20 [ ]; глобальные 169 задач и прежние 86/169 завершённых неизменны. 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 policy `HOLD`; ни одного разрешённого живого обычного ChatGPT запроса нет. **Следующий строго WEB-04 [ ]**, только по новой команде владельца: trusted `project_id`→`chatgpt_project_id`, mock проверка membership/cross-project refusal. Не начинать WEB-05…20 одновременно.
 
 ---

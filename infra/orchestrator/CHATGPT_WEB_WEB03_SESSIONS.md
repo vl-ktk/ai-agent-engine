@@ -32,7 +32,7 @@ python -m unittest discover -s tests -p 'test_chatgpt_web_web03.py' -v
 python -m unittest discover -s tests -q
 ```
 
-Фактические численные результаты, GitHub commit/CI и откат записаны в актуальном `HANDOFF.md`; сценарии выше описывают строго offline-контракт.
+**Фактические результаты:** 14 новых unit PASS; локальный полный регресс **1102 OK (3 skipped)**; Python `compileall`, `git diff --check`, wheel `0.3.28a0` PASS. Исходный commit [`04f8ab54`](https://github.com/vl-ktk/ai-agent-engine/commit/04f8ab543b16b08bc2a9d355bde1cb93e1d61f72), rollback до WEB-03 — `62fc0f060268cd033baf2371505d74b27946bc32`. [CI #44884522475](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44884522475): Linux Python 3.11/3.12/3.13 и wheel PASS; **Windows общий suite FAIL** из-за ранее зарегистрированного [CI-WIN-001](../../docs/KNOWN_ISSUES.md), хотя **14 новых WEB-03 Windows тестов PASS**. Поэтому общий CI не зелёный.
 
 ## Что остаётся за пределами WEB-03
 
