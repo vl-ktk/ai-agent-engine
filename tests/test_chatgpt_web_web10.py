@@ -1,6 +1,7 @@
 """WEB-10: idempotent offline Project rotation and SQLite crash/retry."""
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import replace
 import os
 from pathlib import Path
@@ -76,11 +77,12 @@ class DurableMockChatPort:
         self.reconcile_calls = 0
         self.fail_after_create_once = False
         self.mutator = None
-        with sqlite3.connect(self.db_path) as db:
-            db.execute("""CREATE TABLE IF NOT EXISTS fake_web_chat_operations (
-                rotation TEXT PRIMARY KEY, project TEXT NOT NULL,
-                predecessor TEXT NOT NULL, task TEXT NOT NULL,
-                conversation TEXT NOT NULL UNIQUE)""")
+        with closing(sqlite3.connect(self.db_path)) as db:
+            with db:
+                db.execute("""CREATE TABLE IF NOT EXISTS fake_web_chat_operations (
+                    rotation TEXT PRIMARY KEY, project TEXT NOT NULL,
+                    predecessor TEXT NOT NULL, task TEXT NOT NULL,
+                    conversation TEXT NOT NULL UNIQUE)""")
 
     def create_chat(self, *, chatgpt_project_id, predecessor_id):
         # Initial chat only, never used for WEB-10 replay.
@@ -91,21 +93,22 @@ class DurableMockChatPort:
     def create_or_get_chat(self, *, chatgpt_project_id, predecessor_id,
                            task_id, rotation_id):
         self.reconcile_calls += 1
-        with sqlite3.connect(self.db_path, timeout=8) as db:
-            db.execute("BEGIN IMMEDIATE")
-            row = db.execute("""SELECT project,predecessor,task,conversation
-                FROM fake_web_chat_operations WHERE rotation=?""",
-                (rotation_id,)).fetchone()
-            if row is None:
-                conversation_id = "rot-" + rotation_id[:32]
-                db.execute("INSERT INTO fake_web_chat_operations VALUES (?,?,?,?,?)",
-                           (rotation_id, chatgpt_project_id, predecessor_id,
-                            task_id, conversation_id))
-                self.create_calls += 1
-            else:
-                if row[:3] != (chatgpt_project_id, predecessor_id, task_id):
-                    raise RuntimeError("mock idempotency scope mismatch")
-                conversation_id = row[3]
+        with closing(sqlite3.connect(self.db_path, timeout=8)) as db:
+            with db:
+                db.execute("BEGIN IMMEDIATE")
+                row = db.execute("""SELECT project,predecessor,task,conversation
+                    FROM fake_web_chat_operations WHERE rotation=?""",
+                    (rotation_id,)).fetchone()
+                if row is None:
+                    conversation_id = "rot-" + rotation_id[:32]
+                    db.execute("INSERT INTO fake_web_chat_operations VALUES (?,?,?,?,?)",
+                               (rotation_id, chatgpt_project_id, predecessor_id,
+                                task_id, conversation_id))
+                    self.create_calls += 1
+                else:
+                    if row[:3] != (chatgpt_project_id, predecessor_id, task_id):
+                        raise RuntimeError("mock idempotency scope mismatch")
+                    conversation_id = row[3]
         if self.fail_after_create_once:
             self.fail_after_create_once = False
             raise RuntimeError("test-only driver crash after remote creation")
@@ -186,7 +189,7 @@ class RotationTests(unittest.TestCase):
                                    checkpoint_id=checkpoint)
 
     def created_rows(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db:
             return db.execute("SELECT rotation,project,predecessor,task,conversation FROM fake_web_chat_operations").fetchall()
 
     def test_full_pressure_handoff_and_task_continuation_same_project(self):

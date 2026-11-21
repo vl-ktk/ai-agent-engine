@@ -1,6 +1,6 @@
 # WEB-10 — автоматическая безопасная ротация mock-чата
 
-**21.11.2026.** Десятая из двадцати внутренних задач текущего 7.11, исходный пакет `0.3.35a0`. Код: `ai_agent_engine/chatgpt_web_rotation.py`, расширение `ProjectChatManager.rotate_idempotent`/`restore_verified` и `tests/test_chatgpt_web_web10.py`.
+**21.11.2026.** Десятая из двадцати внутренних задач текущего 7.11, исходный пакет `0.3.35a1`. Код: `ai_agent_engine/chatgpt_web_rotation.py`, расширение `ProjectChatManager.rotate_idempotent`/`restore_verified` и `tests/test_chatgpt_web_web10.py`.
 
 ## Что реализовано
 
@@ -16,4 +16,4 @@
 
 **Границы:** mock-сервис сам реализует устойчивое `create_or_get` по ключу — обычный ChatGPT UI такого официального контракта здесь не предоставлял. Поэтому это **только offline доказательство алгоритма**, а не гарантия отсутствия дублей при live браузерной автоматизации. Долговечный TaskInbox/lease/ACK, полноценный серверный restart и scoped-memory bootstrap относятся к WEB-11…15. Нет реального ChatGPT Web, обхода лимитов подписки, новых затрат, Netcup deployment или `POLICY_GO`.
 
-**Локальные проверки:** **17/17** новых WEB-10 unit PASS, полный regression **1228 OK (3 skipped)**, `compileall`, `git diff --check`, wheel `ai_agent_engine-0.3.35a0-py3-none-any.whl` PASS. CI/Git source SHA будут записаны отдельно после публикации; не объявлять весь CI зелёным до проверки Windows.
+**Проверки:** **17/17** новых WEB-10 unit PASS, повторный полный локальный regression **1228 OK (3 skipped)**, `compileall`, `git diff --check`, wheel `0.3.35a1` PASS. [Первый CI #44898591465](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44898591465): Linux 3.11/3.12/3.13 + wheel PASS; Windows добавил **17 новых ошибок** к прежней CI-WIN-001: mock fixture оставлял SQLite file handle при `TemporaryDirectory.cleanup` (`WinError 32`). Исправлено явное `closing(sqlite3.connect(...))` во всех mock-fixture операциях; повторная версия `0.3.35a1` прошла локальный regression. Новая проверка CI обязательна перед закрытием.
