@@ -21,7 +21,7 @@ MAX_RESPONSE_BYTES = 131_072  # 20k Unicode characters plus envelope metadata
 MAX_TEXT_CHARS = 20_000
 MAX_ARTIFACTS = 16
 MAX_ARTIFACT_SIZE = 100_000_000  # descriptor only, no file transfer
-_PROVIDERS = frozenset({"gpt", "claude"})
+_PROVIDERS = frozenset({"gpt", "claude", "chatgpt_web"})
 _ERROR_CODES = frozenset({"quota", "auth", "unsupported", "unavailable",
                           "worker_failure", "invalid_result", "timed_out", "cancelled"})
 _FAILURE_CODES = _ERROR_CODES - {"timed_out", "cancelled"}

@@ -136,8 +136,13 @@ class SharedCapacity:
             pin = load_specialist_pin(self.inbox, scope, task_id)
             if pin is None or pin.agent_id != worker_id:
                 raise CapacityDenied("approved_specialist_required")
+            # WEB-12: the reviewed chatgpt_web channel consumes the *same*
+            # existing GPT capacity ledger. No new provider class, schema
+            # migration, allowance or bypass of owner-pinned specialists.
+            capacity_provider = ("gpt" if pin.provider_id == "chatgpt_web"
+                                 else pin.provider_id)
             budget = next((p for p in self.policy.providers
-                           if p.provider == pin.provider_id), None)
+                           if p.provider == capacity_provider), None)
             if budget is None:
                 return CapacityDecision(False, "provider_not_enabled")
             now = self._now()
