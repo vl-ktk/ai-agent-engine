@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-07 OFFLINE MOCK PASS → следующий WEB-08
+# HANDOFF — 21.11.2026 / WEB-08 OFFLINE MOCK PASS → следующий WEB-09
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`. **Git source baseline / rollback до WEB-08:** `84501d99996039f6fab6015280c9e0290e6e04c7` (при чужих последующих изменениях только адресный revert своих commit). **Новый исходный Python `0.3.33a0`**, не Netcup production. По последней документальной проверке Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; VPS сейчас не проверялся и не менялся.
+
+**WEB-08 [x] только offline mock:** добавлен `WebInstructionBootstrap` с owner-approved `TrustedAgentInstructionPolicy` и injected scoped mock `ScopedInstructionSource` + `InstructionGrantVerifier`; на каждом turn свежий snapshot с точной принадлежностью, revision, SHA-256, role, current/verified и отдельным mock grant proof; mismatch/старые или чужие инструкции/ошибка — отказ без отправки. WEB-04 membership → WEB-06 model → WEB-07 effort → WEB-08 source+grant проверяются в одной per-agent FIFO до `BrowserPort.complete`. Legacy inline instructions запрещены для WEB-08, grant не создаётся текстом инструкции. Подробности: [WEB-08](./infra/orchestrator/CHATGPT_WEB_WEB08_INSTRUCTIONS.md). **Не** фактический серверный ProjectMemoryStore/TaskPermissionGate, ChatGPT UI, live adapter или доступ к лимитам подписки.
+
+**Проверки:** 23/23 новых WEB-08 unit PASS, полный локальный regression **1196 OK (3 skipped)**, `compileall`, diff check и wheel `ai_agent_engine-0.3.33a0-py3-none-any.whl` PASS, файл instructions присутствует в пакете. GitHub CI на source commit проверить после публикации; Windows CI-WIN-001 остаётся общим baseline FAIL, пока нет новой независимой проверки.
+
+**План:** WEB-01…08 `[x]` строго в документированных source/offline рамках — **8/20**, WEB-09…20 `[ ]`; 169 прямых подпунктов и прежние 86/169 без изменений. 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 `POLICY_HOLD`, обычный ChatGPT allowance не подтверждён. **Следующий только WEB-09 [ ] по новой команде владельца** — предупреждение/ротация контекста по регулируемым 60/75/90% при неизвестном точном счётчике, безопасная деградация. Не начинать WEB-10…20 без новой команды. Нет новых расходов, секретов, изменения Netcup, рабочих БД или публикации real ChatGPT.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-07 OFFLINE MOCK PASS → следующий WEB-08
 
 **Единственный источник:** `vl-ktk/ai-agent-engine/main`. **Git source baseline перед WEB-07 / rollback:** `246bfe80191c891632cb0af0b21807b597ec7f68` (откат только адресным revert изменений WEB-07, без перезаписи чужих commit). **Исходный Python `0.3.32a0`**, это не Netcup production. По последней документальной проверке Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; в WEB-07 состояние VPS не проверялось и не менялось.
 

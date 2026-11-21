@@ -12,6 +12,9 @@ from types import MappingProxyType
 from typing import Protocol
 
 from .chatgpt_web_projects import TrustedChatGPTProjectBinding
+from .chatgpt_web_instructions import (
+    TrustedAgentInstructionPolicy, WebInstructionBootstrap,
+)
 from .chatgpt_web_reasoning import (
     ProjectReasoningSelector, ReasoningSelectionEvidence,
     TrustedAgentReasoningPolicy, TrustedProjectReasoningCatalog,
@@ -98,12 +101,16 @@ class WebAgentModelRegistry:
                  project_catalogs: tuple[TrustedProjectModelCatalog, ...],
                  selector: ProjectModelSelector,
                  reasoning_catalogs: tuple[TrustedProjectReasoningCatalog, ...] | None = None,
-                 reasoning_selector: ProjectReasoningSelector | None = None):
+                 reasoning_selector: ProjectReasoningSelector | None = None,
+                 instruction_bootstrap: WebInstructionBootstrap | None = None):
         if not isinstance(sessions, WebAgentSessionRegistry):
             raise TypeError("invalid web agent session registry")
         if (type(project_catalogs) is not tuple or not project_catalogs
                 or not callable(getattr(selector, "select", None))):
             raise ValueError("trusted model catalog and selector required")
+        if (instruction_bootstrap is not None
+                and not isinstance(instruction_bootstrap, WebInstructionBootstrap)):
+            raise ValueError("invalid trusted instruction bootstrap")
         projects: dict[str, TrustedProjectModelCatalog] = {}
         for catalog in project_catalogs:
             if (not isinstance(catalog, TrustedProjectModelCatalog)
@@ -138,6 +145,7 @@ class WebAgentModelRegistry:
             for project, choices in reasoning_projects.items()
         })
         self._reasoning_selector = reasoning_selector
+        self._instruction_bootstrap = instruction_bootstrap
         self._lock = Lock()
         self._policies: dict[str, TrustedAgentModelPolicy] = {}
         self._reasoning_policies: dict[str, TrustedAgentReasoningPolicy] = {}
@@ -184,6 +192,23 @@ class WebAgentModelRegistry:
             if policy.agent_id in self._reasoning_policies:
                 raise WebReasoningSelectionError("agent reasoning policy already registered")
             self._reasoning_policies[policy.agent_id] = policy
+
+    def register_instructions(self, policy: TrustedAgentInstructionPolicy) -> None:
+        """WEB-08: pin the revision after the model and agent are registered."""
+        if not isinstance(policy, TrustedAgentInstructionPolicy):
+            raise TypeError("invalid trusted instruction policy")
+        if self._instruction_bootstrap is None:
+            raise WebAgentScopeError("web instruction bootstrap disabled")
+        self._policy(owner_id=policy.owner_id, project_id=policy.project_id,
+                     agent_id=policy.agent_id)
+        self._instruction_bootstrap.register(
+            policy,
+            binding=self._sessions.project_binding(
+                owner_id=policy.owner_id, project_id=policy.project_id,
+                agent_id=policy.agent_id),
+            identity=self._sessions.identity(
+                owner_id=policy.owner_id, project_id=policy.project_id,
+                agent_id=policy.agent_id))
 
     def _policy(self, *, owner_id: str, project_id: str,
                 agent_id: str) -> TrustedAgentModelPolicy:
@@ -270,6 +295,14 @@ class WebAgentModelRegistry:
                         or reasoning_proof.reasoning_effort != effort):
                     raise WebReasoningSelectionError("web reasoning selection unverified")
 
+        def load_instructions(profile: WebAgentProfile) -> str:
+            return self._instruction_bootstrap.load(
+                binding=binding, profile=profile,
+                identity=self._sessions.identity(
+                    owner_id=owner_id, project_id=project_id, agent_id=agent_id))
+
         return self._sessions.run_with_model_verifier(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id,
-            model_id=model_id, prompt=prompt, model_verifier=verify)
+            model_id=model_id, prompt=prompt, model_verifier=verify,
+            instructions_loader=(load_instructions
+                                 if self._instruction_bootstrap is not None else None))

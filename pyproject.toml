@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-agent-engine"
-version = "0.3.32a0"
+version = "0.3.33a0"
 description = "Owner-operated, provider-neutral open-source agent runtime prototype"
 readme = "README.md"
 requires-python = ">=3.11"

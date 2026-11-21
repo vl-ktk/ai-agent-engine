@@ -270,18 +270,24 @@ class WebAgentSessionRegistry:
 
     def run_with_model_verifier(self, *, owner_id: str, project_id: str,
                                 agent_id: str, model_id: str, prompt: str,
-                                model_verifier: Callable[[WebAgentProfile, str], None]
+                                model_verifier: Callable[[WebAgentProfile, str], None],
+                                instructions_loader: Callable[[WebAgentProfile], str]
+                                | None = None
                                 ) -> AgentResult:
         """WEB-06: check selection inside the same FIFO turn as sending."""
         if not callable(model_verifier):
             raise ValueError("trusted web model verifier required")
+        if instructions_loader is not None and not callable(instructions_loader):
+            raise ValueError("trusted instructions loader required")
         return self._run(owner_id=owner_id, project_id=project_id,
                          agent_id=agent_id, model_id=model_id, prompt=prompt,
-                         model_verifier=model_verifier)
+                         model_verifier=model_verifier,
+                         instructions_loader=instructions_loader)
 
     def _run(self, *, owner_id: str, project_id: str,
              agent_id: str, model_id: str, prompt: str,
-             model_verifier: Callable[[WebAgentProfile, str], None] | None = None
+             model_verifier: Callable[[WebAgentProfile, str], None] | None = None,
+             instructions_loader: Callable[[WebAgentProfile], str] | None = None
              ) -> AgentResult:
         slot = self._slot(owner_id=owner_id, project_id=project_id,
                           agent_id=agent_id)
@@ -291,8 +297,14 @@ class WebAgentSessionRegistry:
                     profile=slot.profile, verifier=self._project_verifier)
             if model_verifier is not None:
                 model_verifier(slot.profile, model_id)
+            instructions = slot.identity.instructions
+            if instructions_loader is not None:
+                instructions = instructions_loader(slot.profile)
+                if (type(instructions) is not str or not instructions.strip()
+                        or "\x00" in instructions or len(instructions) > 8_000):
+                    raise WebAgentScopeError("unverified web agent instructions")
             model = ChatGPTWebModel(self._config, model_id, slot.browser)
             context = SessionContext(slot.identity.project_id,
                                      slot.identity.agent_id,
-                                     slot.identity.role, slot.identity.instructions)
+                                     slot.identity.role, instructions)
             return AgentSession(context=context, model=model).run(prompt)

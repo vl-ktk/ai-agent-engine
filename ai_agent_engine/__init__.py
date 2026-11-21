@@ -31,6 +31,12 @@ from .chatgpt_web_reasoning import (
     TrustedAgentReasoningPolicy, TrustedModelReasoningChoices,
     TrustedProjectReasoningCatalog, WebReasoningSelectionError,
 )
+from .chatgpt_web_instructions import (
+    InstructionGrantEvidence, InstructionGrantVerifier,
+    ScopedInstructionSnapshot, ScopedInstructionSource,
+    TrustedAgentInstructionPolicy, WebInstructionBootstrap,
+    WebInstructionBootstrapError,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -50,4 +56,8 @@ __all__ = [
     "ProjectReasoningSelector", "ReasoningSelectionEvidence",
     "TrustedAgentReasoningPolicy", "TrustedModelReasoningChoices",
     "TrustedProjectReasoningCatalog", "WebReasoningSelectionError",
+    "InstructionGrantEvidence", "InstructionGrantVerifier",
+    "ScopedInstructionSnapshot", "ScopedInstructionSource",
+    "TrustedAgentInstructionPolicy", "WebInstructionBootstrap",
+    "WebInstructionBootstrapError",
 ]
