@@ -42,6 +42,10 @@ from .chatgpt_web_context import (
     ScopedContextUsageSource, TrustedAgentContextPolicy, WebContextMonitor,
     WebContextPressureError,
 )
+from .chatgpt_web_rotation import (
+    SQLiteWebRotationJournal, WebAutomaticChatRotator, WebChatRotationError,
+    WebRotationReceipt,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -68,4 +72,6 @@ __all__ = [
     "ContextPressureDecision", "ContextThresholds", "ContextUsageEvidence",
     "ScopedContextUsageSource", "TrustedAgentContextPolicy", "WebContextMonitor",
     "WebContextPressureError",
+    "SQLiteWebRotationJournal", "WebAutomaticChatRotator",
+    "WebChatRotationError", "WebRotationReceipt",
 ]

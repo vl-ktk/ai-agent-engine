@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-09 OFFLINE MOCK PASS → следующий WEB-10
+# HANDOFF — 21.11.2026 / WEB-10 OFFLINE MOCK PASS → следующий WEB-11
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`. **Git source baseline/rollback до WEB-10:** `d804ea5ffcae03ead914965458ca233d787ab31d` (при чужих коммитах только адресный revert своих изменений). **Исходный Python `0.3.35a0`**, не Netcup production. Последняя *документированная*, но не перепроверенная live версия Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; VPS/рабочие БД не трогали.
+
+**WEB-10 [x] только offline mock:** `WebAutomaticChatRotator` принимает последнюю проверенную WEB-09 оценку `ROTATE`/`EMERGENCY` и безопасно инициирует chat handoff, сохраняя owner/project/agent/task/checkpoint, exact Project membership, FIFO, прежний/new `conversation_id` и stable `rotation_id`. `ProjectChatManager.rotate_idempotent` **требует** injected mock `create_or_get_chat` без fallback; `SQLiteWebRotationJournal` сохраняет PREPARED/COMMITTED и цепочку. Параллельные дубли и retry возвращают тот же receipt; сбой до/после mock side effect и перед SQLite commit восстанавливается через тот же ключ без второго создания. Реальный дочерний Python process принудительно завершён `os._exit(37)` после mock create, новый runtime по SQLite восстанавливает переход и не создаёт второй чат. WEB-10 **не исполняет** заблокированную задачу повторно; TaskInbox/lease/ACK и полноценный серверный restart — WEB-12/13/15. [Протокол WEB-10](./infra/orchestrator/CHATGPT_WEB_WEB10_ROTATION.md).
+
+**Проверки:** 17/17 новых WEB-10 unit PASS, полный локальный regression **1228 OK (3 skipped)**, `compileall`, wheel `ai_agent_engine-0.3.35a0-py3-none-any.whl`, `git diff --check` PASS. Git source SHA/точный Git tree/Actions CI дописать после публикации. Ни автоматического реального Web ChatGPT, ни его официального idempotency contract/лимитов подписки не подтверждено.
+
+**Статус плана:** WEB-01…10 `[x]` строго в source/offline рамках — **10/20**; WEB-11…20 `[ ]`, 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 `POLICY_HOLD`; 169 прямых подпунктов и ранее 86/169 без изменений. **Следующий только WEB-11 [ ] по новой команде владельца** — scoped checkpoint/state/instructions/memory при смене чата без полного архива/чужих данных. Нет расходов, секретов, новых платных API, реального UI или Netcup публикации.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-09 OFFLINE MOCK PASS → следующий WEB-10
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`. **Git source baseline/rollback до WEB-09:** `ea881a5fdfea5900a58e016748708be3ec0e2c22` (при чужих правках только адресный revert собственных commits). **Новый исходный Python `0.3.34a0`**, не Netcup production. Последняя **документированная**, не live-перепроверенная версия Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; VPS/БД не трогали.
 

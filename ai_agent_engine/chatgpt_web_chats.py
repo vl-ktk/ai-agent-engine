@@ -50,6 +50,8 @@ class ProjectChatRecord:
     conversation_id: str
     predecessor_id: str | None
     next_id: str | None = None
+    task_id: str | None = None
+    rotation_id: str | None = None
 
 
 class ProjectChatManager:
@@ -94,7 +96,10 @@ class ProjectChatManager:
         return port
 
     def _create(self, *, owner_id: str, project_id: str,
-                agent_id: str, initial: bool) -> ProjectChatRecord:
+                agent_id: str, initial: bool,
+                expected_predecessor: str | None = None,
+                task_id: str | None = None,
+                rotation_id: str | None = None) -> ProjectChatRecord:
         # Membership and per-agent FIFO are held through the entire port call
         # and local lineage commit. Another agent can proceed independently.
         with self._sessions.scoped_project_operation(
@@ -102,16 +107,36 @@ class ProjectChatManager:
                 agent_id=agent_id) as (profile, binding):
             with self._lock:
                 existing = self._history.get(agent_id, [])
+                if rotation_id is not None:
+                    replay = next((record for record in existing
+                                   if record.rotation_id == rotation_id), None)
+                    if replay is not None:
+                        if (replay.task_id != task_id
+                                or replay.predecessor_id != expected_predecessor):
+                            raise WebAgentScopeError("rotation idempotency collision")
+                        return replay
                 if initial and existing:
                     raise WebAgentScopeError("initial project chat already exists")
                 if not initial and not existing:
                     raise WebAgentScopeError("no active project chat to rotate")
                 predecessor = existing[-1].conversation_id if existing else None
+                if (rotation_id is not None
+                        and predecessor != expected_predecessor):
+                    raise WebAgentScopeError("rotation predecessor changed")
             port = self._port(profile)
             try:
-                created = port.create_chat(
-                    chatgpt_project_id=binding.chatgpt_project_id,
-                    predecessor_id=predecessor)
+                if rotation_id is not None:
+                    create_once = getattr(port, "create_or_get_chat", None)
+                    if not callable(create_once):
+                        raise WebAgentScopeError("idempotent project chat port unavailable")
+                    created = create_once(
+                        chatgpt_project_id=binding.chatgpt_project_id,
+                        predecessor_id=predecessor, task_id=task_id,
+                        rotation_id=rotation_id)
+                else:
+                    created = port.create_chat(
+                        chatgpt_project_id=binding.chatgpt_project_id,
+                        predecessor_id=predecessor)
             except Exception:
                 # Do not retry: the mock port might already have created it.
                 raise WebAgentScopeError("project chat creation unverified") from None
@@ -129,7 +154,7 @@ class ProjectChatManager:
                 record = ProjectChatRecord(
                     profile.owner_id, profile.project_id, profile.agent_id,
                     binding.chatgpt_project_id, created.conversation_id,
-                    predecessor)
+                    predecessor, task_id=task_id, rotation_id=rotation_id)
                 if lineage:
                     lineage[-1] = replace(lineage[-1],
                                           next_id=created.conversation_id)
@@ -146,6 +171,69 @@ class ProjectChatManager:
                agent_id: str) -> ProjectChatRecord:
         return self._create(owner_id=owner_id, project_id=project_id,
                             agent_id=agent_id, initial=False)
+
+    def rotate_idempotent(self, *, owner_id: str, project_id: str,
+                          agent_id: str, expected_predecessor: str,
+                          task_id: str, rotation_id: str) -> ProjectChatRecord:
+        """WEB-10 mock: same operation can be reconciled after uncertainty.
+
+        Port MUST implement `create_or_get_chat` with server-side idempotency
+        semantics. No fallback to non-idempotent WEB-05 `create_chat`.
+        """
+        if (any(type(x) is not str or not _CHAT_ID.fullmatch(x)
+                for x in (expected_predecessor, task_id, rotation_id))):
+            raise WebAgentScopeError("invalid rotation operation identity")
+        return self._create(owner_id=owner_id, project_id=project_id,
+                            agent_id=agent_id, initial=False,
+                            expected_predecessor=expected_predecessor,
+                            task_id=task_id, rotation_id=rotation_id)
+
+    def restore_verified(self, *, owner_id: str, project_id: str,
+                         agent_id: str,
+                         records: tuple[ProjectChatRecord, ...]) -> None:
+        """Restore an entire trusted mock chain after a controller restart.
+
+        The caller is responsible for authenticating the journal. This does
+        not recreate browser tabs or prove live ChatGPT Project membership.
+        """
+        if type(records) is not tuple or not records:
+            raise WebAgentScopeError("missing verified chat history")
+        with self._sessions.scoped_project_operation(
+                owner_id=owner_id, project_id=project_id,
+                agent_id=agent_id) as (profile, binding):
+            seen: set[str] = set()
+            rotations: set[str] = set()
+            for i, record in enumerate(records):
+                if (type(record) is not ProjectChatRecord
+                        or (record.owner_id, record.project_id, record.agent_id)
+                        != (owner_id, project_id, agent_id)
+                        or record.chatgpt_project_id != binding.chatgpt_project_id
+                        or type(record.conversation_id) is not str
+                        or not _CHAT_ID.fullmatch(record.conversation_id)
+                        or record.conversation_id in seen
+                        or (record.rotation_id is not None
+                            and record.rotation_id in rotations)
+                        or record.predecessor_id != (
+                            records[i - 1].conversation_id if i else None)
+                        or record.next_id != (
+                            records[i + 1].conversation_id
+                            if i + 1 < len(records) else None)
+                        or (i == 0 and (record.task_id is not None
+                                         or record.rotation_id is not None))
+                        or (i > 0 and ((record.task_id is None)
+                                       != (record.rotation_id is None)))
+                        or any(x is not None and (type(x) is not str
+                               or not _CHAT_ID.fullmatch(x))
+                               for x in (record.task_id, record.rotation_id))):
+                    raise WebAgentScopeError("invalid restored chat lineage")
+                seen.add(record.conversation_id)
+                if record.rotation_id is not None:
+                    rotations.add(record.rotation_id)
+            with self._lock:
+                if self._history.get(agent_id) or seen & self._conversation_ids:
+                    raise WebAgentScopeError("chat history restore collision")
+                self._history[agent_id] = list(records)
+                self._conversation_ids.update(seen)
 
     def history(self, *, owner_id: str, project_id: str,
                 agent_id: str) -> tuple[ProjectChatRecord, ...]:
