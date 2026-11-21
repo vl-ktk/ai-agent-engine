@@ -231,6 +231,27 @@ class WebAgentSessionRegistry:
         return self._project_registry.binding_for(
             owner_id=slot.identity.owner_id, project_id=slot.identity.project_id)
 
+    @contextmanager
+    def scoped_project_operation(self, *, owner_id: str, project_id: str,
+                                 agent_id: str) -> Iterator[
+                                     tuple[WebAgentProfile, TrustedChatGPTProjectBinding]]:
+        """WEB-05: verify membership and hold the agent FIFO for chat actions.
+
+        The injected chat port must not act before this context is entered.
+        This contract does not attest real ChatGPT UI state.
+        """
+        slot = self._slot(owner_id=owner_id, project_id=project_id,
+                          agent_id=agent_id)
+        if self._project_registry is None:
+            raise WebAgentScopeError("no trusted ChatGPT Project gate")
+        with slot.queue.turn():
+            self._project_registry.verify_member(
+                profile=slot.profile, verifier=self._project_verifier)
+            binding = self._project_registry.binding_for(
+                owner_id=slot.identity.owner_id,
+                project_id=slot.identity.project_id)
+            yield slot.profile, binding
+
     def run(self, *, owner_id: str, project_id: str,
             agent_id: str, model_id: str, prompt: str) -> AgentResult:
         """One scoped synthetic task, FIFO per agent, parallel across agents.

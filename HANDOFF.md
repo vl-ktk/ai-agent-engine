@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-04 OFFLINE MOCK PASS → следующий WEB-05
+# HANDOFF — 21.11.2026 / WEB-05 OFFLINE MOCK PASS → следующий WEB-06
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`. **Source baseline/rollback перед WEB-05:** `99069ed33b9894987dfad202a5e80353cccb22c2` (при новых чужих коммитах только адресный revert). **Новый исходный пакет:** `0.3.30a0`, **не** production. **Netcup не трогали:** последний записанный controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite v14; живой VPS не проверялся.
+
+**WEB-05 [x] только offline mock:** `ai_agent_engine/chatgpt_web_chats.py` добавляет `ProjectChatManager` и отдельный `ScopedProjectChatPort`. Один активный conversation на агента, `create_initial/rotate`, цепочка predecessor/next, история со scope проверкой. `WebAgentSessionRegistry.scoped_project_operation()` требует повторный WEB-04 membership proof и удерживает отдельную per-agent FIFO до завершения chat creation. Нет root fallback: mock-port получает точный доверенный `chatgpt_project_id`, его ответ обязан совпадать с проектом и логическими профилем/почтой; malformed/duplicate чужой ID/error не изменяют active/history. Порты агентов разделены и не могут переиспользоваться. **НЕТ** live ChatGPT chat/UI/авторизации, persistence/restart, передачи содержания старого чата и фактической работы через подписку. [Спецификация и тесты WEB-05](./infra/orchestrator/CHATGPT_WEB_WEB05_CHAT_LIFECYCLE.md).
+
+**Проверки:** 17/17 новых unit PASS; полный локальный regression **1133 OK (3 skipped)**; wheel `ai_agent_engine-0.3.30a0-py3-none-any.whl`, `compileall`, diff check PASS. GitHub CI дополнить после публикации. Общий старый CI-WIN-001 остаётся открытым, Windows матрицу не объявлять зелёной.
+
+**Статус:** WEB-01…05 [x] в source/offline границах **5/20**, WEB-06…20 [ ]; глобальные 86/169 ранее закрытых и 7.11 `[ ] PARTIAL` неизменны, 7.12 HOLD, WEB-17 `POLICY_HOLD`. **Следующий только WEB-06 [ ]** по новой команде владельца: выбор доступного model ID для агента/задачи и отказ неподдерживаемого без fallback. Не начинать WEB-07…20.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-04 OFFLINE MOCK PASS → следующий WEB-05
 
 **Единственный источник:** `vl-ktk/ai-agent-engine/main`. **База/source rollback до WEB-04:** `ae6f027411c83c90af8569e57776abd02bc211a0` (при чужих последующих изменениях только адресный revert). **Исходная Python-версия:** `0.3.29a0`, это не production. **Netcup не трогали:** по последней зафиксированной проверке controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite `v14`; live VPS на WEB-04 не проверялся.
 

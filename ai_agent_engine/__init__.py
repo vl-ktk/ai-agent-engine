@@ -18,6 +18,10 @@ from .chatgpt_web_projects import (
     ProjectMembershipEvidence, ProjectMembershipVerifier,
     TrustedChatGPTProjectBinding, TrustedChatGPTProjectRegistry,
 )
+from .chatgpt_web_chats import (
+    ChatPortFactory, CreatedProjectChat, ProjectChatManager, ProjectChatRecord,
+    ScopedProjectChatPort,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -30,4 +34,6 @@ __all__ = [
     "WebAgentSessionRegistry",
     "ProjectMembershipEvidence", "ProjectMembershipVerifier",
     "TrustedChatGPTProjectBinding", "TrustedChatGPTProjectRegistry",
+    "ChatPortFactory", "CreatedProjectChat", "ProjectChatManager",
+    "ProjectChatRecord", "ScopedProjectChatPort",
 ]

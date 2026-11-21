@@ -294,6 +294,14 @@ the mock browser sends anything; the verifier is called again on every turn.
 This is a synthetic trust-boundary test, **not proof of live ChatGPT Project
 membership**. See [WEB-04 evidence](./infra/orchestrator/CHATGPT_WEB_WEB04_PROJECT_MEMBERSHIP.md).
 
+WEB-05 adds an in-memory **mock ChatManager** that records one active chat per
+agent and immutable predecessor/next conversation links. It creates chats only
+through a scoped Project port after fresh WEB-04 membership verification, and
+never silently creates a root chat. Mismatched returned Project/profile IDs or
+duplicate conversation IDs do not change the recorded active chat. The mock
+does **not** create actual ChatGPT chats, preserve history across restart, or
+transfer task context. See [WEB-05 chat lifecycle](./infra/orchestrator/CHATGPT_WEB_WEB05_CHAT_LIFECYCLE.md).
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.
