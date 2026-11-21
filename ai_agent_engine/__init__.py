@@ -6,10 +6,16 @@ from .core import (
 )
 from .tools import SandboxFiles, ToolError
 from .model_routing import ModelRouter, ModelSetupError, ProviderSpec, TextOnlyModel
+from .chatgpt_web import (
+    BrowserPort, BrowserTurn, ChatGPTWebConfig, ChatGPTWebModel,
+    ChatGPTWebUnavailable, chatgpt_web_provider_spec,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
     "ModelTurn", "ScriptedModel", "SessionContext", "StopToken",
     "Tool", "ToolRegistry", "AuditEvent", "SandboxFiles", "ToolError",
     "ModelRouter", "ModelSetupError", "ProviderSpec", "TextOnlyModel",
+    "BrowserPort", "BrowserTurn", "ChatGPTWebConfig", "ChatGPTWebModel",
+    "ChatGPTWebUnavailable", "chatgpt_web_provider_spec",
 ]

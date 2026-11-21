@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-01 SOURCE REVIEW COMPLETE → следующий WEB-02
+# HANDOFF — 21.11.2026 / WEB-02 SOURCE/OFFLINE PASS → следующий WEB-03
+
+**Источник:** `vl-ktk/ai-agent-engine/main`. **Базовый Git SHA до WEB-02 / source rollback:** `376f3c27382186b01debcbbf3a6a8d6d95c50445` (при будущих изменениях откатывать адресно, не переписывая чужой `main`). **Новая исходная версия Python-пакета:** `0.3.27a0` (не production release). **Netcup НЕ трогали:** из последней записи production controller `v0.3.11a0`, релиз/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая SQLite `v14`; текущий live статус не перепроверялся.
+
+**Текущий пункт WEB-02 [x] выполнен только как source/offline:** `ai_agent_engine/chatgpt_web.py` содержит сменяемый `ModelRouter` provider `chatgpt_web`, `ChatGPTWebConfig(enabled=False)` и абстрактный `BrowserPort`; без реального CDP/HTTP/login, чтения credentials и web-запросов. Регистрируемые модели явные. Disabled route отвергается до создания mock, отсутствующий driver или неподтверждённый ответ — fail-closed; скрытых повторов и tool calls нет. Действующие `gpt_siwc`, `GPTTaskExecutor`/TaskInbox/SharedCapacity/TaskPermissionGate не менялись. Документация: [WEB-02](./infra/orchestrator/CHATGPT_WEB_WEB02_ADAPTER.md).
+
+**Реальные проверки:** 12/12 WEB-02 unittest PASS; полный локальный `python -m unittest discover -s tests -q`: **1088 OK, 3 skipped**, exit 0; `compileall`, `git diff --check` и сборка wheel **`ai_agent_engine-0.3.27a0-py3-none-any.whl` PASS**, архив содержит `chatgpt_web.py`. Никаких ChatGPT, личных cookies/tokens, paid API или Netcup/live/production вызовов. **Это не готовая многоагентная Web ChatGPT система**, не полный WEB-16 OFFLINE_PASS и не POLICY_GO.
+
+**Далее строго WEB-03 [ ]** по новой команде владельца: стабильный `agent_id`, отдельная session/profile/queue и изоляция двух агентов на mock browser; не начинать WEB-04…20 одним заходом. Основные 169 и 86/169 выполненных не менялись; WEB checklist **2/20 [x]**, 18/20 [ ]; 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 policy остаётся `HOLD`.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-01 SOURCE REVIEW COMPLETE → следующий WEB-02
 
 **Единственный источник:** [`vl-ktk/ai-agent-engine/main`](https://github.com/vl-ktk/ai-agent-engine/tree/main). **База текущей source-правки:** `06e30efb347f344b084788a3850bfddaecaf0681` (откат изменений WEB-01 при отсутствии последующих зависимых commit). Production **не меняли**: согласно предыдущему HANDOFF контроллер `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite `v14`; **текущий live Netcup не проверяли**.
 

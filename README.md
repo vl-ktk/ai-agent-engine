@@ -265,6 +265,17 @@ GPT/Claude runtime integration, credentials, session lifecycle, quota fallback,
 user authorization and provider-specific tool translation remain for stage 6
 and later explicit owner decisions. This phase sends **zero** live requests.
 
+### ChatGPT Web adapter (WEB-02; strictly offline)
+
+The optional `chatgpt_web` provider implements the existing `ModelRouter` /
+`Model` contract behind an injected `BrowserPort`. Its `ChatGPTWebConfig`
+defaults to `enabled=False`, with no implicit model ID. The repository has
+**no live browser driver, ChatGPT login or credential reader**; WEB-02 tests
+use only an in-process fake and synthetic results. Unknown models, tools,
+missing drivers and uncertain browser failures are refused without retry or
+fallback. The adapter is **not yet wired** to the durable task executor or
+ChatGPT Projects. See [WEB-02 boundaries and tests](./infra/orchestrator/CHATGPT_WEB_WEB02_ADAPTER.md).
+
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 
 The OAuth flow follows the [official OSS sign-in guide](https://developers.openai.com/siwc/token-sharing-open-source/sign-in): dynamic client registration, loopback callback, PKCE, signed OpenID identity verification and explicit ChatGPT plan permission check.
