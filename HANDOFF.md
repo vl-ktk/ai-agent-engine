@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-06 OFFLINE MOCK PASS → следующий WEB-07
+# HANDOFF — 21.11.2026 / WEB-07 OFFLINE MOCK PASS → следующий WEB-08
+
+**Единственный источник:** `vl-ktk/ai-agent-engine/main`. **Git source baseline перед WEB-07 / rollback:** `246bfe80191c891632cb0af0b21807b597ec7f68` (откат только адресным revert изменений WEB-07, без перезаписи чужих commit). **Исходный Python `0.3.32a0`**, это не Netcup production. По последней документальной проверке Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; в WEB-07 состояние VPS не проверялось и не менялось.
+
+**WEB-07 [x] только offline mock:** в `chatgpt_web_reasoning.py` добавлены per-model/ChatGPT Project immutable каталоги effort, per-agent policy и `ReasoningSelectionEvidence`; `WebAgentModelRegistry` обеспечивает task override/default и **обязательное** сочетание допустимых модели и reasoning effort, fresh WEB-04 membership, WEB-06 model proof, WEB-07 effort proof в **одной FIFO до BrowserPort.complete**. При неизвестном/чужом/mismatch/отказе селектора — fail-closed без silent fallback и повторной отправки. Документация: [WEB-07](./infra/orchestrator/CHATGPT_WEB_WEB07_REASONING_SELECTION.md). **Нет** реальной автоматизации ChatGPT, доступных UI-режимов/подписочных квот, live browser profile, long-term persistence или policy approval.
+
+**Проверки:** 22/22 новых WEB-07 unit PASS; полный локальный regression **1173 OK (3 skipped)**; `compileall`, `git diff --check` и wheel `ai_agent_engine-0.3.32a0-py3-none-any.whl` PASS (reasoning module включён). Общая Windows проблема `CI-WIN-001` прежняя; исходный статус CI для WEB-07 проверить после GitHub push, не объявлять матрицу зелёной заранее.
+
+**План:** WEB-01…07 `[x]` только в доказанном source/offline объёме — **7/20**, WEB-08…20 `[ ]`; прямые 169 подпунктов и ранее выполненные 86 не изменены. 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 `POLICY_HOLD`. **Следующий только WEB-08 [ ] по новой команде Владислава:** versioned project instructions + trusted scoped bootstrap, роль/grant и отказ при чужой/устаревшей ревизии. Не переходить к WEB-09…20 одновременно. Нет новых затрат, изменений секретов, рабочих БД, Netcup, подписок или ChatGPT UI.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-06 OFFLINE MOCK PASS → следующий WEB-07
 
 **Единственный источник:** `vl-ktk/ai-agent-engine/main`. **Git baseline/source rollback до WEB-06:** `44e2904dc9f5f40784298a09936063d57a1daaf9` (откат только адресным revert при чужих новых изменениях). **Новый Python source `0.3.31a0`**, это не Netcup production. **Netcup не трогали:** последняя записанная версия controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, SQLite v14; текущий live VPS не проверялся.
 

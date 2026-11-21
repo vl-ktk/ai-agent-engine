@@ -12,6 +12,11 @@ from types import MappingProxyType
 from typing import Protocol
 
 from .chatgpt_web_projects import TrustedChatGPTProjectBinding
+from .chatgpt_web_reasoning import (
+    ProjectReasoningSelector, ReasoningSelectionEvidence,
+    TrustedAgentReasoningPolicy, TrustedProjectReasoningCatalog,
+    WebReasoningSelectionError,
+)
 from .chatgpt_web_sessions import (
     WebAgentProfile, WebAgentScopeError, WebAgentSessionRegistry,
 )
@@ -91,7 +96,9 @@ class WebAgentModelRegistry:
 
     def __init__(self, sessions: WebAgentSessionRegistry, *,
                  project_catalogs: tuple[TrustedProjectModelCatalog, ...],
-                 selector: ProjectModelSelector):
+                 selector: ProjectModelSelector,
+                 reasoning_catalogs: tuple[TrustedProjectReasoningCatalog, ...] | None = None,
+                 reasoning_selector: ProjectReasoningSelector | None = None):
         if not isinstance(sessions, WebAgentSessionRegistry):
             raise TypeError("invalid web agent session registry")
         if (type(project_catalogs) is not tuple or not project_catalogs
@@ -103,11 +110,37 @@ class WebAgentModelRegistry:
                     or catalog.chatgpt_project_id in projects):
                 raise ValueError("ambiguous project model catalog")
             projects[catalog.chatgpt_project_id] = catalog
+        if (reasoning_catalogs is None) != (reasoning_selector is None):
+            raise ValueError("trusted reasoning catalog and selector must be paired")
+        reasoning_projects: dict[str, dict[str, tuple[str, ...]]] = {}
+        if reasoning_catalogs is not None:
+            if (type(reasoning_catalogs) is not tuple or not reasoning_catalogs
+                    or not callable(getattr(reasoning_selector, "select", None))):
+                raise ValueError("invalid trusted reasoning catalog or selector")
+            for reasoning_catalog in reasoning_catalogs:
+                if (not isinstance(reasoning_catalog, TrustedProjectReasoningCatalog)
+                        or reasoning_catalog.chatgpt_project_id in reasoning_projects):
+                    raise ValueError("ambiguous project reasoning catalog")
+                project = projects.get(reasoning_catalog.chatgpt_project_id)
+                if (project is None
+                        or any(choice.model_id not in project.model_ids
+                               for choice in reasoning_catalog.model_choices)):
+                    raise ValueError("reasoning catalog contains unavailable model")
+                reasoning_projects[reasoning_catalog.chatgpt_project_id] = {
+                    choice.model_id: choice.reasoning_efforts
+                    for choice in reasoning_catalog.model_choices
+                }
         self._sessions = sessions
         self._projects = MappingProxyType(projects)
         self._selector = selector
+        self._reasoning_projects = MappingProxyType({
+            project: MappingProxyType(choices)
+            for project, choices in reasoning_projects.items()
+        })
+        self._reasoning_selector = reasoning_selector
         self._lock = Lock()
         self._policies: dict[str, TrustedAgentModelPolicy] = {}
+        self._reasoning_policies: dict[str, TrustedAgentReasoningPolicy] = {}
 
     def register(self, policy: TrustedAgentModelPolicy) -> None:
         if not isinstance(policy, TrustedAgentModelPolicy):
@@ -126,6 +159,31 @@ class WebAgentModelRegistry:
             if policy.agent_id in self._policies:
                 raise WebModelSelectionError("agent model policy already registered")
             self._policies[policy.agent_id] = policy
+
+    def register_reasoning(self, policy: TrustedAgentReasoningPolicy) -> None:
+        """WEB-07: a pinned agent policy; requires existing WEB-06 registration."""
+        if not isinstance(policy, TrustedAgentReasoningPolicy):
+            raise TypeError("invalid trusted agent reasoning policy")
+        if self._reasoning_selector is None:
+            raise WebReasoningSelectionError("web reasoning selection is disabled")
+        model_policy = self._policy(owner_id=policy.owner_id,
+                                    project_id=policy.project_id,
+                                    agent_id=policy.agent_id)
+        binding = self._sessions.project_binding(
+            owner_id=policy.owner_id, project_id=policy.project_id,
+            agent_id=policy.agent_id)
+        choices = self._reasoning_projects.get(binding.chatgpt_project_id)
+        if (choices is None
+                or policy.default_reasoning_effort not in
+                choices.get(model_policy.default_model_id, ())
+                or any(not any(effort in choices.get(model, ())
+                                   for model in model_policy.allowed_model_ids)
+                       for effort in policy.allowed_reasoning_efforts)):
+            raise WebReasoningSelectionError("unavailable trusted web reasoning effort")
+        with self._lock:
+            if policy.agent_id in self._reasoning_policies:
+                raise WebReasoningSelectionError("agent reasoning policy already registered")
+            self._reasoning_policies[policy.agent_id] = policy
 
     def _policy(self, *, owner_id: str, project_id: str,
                 agent_id: str) -> TrustedAgentModelPolicy:
@@ -150,12 +208,31 @@ class WebAgentModelRegistry:
         return model_id
 
     def run(self, *, owner_id: str, project_id: str, agent_id: str,
-            prompt: str, requested_model_id: str | None = None) -> AgentResult:
+            prompt: str, requested_model_id: str | None = None,
+            requested_reasoning_effort: str | None = None) -> AgentResult:
         model_id = self.selected_model(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id,
             requested_model_id=requested_model_id)
         binding = self._sessions.project_binding(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id)
+
+        effort: str | None = None
+        if self._reasoning_selector is not None:
+            with self._lock:
+                reasoning_policy = self._reasoning_policies.get(agent_id)
+            if (reasoning_policy is None or reasoning_policy.owner_id != owner_id
+                    or reasoning_policy.project_id != project_id):
+                raise WebReasoningSelectionError("agent reasoning policy not registered")
+            effort = (reasoning_policy.default_reasoning_effort
+                      if requested_reasoning_effort is None
+                      else requested_reasoning_effort)
+            choices = self._reasoning_projects.get(binding.chatgpt_project_id, {})
+            if (type(effort) is not str
+                    or effort not in reasoning_policy.allowed_reasoning_efforts
+                    or effort not in choices.get(model_id, ())):
+                raise WebReasoningSelectionError("unavailable trusted web reasoning effort")
+        elif requested_reasoning_effort is not None:
+            raise WebReasoningSelectionError("web reasoning selection is disabled")
 
         def verify(profile: WebAgentProfile, selected: str) -> None:
             try:
@@ -173,6 +250,25 @@ class WebAgentModelRegistry:
                     or proof.mailbox_key != profile.mailbox_key
                     or proof.model_id != selected):
                 raise WebModelSelectionError("web model selection unverified")
+            if effort is not None:
+                try:
+                    reasoning_proof = self._reasoning_selector.select(
+                        binding=binding, profile=profile, model_id=selected,
+                        reasoning_effort=effort)
+                except Exception:
+                    raise WebReasoningSelectionError(
+                        "web reasoning selection unverified") from None
+                if (type(reasoning_proof) is not ReasoningSelectionEvidence
+                        or reasoning_proof.verified is not True
+                        or reasoning_proof.owner_id != profile.owner_id
+                        or reasoning_proof.project_id != profile.project_id
+                        or reasoning_proof.agent_id != profile.agent_id
+                        or reasoning_proof.chatgpt_project_id != binding.chatgpt_project_id
+                        or reasoning_proof.profile_key != profile.profile_key
+                        or reasoning_proof.mailbox_key != profile.mailbox_key
+                        or reasoning_proof.model_id != selected
+                        or reasoning_proof.reasoning_effort != effort):
+                    raise WebReasoningSelectionError("web reasoning selection unverified")
 
         return self._sessions.run_with_model_verifier(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id,

@@ -26,6 +26,11 @@ from .chatgpt_web_models import (
     ModelSelectionEvidence, ProjectModelSelector, TrustedAgentModelPolicy,
     TrustedProjectModelCatalog, WebAgentModelRegistry, WebModelSelectionError,
 )
+from .chatgpt_web_reasoning import (
+    ProjectReasoningSelector, ReasoningSelectionEvidence,
+    TrustedAgentReasoningPolicy, TrustedModelReasoningChoices,
+    TrustedProjectReasoningCatalog, WebReasoningSelectionError,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -42,4 +47,7 @@ __all__ = [
     "ProjectChatRecord", "ScopedProjectChatPort",
     "ModelSelectionEvidence", "ProjectModelSelector", "TrustedAgentModelPolicy",
     "TrustedProjectModelCatalog", "WebAgentModelRegistry", "WebModelSelectionError",
+    "ProjectReasoningSelector", "ReasoningSelectionEvidence",
+    "TrustedAgentReasoningPolicy", "TrustedModelReasoningChoices",
+    "TrustedProjectReasoningCatalog", "WebReasoningSelectionError",
 ]
