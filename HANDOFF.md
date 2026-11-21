@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / текущий пункт строго ChatGPT Web First
+# HANDOFF — 21.11.2026 / WEB-01 SOURCE REVIEW COMPLETE → следующий WEB-02
+
+**Единственный источник:** [`vl-ktk/ai-agent-engine/main`](https://github.com/vl-ktk/ai-agent-engine/tree/main). **База текущей source-правки:** `06e30efb347f344b084788a3850bfddaecaf0681` (откат изменений WEB-01 при отсутствии последующих зависимых commit). Production **не меняли**: согласно предыдущему HANDOFF контроллер `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite `v14`; **текущий live Netcup не проверяли**.
+
+**Выполнен только WEB-01 [x]:** проверены публичные pinned исходники [Octo-Lex/ChatGPT-Web2API](https://github.com/Octo-Lex/ChatGPT-Web2API/tree/497527dceabfa3f95961e23c291e618c5570f1ac) и [cromat/chatgpt-web-session-proxy](https://github.com/cromat/chatgpt-web-session-proxy/tree/753d7d8c5f0fa3fe5f342839b016dfb18b781b0b): архитектура, версии, лицензии, runtime/development dependencies, сессии, проекты, model/effort, ошибки, тестовые примеры и текущие условия OpenAI. Итог: [`infra/orchestrator/CHATGPT_WEB_WEB01_REFERENCE_REVIEW.md`](./infra/orchestrator/CHATGPT_WEB_WEB01_REFERENCE_REVIEW.md). Решение: **свой Python adapter + mock browser**, переиспользовать идеи scoped sessions/queue/guards; не переносить неофициальные `backend-api`/access tokens, общий MCP SSE tab, prompt-based tool effects или fail-open выбор модели.
+
+**Проверки:** read-only сравнение GitHub файлов, manifest/LICENSE/README и исходников, сверка с provider/task contracts движка и официальными правилами OpenAI, контроль статусов roadmap/реестра. **Не выполнялось:** установка/сборка чужих проектов, unit/CI/E2E, личный ChatGPT web/проверка Chat-лимитов, доступ к cookies/секретам, Netcup/production deploy. **WEB-01 — source review, не OFFLINE/LIVE/POLICY PASS.**
+
+**Далее строго WEB-02 [ ]** после новой команды владельца: создать **отключённый по умолчанию** `chatgpt_web` Python provider adapter + абстракцию mock-browser, совместить с текущими provider contracts, сохранить `gpt_siwc`, проверить unit PASS при mock вызове и отключённом флаге. Не начинать WEB-03…20 одновременно. **7.11 [ ] PARTIAL**, 7.12 HOLD; checklist **1/20 WEB [x], 19/20 [ ]** при прежних **86/169** основных задач. Live/policy и разрешение на автоматизацию — отдельный gate WEB-17+, текущий `POLICY_HOLD`.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / исходная постановка ChatGPT Web First
 
 **Детализация по команде владельца 21.11.2026:** внутри текущего 7.11 теперь есть исполняемый чек-лист **WEB-01…WEB-20**, все `[ ]`. Первый следующий шаг — **WEB-01: углублённый разбор двух референсов**; затем последовательно WEB-02…16 offline, WEB-17 policy, WEB-18…19 только при допустимости/отдельном одобрении, WEB-20 итоговый gate. 169 старых основных подпунктов и их статусы не менялись; 7.11 остаётся `[ ] PARTIAL`. Точное текущее состояние в [roadmap](./IMPLEMENTATION_ROADMAP.md) и [реестре](./docs/STATUS_REGISTER.md). Предыдущий Git head для отката этой документационной поправки: `869f15a4dea7bbb10a28589e038be91dd61c06ba`. Production `v0.3.11a0` / release `0e04af007375d82daf8f7d3b36c71abb0c784e0b` / task SQLite `v14` **по последнему HANDOFF**, живой сервер этой записью не проверяли и не меняли. Код адаптера и live вызовы не выполняли.
 
