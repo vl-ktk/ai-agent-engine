@@ -45,7 +45,7 @@ python -m unittest discover -s tests -p 'test_chatgpt_web_web02.py' -v
 python -m unittest discover -s tests -q
 ```
 
-Результаты тестов, Git commit и rollback фиксируются в актуальном `HANDOFF.md`. Никаких live ChatGPT, API или Netcup вызовов эта проверка не требует.
+**Фактически:** все 12 специальных unit PASS; локальный полный регресс — 1088 OK / 3 skipped; wheel `0.3.27a0` PASS. Исходный commit [`f1209388`](https://github.com/vl-ktk/ai-agent-engine/commit/f120938823ca89b6c43ddfb0b0fc83a412202576). [CI #44882782277](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44882782277): Linux Python 3.11/3.12/3.13 PASS, wheel PASS, **Windows общая матрица FAIL по старым Linux-only зависимостям**; 12 новых WEB-02 Windows тестов PASS. Ошибка записана как [CI-WIN-001](../../docs/KNOWN_ISSUES.md) и не объявлена исправленной. Исходный rollback до WEB-02: `376f3c27382186b01debcbbf3a6a8d6d95c50445`. Никаких live ChatGPT, API или Netcup вызовов эта проверка не требует.
 
 ## Границы и следующий пункт
 

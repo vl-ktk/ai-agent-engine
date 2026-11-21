@@ -56,6 +56,7 @@
   POSIX-зависимых тестах даже при зелёных Linux и wheel.
 - **Причина:** код и часть тестов рассчитаны на Linux/Netcup; полного
   Windows-порта пока нет.
+- **Новая проверка 21.11.2026:** в [CI #44882782277](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44882782277) для WEB-02 общий Windows Python 3.12 job вновь FAILED (4 test failures, 44 errors; логи показывают `fcntl`, `pwd`, `grp`, отсутствие `socketserver.UnixStreamServer` и `os.geteuid`). Linux 3.11/3.12/3.13 и wheel jobs PASS, **все 12 тестов нового `test_chatgpt_web_web02.py` на Windows также PASS**. Это подтверждение старой ошибки, **не новая поломка `chatgpt_web`**.
 - **Статус:** открыто. Не выдавать `CI all green`; это известное ограничение,
   а не доказательство корректности Windows. Перед Windows-релизом требуется
   отдельная совместимость и отдельная приёмка.

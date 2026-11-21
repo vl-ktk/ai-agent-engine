@@ -6,6 +6,8 @@
 
 **Реальные проверки:** 12/12 WEB-02 unittest PASS; полный локальный `python -m unittest discover -s tests -q`: **1088 OK, 3 skipped**, exit 0; `compileall`, `git diff --check` и сборка wheel **`ai_agent_engine-0.3.27a0-py3-none-any.whl` PASS**, архив содержит `chatgpt_web.py`. Никаких ChatGPT, личных cookies/tokens, paid API или Netcup/live/production вызовов. **Это не готовая многоагентная Web ChatGPT система**, не полный WEB-16 OFFLINE_PASS и не POLICY_GO.
 
+**GitHub после WEB-02:** исходники опубликованы commit [`f120938823ca89b6c43ddfb0b0fc83a412202576`](https://github.com/vl-ktk/ai-agent-engine/commit/f120938823ca89b6c43ddfb0b0fc83a412202576), проверены 9/9 точных Git blob SHA. [CI #44882782277](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44882782277): **Ubuntu Python 3.11/3.12/3.13 PASS**, isolated wheel **PASS**; **Windows Python 3.12 FAIL** по известному [CI-WIN-001](./docs/KNOWN_ISSUES.md) (`fcntl`/`pwd`/`grp` и другие POSIX-допущения, 4 failures + 44 import/runtime errors); **все 12 новых WEB-02 тестов на Windows PASS**. Поэтому общий CI **не зелёный**; Windows-совместимость вне текущего WEB-02, проблему не закрывали.
+
 **Далее строго WEB-03 [ ]** по новой команде владельца: стабильный `agent_id`, отдельная session/profile/queue и изоляция двух агентов на mock browser; не начинать WEB-04…20 одним заходом. Основные 169 и 86/169 выполненных не менялись; WEB checklist **2/20 [x]**, 18/20 [ ]; 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 policy остаётся `HOLD`.
 
 ---
