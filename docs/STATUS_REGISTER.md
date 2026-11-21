@@ -28,7 +28,7 @@
 
 **WEB-08 проверки:** 23/23 новых unit PASS, полный локальный регресс **1196 OK (3 skipped)**, wheel `0.3.33a0` с instruction bootstrap, compileall и diff check PASS. [CI #44895009301](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44895009301): Ubuntu 3.11/3.12/3.13 и wheel PASS, общий Windows FAIL на CI-WIN-001, все 23 новых Windows unit PASS. [Протокол WEB-08](../infra/orchestrator/CHATGPT_WEB_WEB08_INSTRUCTIONS.md).
 
-**WEB-09 проверки:** 15/15 новых unit, полный локальный регресс **1211 OK (3 skipped)**, wheel `0.3.34a0`, compileall и diff check PASS. [Протокол WEB-09](../infra/orchestrator/CHATGPT_WEB_WEB09_CONTEXT_PRESSURE.md). CI будет дописан после публикации: это лишь scoped offline preflight, не настоящий ChatGPT token count или ротация чата.
+**WEB-09 проверки:** 15/15 новых unit, полный локальный регресс **1211 OK (3 skipped)**, wheel `0.3.34a0`, compileall и diff check PASS. [CI #44897250136](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44897250136): Ubuntu 3.11/3.12/3.13 и wheel PASS; Windows global FAIL по прежней CI-WIN-001 (4 failures/44 errors), но 15/15 новых Windows unit PASS. [Протокол WEB-09](../infra/orchestrator/CHATGPT_WEB_WEB09_CONTEXT_PRESSURE.md). Это лишь scoped offline preflight, не настоящий ChatGPT token count или ротация чата.
 
 ## 2. Точка остановки — текущий 7.11
 
