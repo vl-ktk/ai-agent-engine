@@ -201,3 +201,14 @@ class WebInstructionBootstrap:
             raise WebInstructionBootstrapError("instruction grant unverified")
 
         return snapshot.instructions
+
+    def pinned_policy(self, *, owner_id: str, project_id: str,
+                      agent_id: str) -> TrustedAgentInstructionPolicy:
+        """Trusted metadata only; never returns memory or grants as authority."""
+        with self._lock:
+            policy = self._policies.get(agent_id)
+        if (policy is None or (policy.owner_id, policy.project_id,
+                              policy.agent_id) !=
+                             (owner_id, project_id, agent_id)):
+            raise WebInstructionBootstrapError("instruction policy unavailable")
+        return policy

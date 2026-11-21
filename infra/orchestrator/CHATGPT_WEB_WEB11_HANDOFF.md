@@ -1,0 +1,20 @@
+# WEB-11 — перенос разрешённого состояния и памяти в новый mock-чат
+
+**21.11.2026.** Одиннадцатая из 20 внутренних задач 7.11. Версия исходника `0.3.36a0`, реализация `ai_agent_engine/chatgpt_web_handoff.py`, opt-in интеграция `WebAgentModelRegistry`/`WebAgentSessionRegistry`, проверочные тесты `tests/test_chatgpt_web_web11.py`.
+
+## Что перенесено
+
+1. Только **после** WEB-10 `WebRotationReceipt` (owner, project, agent, task, checkpoint, old/new conversation, rotation) подтверждается по точной **COMMITTED** цепочке в `SQLiteWebRotationJournal` и текущему `ProjectChatManager.active`. Старый/поддельный receipt, другой проект или уже заменённый чат → HOLD **до** загрузки данных.
+2. WEB-08 `WebInstructionBootstrap` в той же per-agent FIFO заново читает утверждённую версию проектных инструкций и независимый grant proof. `TrustedHandoffPolicy` закрепляет тот же `role`, `instruction_revision` и SHA-256 — нельзя подменить или незаметно перенести устаревшие инструкции.
+3. `ScopedCheckpointSource` — инъектированный **mock** trusted-port, не свободный текст от модели: подтверждает точные owner/project/agent/ChatGPT Project/profile/mailbox/task/checkpoint, флаги verified/current, целочисленную revision и **owner-pinned SHA-256** короткого `status/summary/next_action`. Допустимы только `in_progress`, `paused`, `blocked`; нет full transcript или скрытых chain-of-thought.
+4. `ScopedHandoffMemorySource` возвращает только явно одобренные `TrustedMemoryPin` (`memory_id`, revision, SHA-256), максимум **пять** фактов по **600 символов** каждый. Пустая память допустима; новые/чужие/старые/лишние/неподтверждённые записи → HOLD, без fallback в общую базу или соседний проект. Это отдельные typed claims тестового порта, не фактическое чтение `ProjectMemoryStore` (полное подключение ядра запланировано на WEB-12).
+5. Текстовые поля bounded и проверяются на очевидные утечки (`password=`, private key, raw transcript, hidden reasoning) и инструкции, способные выдать новые права. Источник правды — доверенная pin/revision/permission проверка; эвристический текстовый фильтр **не** доказывает отсутствие любой потенциальной утечки. Данные заворачиваются в компактный JSON с явным `DATA_NOT_INSTRUCTIONS`, отдельными task/checkpoint ID и одним актуальным пользовательским запросом. Системные инструкции остаются в отдельном system message. Нет копирования полного архива чатов, hidden thought, произвольных соседних задач или выдачи grant из текста.
+6. `WebAgentSessionRegistry.run_with_model_verifier` опционально вызывает `prompt_preparer` **внутри агентной FIFO** только после membership/model/effort/WEB-08 verified bootstrap, до WEB-09 preflight и `BrowserPort.complete`. Поэтому в тестах невозможно успеть повернуть чат между проверкой источников и отправкой. Неизвестный source/exception → sanitized HOLD без вызова браузера.
+
+## Верификация и границы
+
+- Позитивный mock E2E: WEB-09 pressure → WEB-10 rotation → свежие WEB-08 инструкции/grant → WEB-11 scoped checkpoint+memory → один новый mock turn. Точная версия task/checkpoint/agent видна в JSON.
+- Негативные: wrong owner/project/agent, forged/stale WEB-10 receipt, old chat, неверный checkpoint revision/SHA/status, изменённые инструкции, malicious/foreign/unapproved memory, secret/CoT/role injection, exception в источнике, concurrent chat action, восстановление нового manager из SQLite journal — отказ до браузера и no cross-project bleed.
+- **19/19 новых unit PASS**; полный локальный regression **1247 OK (3 skipped)**, `compileall`, `git diff --check`, wheel `ai_agent_engine-0.3.36a0-py3-none-any.whl` PASS. Git source SHA/CI зафиксировать после публикации.
+
+**Не сделано и не утверждается:** настоящий ChatGPT Web UI, серверный TaskInbox/lease/ACK, реальный `ProjectMemoryStore`→Web adapter, durable business checkpoint writer, автоматическая повторная доставка, WEB-16 offline полная приёмка, `POLICY_GO`/`TECH_GO` или реальная подписочная квота. WEB-12…20 отдельно открыты; `7.11 PARTIAL`.

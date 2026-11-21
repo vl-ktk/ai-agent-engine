@@ -18,6 +18,10 @@ from .chatgpt_web_instructions import (
 from .chatgpt_web_context import (
     TrustedAgentContextPolicy, WebContextMonitor,
 )
+from .chatgpt_web_handoff import (
+    TrustedHandoffPolicy, WebChatHandoff, WebHandoffError,
+)
+from .chatgpt_web_rotation import WebRotationReceipt
 from .chatgpt_web_reasoning import (
     ProjectReasoningSelector, ReasoningSelectionEvidence,
     TrustedAgentReasoningPolicy, TrustedProjectReasoningCatalog,
@@ -106,7 +110,8 @@ class WebAgentModelRegistry:
                  reasoning_catalogs: tuple[TrustedProjectReasoningCatalog, ...] | None = None,
                  reasoning_selector: ProjectReasoningSelector | None = None,
                  instruction_bootstrap: WebInstructionBootstrap | None = None,
-                 context_monitor: WebContextMonitor | None = None):
+                 context_monitor: WebContextMonitor | None = None,
+                 handoff: WebChatHandoff | None = None):
         if not isinstance(sessions, WebAgentSessionRegistry):
             raise TypeError("invalid web agent session registry")
         if (type(project_catalogs) is not tuple or not project_catalogs
@@ -119,6 +124,11 @@ class WebAgentModelRegistry:
                 and (not isinstance(context_monitor, WebContextMonitor)
                      or context_monitor.sessions is not sessions)):
             raise ValueError("invalid trusted context monitor")
+        if (handoff is not None
+                and (not isinstance(handoff, WebChatHandoff)
+                     or handoff.sessions is not sessions
+                     or instruction_bootstrap is None)):
+            raise ValueError("handoff requires scoped sessions and WEB-08 instructions")
         projects: dict[str, TrustedProjectModelCatalog] = {}
         for catalog in project_catalogs:
             if (not isinstance(catalog, TrustedProjectModelCatalog)
@@ -155,6 +165,7 @@ class WebAgentModelRegistry:
         self._reasoning_selector = reasoning_selector
         self._instruction_bootstrap = instruction_bootstrap
         self._context_monitor = context_monitor
+        self._handoff = handoff
         self._lock = Lock()
         self._policies: dict[str, TrustedAgentModelPolicy] = {}
         self._reasoning_policies: dict[str, TrustedAgentReasoningPolicy] = {}
@@ -229,6 +240,25 @@ class WebAgentModelRegistry:
                      agent_id=policy.agent_id)
         self._context_monitor.register(policy)
 
+    def register_handoff(self, policy: TrustedHandoffPolicy) -> None:
+        """WEB-11: bind task/checkpoint to approved WEB-08 revision/digest."""
+        if type(policy) is not TrustedHandoffPolicy:
+            raise TypeError("invalid trusted handoff policy")
+        if self._handoff is None or self._instruction_bootstrap is None:
+            raise WebHandoffError("web handoff is disabled")
+        self._policy(owner_id=policy.owner_id, project_id=policy.project_id,
+                     agent_id=policy.agent_id)
+        instruction_policy = self._instruction_bootstrap.pinned_policy(
+            owner_id=policy.owner_id, project_id=policy.project_id,
+            agent_id=policy.agent_id)
+        self._handoff.register(
+            policy,
+            identity=self._sessions.identity(
+                owner_id=policy.owner_id, project_id=policy.project_id,
+                agent_id=policy.agent_id),
+            instruction_revision=instruction_policy.revision,
+            instruction_sha256=instruction_policy.instructions_sha256)
+
     def _policy(self, *, owner_id: str, project_id: str,
                 agent_id: str) -> TrustedAgentModelPolicy:
         self._sessions.profile(owner_id=owner_id, project_id=project_id,
@@ -253,7 +283,10 @@ class WebAgentModelRegistry:
 
     def run(self, *, owner_id: str, project_id: str, agent_id: str,
             prompt: str, requested_model_id: str | None = None,
-            requested_reasoning_effort: str | None = None) -> AgentResult:
+            requested_reasoning_effort: str | None = None,
+            handoff_receipt: WebRotationReceipt | None = None) -> AgentResult:
+        if handoff_receipt is not None and self._handoff is None:
+            raise WebHandoffError("trusted chat handoff is disabled")
         model_id = self.selected_model(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id,
             requested_model_id=requested_model_id)
@@ -326,10 +359,18 @@ class WebAgentModelRegistry:
                 binding=binding, profile=profile, prompt=text,
                 system_message=system_message)
 
+        def compose_resume(profile: WebAgentProfile, text: str,
+                           instructions: str) -> str:
+            return self._handoff.prepare(
+                binding=binding, profile=profile,
+                receipt=handoff_receipt, prompt=text,
+                instructions=instructions)
+
         return self._sessions.run_with_model_verifier(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id,
             model_id=model_id, prompt=prompt, model_verifier=verify,
             instructions_loader=(load_instructions
                                  if self._instruction_bootstrap is not None else None),
             context_preflight=(check_context
-                               if self._context_monitor is not None else None))
+                               if self._context_monitor is not None else None),
+            prompt_preparer=(compose_resume if handoff_receipt is not None else None))

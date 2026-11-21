@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-10 OFFLINE MOCK PASS → следующий WEB-11
+# HANDOFF — 21.11.2026 / WEB-11 OFFLINE MOCK PASS → следующий WEB-12
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`. **Baseline и rollback перед WEB-11:** `0b348d823846928196397cd5d0f2df3dea168020` (при чужих изменениях только адресный revert коммитов WEB-11). **Python source `0.3.36a0`**, не серверный релиз. Последняя документированная, не перепроверенная live версия Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`; рабочая SQLite v14 не менялась.
+
+**WEB-11 [x] только offline mock:** `WebChatHandoff` принимает WEB-10 `WebRotationReceipt` только при точной `COMMITTED` записи в SQLite-журнале и том же активном новом mock-чате. В той же FIFO повторно проверяются WEB-08 проектные инструкции + grant; затем owner-pinned свежий checkpoint (`owner/project/agent/task/checkpoint`, revision, SHA-256, verified/current) и до пяти approved memory facts (точные ID/revision/SHA-256). В `BrowserPort` отправляется ограниченный data-only JSON с текущей задачей и состоянием, **без** полного chat transcript и hidden reasoning. Чужой/устаревший/ложный scope, неподтверждённая память или ошибка mock-порта блокируют отправку. [Протокол WEB-11](./infra/orchestrator/CHATGPT_WEB_WEB11_HANDOFF.md). Реальные `ProjectMemoryStore`/TaskInbox/lease/ACK, ChatGPT UI и серверный restart ещё не интегрированы; текстовый эвристический фильтр не является формальной DLP-гарантией.
+
+**Проверки локально:** 19/19 новых WEB-11 unit PASS; полный regression **1247 OK (3 skipped)**, `compileall`, wheel `ai_agent_engine-0.3.36a0-py3-none-any.whl`, `git diff --check` PASS. **GitHub source/CI:** ожидают публикации и проверки; этот HANDOFF обновить точными commit/run ID и честным Windows итогом. Нет `POLICY_GO`/`TECH_GO` или live-доступа.
+
+**Статус:** WEB-01…11 `[x]` лишь в узком offline/mock объёме — **11/20**; WEB-12…20 `[ ]`, 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 `POLICY_HOLD`. 169 прямых подпунктов/86 ранее закрытых не менялись. **Следующий только WEB-12 по новой команде владельца:** интеграция с TaskInbox/TaskPermissionGate/SharedCapacity и provider-neutral контрактом. Netcup, production, секреты, реальные проекты и платные API не тронуты.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-10 OFFLINE MOCK PASS → следующий WEB-11
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`. **Git source baseline/rollback до WEB-10:** `d804ea5ffcae03ead914965458ca233d787ab31d` (при чужих коммитах только адресный revert своих изменений). **Исходный Python `0.3.35a1`**, не Netcup production. Последняя *документированная*, но не перепроверенная live версия Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; VPS/рабочие БД не трогали.
 

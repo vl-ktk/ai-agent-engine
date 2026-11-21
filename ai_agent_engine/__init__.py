@@ -46,6 +46,11 @@ from .chatgpt_web_rotation import (
     SQLiteWebRotationJournal, WebAutomaticChatRotator, WebChatRotationError,
     WebRotationReceipt,
 )
+from .chatgpt_web_handoff import (
+    ApprovedMemoryItem, ScopedCheckpointSnapshot, ScopedCheckpointSource,
+    ScopedHandoffMemorySource, ScopedMemorySnapshot, TrustedHandoffPolicy,
+    TrustedMemoryPin, WebChatHandoff, WebHandoffError, checkpoint_sha256,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -74,4 +79,7 @@ __all__ = [
     "WebContextPressureError",
     "SQLiteWebRotationJournal", "WebAutomaticChatRotator",
     "WebChatRotationError", "WebRotationReceipt",
+    "ApprovedMemoryItem", "ScopedCheckpointSnapshot", "ScopedCheckpointSource",
+    "ScopedHandoffMemorySource", "ScopedMemorySnapshot", "TrustedHandoffPolicy",
+    "TrustedMemoryPin", "WebChatHandoff", "WebHandoffError", "checkpoint_sha256",
 ]

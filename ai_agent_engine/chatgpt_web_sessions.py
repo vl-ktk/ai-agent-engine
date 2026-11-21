@@ -274,6 +274,8 @@ class WebAgentSessionRegistry:
                                 instructions_loader: Callable[[WebAgentProfile], str]
                                 | None = None,
                                 context_preflight: Callable[[WebAgentProfile, str, str], None]
+                                | None = None,
+                                prompt_preparer: Callable[[WebAgentProfile, str, str], str]
                                 | None = None
                                 ) -> AgentResult:
         """WEB-06: check selection inside the same FIFO turn as sending."""
@@ -283,17 +285,21 @@ class WebAgentSessionRegistry:
             raise ValueError("trusted instructions loader required")
         if context_preflight is not None and not callable(context_preflight):
             raise ValueError("trusted context preflight required")
+        if prompt_preparer is not None and not callable(prompt_preparer):
+            raise ValueError("trusted scoped prompt preparer required")
         return self._run(owner_id=owner_id, project_id=project_id,
                          agent_id=agent_id, model_id=model_id, prompt=prompt,
                          model_verifier=model_verifier,
                          instructions_loader=instructions_loader,
-                         context_preflight=context_preflight)
+                         context_preflight=context_preflight,
+                         prompt_preparer=prompt_preparer)
 
     def _run(self, *, owner_id: str, project_id: str,
              agent_id: str, model_id: str, prompt: str,
              model_verifier: Callable[[WebAgentProfile, str], None] | None = None,
              instructions_loader: Callable[[WebAgentProfile], str] | None = None,
-             context_preflight: Callable[[WebAgentProfile, str, str], None] | None = None
+             context_preflight: Callable[[WebAgentProfile, str, str], None] | None = None,
+             prompt_preparer: Callable[[WebAgentProfile, str, str], str] | None = None
              ) -> AgentResult:
         slot = self._slot(owner_id=owner_id, project_id=project_id,
                           agent_id=agent_id)
@@ -312,6 +318,11 @@ class WebAgentSessionRegistry:
             context = SessionContext(slot.identity.project_id,
                                      slot.identity.agent_id,
                                      slot.identity.role, instructions)
+            if prompt_preparer is not None:
+                prompt = prompt_preparer(slot.profile, prompt, instructions)
+                if (type(prompt) is not str or not prompt.strip()
+                        or "\x00" in prompt or len(prompt) > 65_536):
+                    raise WebAgentScopeError("unverified scoped resume payload")
             if context_preflight is not None:
                 context_preflight(slot.profile, prompt,
                                   context.system_message().content)
