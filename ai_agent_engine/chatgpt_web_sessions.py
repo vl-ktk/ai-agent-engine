@@ -272,6 +272,8 @@ class WebAgentSessionRegistry:
                                 agent_id: str, model_id: str, prompt: str,
                                 model_verifier: Callable[[WebAgentProfile, str], None],
                                 instructions_loader: Callable[[WebAgentProfile], str]
+                                | None = None,
+                                context_preflight: Callable[[WebAgentProfile, str, str], None]
                                 | None = None
                                 ) -> AgentResult:
         """WEB-06: check selection inside the same FIFO turn as sending."""
@@ -279,15 +281,19 @@ class WebAgentSessionRegistry:
             raise ValueError("trusted web model verifier required")
         if instructions_loader is not None and not callable(instructions_loader):
             raise ValueError("trusted instructions loader required")
+        if context_preflight is not None and not callable(context_preflight):
+            raise ValueError("trusted context preflight required")
         return self._run(owner_id=owner_id, project_id=project_id,
                          agent_id=agent_id, model_id=model_id, prompt=prompt,
                          model_verifier=model_verifier,
-                         instructions_loader=instructions_loader)
+                         instructions_loader=instructions_loader,
+                         context_preflight=context_preflight)
 
     def _run(self, *, owner_id: str, project_id: str,
              agent_id: str, model_id: str, prompt: str,
              model_verifier: Callable[[WebAgentProfile, str], None] | None = None,
-             instructions_loader: Callable[[WebAgentProfile], str] | None = None
+             instructions_loader: Callable[[WebAgentProfile], str] | None = None,
+             context_preflight: Callable[[WebAgentProfile, str, str], None] | None = None
              ) -> AgentResult:
         slot = self._slot(owner_id=owner_id, project_id=project_id,
                           agent_id=agent_id)
@@ -303,8 +309,11 @@ class WebAgentSessionRegistry:
                 if (type(instructions) is not str or not instructions.strip()
                         or "\x00" in instructions or len(instructions) > 8_000):
                     raise WebAgentScopeError("unverified web agent instructions")
-            model = ChatGPTWebModel(self._config, model_id, slot.browser)
             context = SessionContext(slot.identity.project_id,
                                      slot.identity.agent_id,
                                      slot.identity.role, instructions)
+            if context_preflight is not None:
+                context_preflight(slot.profile, prompt,
+                                  context.system_message().content)
+            model = ChatGPTWebModel(self._config, model_id, slot.browser)
             return AgentSession(context=context, model=model).run(prompt)

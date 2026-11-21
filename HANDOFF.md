@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-08 OFFLINE MOCK PASS → следующий WEB-09
+# HANDOFF — 21.11.2026 / WEB-09 OFFLINE MOCK PASS → следующий WEB-10
+
+**Источник истины:** `vl-ktk/ai-agent-engine/main`. **Git source baseline/rollback до WEB-09:** `ea881a5fdfea5900a58e016748708be3ec0e2c22` (при чужих правках только адресный revert собственных commits). **Новый исходный Python `0.3.34a0`**, не Netcup production. Последняя **документированная**, не live-перепроверенная версия Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; VPS/БД не трогали.
+
+**WEB-09 [x] только offline mock:** `WebContextMonitor` с pinned per-agent `TrustedAgentContextPolicy`, независимым `ScopedContextUsageSource` и exact/bounded/unknown evidence верифицирует активный `ProjectChatManager` mock conversation, owner/project/agent/ChatGPT Project/profile/mailbox/current/verified в агентной FIFO после WEB-04/06/07/08, **до** BrowserPort. Процент от консервативной верхней границы (учитывает полный system/user текст и reserve): 60% `WARN` (допуск + статус), 75% `ROTATE` (запрет до будущего WEB-10), 90% `EMERGENCY` (запрет); неизвестная/ложная/старая/регрессирующая оценка `HOLD` или fail-closed. Нет точного токен-счётчика веба, гарантии отсутствия лживого правдоподобного mock proof, автоматической ротации, persistent состояния или живой авторизации. [Протокол WEB-09](./infra/orchestrator/CHATGPT_WEB_WEB09_CONTEXT_PRESSURE.md).
+
+**Реальные локальные проверки:** 15/15 новых unit, полный regression **1211 OK (3 skipped)**, `compileall`, wheel `ai_agent_engine-0.3.34a0-py3-none-any.whl`, `git diff --check` PASS. **GitHub source/CI:** ожидает публикации/верификации; обновить эти строки после получения SHA и GitHub Actions результата, не объявлять CI PASS заранее.
+
+**Статус плана:** WEB-01…09 `[x]` строго в source/offline рамках — **9/20**. WEB-10…20 `[ ]`, 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 `POLICY_HOLD`; 169 прямых подпунктов и прежние 86/169 без изменений. **Следующий только WEB-10 [ ] по новой команде владельца** — автоматическая ротация mock-чата внутри того же проекта, exact lineage/task/agent, crash/retry и отсутствие дублирующих эффектов. WEB-11…20 без новой команды не начинать. Нет новых расходов, реальных ChatGPT/Netcup-операций или платных API.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-08 OFFLINE MOCK PASS → следующий WEB-09
 
 **Источник истины:** `vl-ktk/ai-agent-engine/main`. **Git source baseline / rollback до WEB-08:** `84501d99996039f6fab6015280c9e0290e6e04c7` (при чужих последующих изменениях только адресный revert своих commit). **Новый исходный Python `0.3.33a0`**, не Netcup production. По последней документальной проверке Netcup controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая task SQLite v14; VPS сейчас не проверялся и не менялся.
 

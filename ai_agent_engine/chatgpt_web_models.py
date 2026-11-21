@@ -15,6 +15,9 @@ from .chatgpt_web_projects import TrustedChatGPTProjectBinding
 from .chatgpt_web_instructions import (
     TrustedAgentInstructionPolicy, WebInstructionBootstrap,
 )
+from .chatgpt_web_context import (
+    TrustedAgentContextPolicy, WebContextMonitor,
+)
 from .chatgpt_web_reasoning import (
     ProjectReasoningSelector, ReasoningSelectionEvidence,
     TrustedAgentReasoningPolicy, TrustedProjectReasoningCatalog,
@@ -102,7 +105,8 @@ class WebAgentModelRegistry:
                  selector: ProjectModelSelector,
                  reasoning_catalogs: tuple[TrustedProjectReasoningCatalog, ...] | None = None,
                  reasoning_selector: ProjectReasoningSelector | None = None,
-                 instruction_bootstrap: WebInstructionBootstrap | None = None):
+                 instruction_bootstrap: WebInstructionBootstrap | None = None,
+                 context_monitor: WebContextMonitor | None = None):
         if not isinstance(sessions, WebAgentSessionRegistry):
             raise TypeError("invalid web agent session registry")
         if (type(project_catalogs) is not tuple or not project_catalogs
@@ -111,6 +115,10 @@ class WebAgentModelRegistry:
         if (instruction_bootstrap is not None
                 and not isinstance(instruction_bootstrap, WebInstructionBootstrap)):
             raise ValueError("invalid trusted instruction bootstrap")
+        if (context_monitor is not None
+                and (not isinstance(context_monitor, WebContextMonitor)
+                     or context_monitor.sessions is not sessions)):
+            raise ValueError("invalid trusted context monitor")
         projects: dict[str, TrustedProjectModelCatalog] = {}
         for catalog in project_catalogs:
             if (not isinstance(catalog, TrustedProjectModelCatalog)
@@ -146,6 +154,7 @@ class WebAgentModelRegistry:
         })
         self._reasoning_selector = reasoning_selector
         self._instruction_bootstrap = instruction_bootstrap
+        self._context_monitor = context_monitor
         self._lock = Lock()
         self._policies: dict[str, TrustedAgentModelPolicy] = {}
         self._reasoning_policies: dict[str, TrustedAgentReasoningPolicy] = {}
@@ -209,6 +218,16 @@ class WebAgentModelRegistry:
             identity=self._sessions.identity(
                 owner_id=policy.owner_id, project_id=policy.project_id,
                 agent_id=policy.agent_id))
+
+    def register_context(self, policy: TrustedAgentContextPolicy) -> None:
+        """WEB-09: pin one agent's measured context budget and thresholds."""
+        if type(policy) is not TrustedAgentContextPolicy:
+            raise TypeError("invalid trusted context policy")
+        if self._context_monitor is None:
+            raise WebAgentScopeError("web context monitoring disabled")
+        self._policy(owner_id=policy.owner_id, project_id=policy.project_id,
+                     agent_id=policy.agent_id)
+        self._context_monitor.register(policy)
 
     def _policy(self, *, owner_id: str, project_id: str,
                 agent_id: str) -> TrustedAgentModelPolicy:
@@ -301,8 +320,16 @@ class WebAgentModelRegistry:
                 identity=self._sessions.identity(
                     owner_id=owner_id, project_id=project_id, agent_id=agent_id))
 
+        def check_context(profile: WebAgentProfile, text: str,
+                          system_message: str) -> None:
+            self._context_monitor.preflight(
+                binding=binding, profile=profile, prompt=text,
+                system_message=system_message)
+
         return self._sessions.run_with_model_verifier(
             owner_id=owner_id, project_id=project_id, agent_id=agent_id,
             model_id=model_id, prompt=prompt, model_verifier=verify,
             instructions_loader=(load_instructions
-                                 if self._instruction_bootstrap is not None else None))
+                                 if self._instruction_bootstrap is not None else None),
+            context_preflight=(check_context
+                               if self._context_monitor is not None else None))

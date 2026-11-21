@@ -37,6 +37,11 @@ from .chatgpt_web_instructions import (
     TrustedAgentInstructionPolicy, WebInstructionBootstrap,
     WebInstructionBootstrapError,
 )
+from .chatgpt_web_context import (
+    ContextPressureDecision, ContextThresholds, ContextUsageEvidence,
+    ScopedContextUsageSource, TrustedAgentContextPolicy, WebContextMonitor,
+    WebContextPressureError,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -60,4 +65,7 @@ __all__ = [
     "ScopedInstructionSnapshot", "ScopedInstructionSource",
     "TrustedAgentInstructionPolicy", "WebInstructionBootstrap",
     "WebInstructionBootstrapError",
+    "ContextPressureDecision", "ContextThresholds", "ContextUsageEvidence",
+    "ScopedContextUsageSource", "TrustedAgentContextPolicy", "WebContextMonitor",
+    "WebContextPressureError",
 ]
