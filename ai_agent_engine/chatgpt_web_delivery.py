@@ -22,6 +22,7 @@ import time
 from .chatgpt_web_core import (
     WebCoreTaskAdapter, WebCoreTaskOutcome,
 )
+from .chatgpt_web_failures import WebFaultGuard
 from .chatgpt_web_rotation import WebRotationReceipt
 from .task_api import OwnerScope, _TASK_ID
 from .task_delivery import TaskDeliveryManager
@@ -243,21 +244,25 @@ class WebIdempotentDispatcher:
 
     Only capacity denials are conclusively pre-send and retryable (1..5,
     bounded backoff). An ACTIVE/VERIFIED token is never reissued, including
-    after lease expiry or restart; WEB-15 owns deeper recovery.
+    after lease expiry or restart. WEB-14's opt-in bound fault guard refuses
+    new tickets for agents whose BrowserPort reported an unsafe outcome;
+    WEB-15 owns deeper durable agent/session recovery.
     """
 
     def __init__(self, core: WebCoreTaskAdapter,
                  delivery: TaskDeliveryManager,
                  journal: SQLiteWebDeliveryJournal, *,
                  max_attempts: int = 3, lease_seconds: int = 120,
-                 clock=time.time):
+                 clock=time.time, fault_guard: WebFaultGuard | None = None):
         if (not isinstance(core, WebCoreTaskAdapter)
                 or not isinstance(delivery, TaskDeliveryManager)
                 or delivery.inbox is not core.inbox
                 or not isinstance(journal, SQLiteWebDeliveryJournal)
                 or type(max_attempts) is not int or not 1 <= max_attempts <= 5
                 or type(lease_seconds) is not int or not 1 <= lease_seconds <= 3600
-                or not callable(clock)):
+                or not callable(clock)
+                or (fault_guard is not None
+                    and not isinstance(fault_guard, WebFaultGuard))):
             raise ValueError("trusted bounded web delivery dependencies required")
         self.core = core
         self.delivery = delivery
@@ -265,6 +270,7 @@ class WebIdempotentDispatcher:
         self.max_attempts = max_attempts
         self.lease_seconds = lease_seconds
         self._clock = clock
+        self.fault_guard = fault_guard
 
     def dispatch(self, raw_request: bytes, *, task_id: str, worker_id: str,
                  requested_model_id: str | None = None,
@@ -277,6 +283,16 @@ class WebIdempotentDispatcher:
                 raw_request, task_id=task_id, worker_id=worker_id,
                 requested_model_id=requested_model_id,
                 handoff_receipt=handoff_receipt)
+            if self.fault_guard is not None:
+                # The same guard must wrap the actual scoped BrowserPort;
+                # a detached dummy guard must not claim WEB-14 protection.
+                slot = self.core.sessions._slot(
+                    owner_id=scope.owner_id, project_id=record.project_id,
+                    agent_id=worker_id)
+                self.fault_guard.require_bound_port(slot.browser)
+                self.fault_guard.require_ready(
+                    owner_id=scope.owner_id, project_id=record.project_id,
+                    agent_id=worker_id)
             # TaskDeliveryManager is the existing atomic v17 delivery ledger.
             ticket = self.delivery.reserve(
                 task_id, scope, actor_id=worker_id,
