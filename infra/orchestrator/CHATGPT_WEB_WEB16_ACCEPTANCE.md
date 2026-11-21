@@ -71,11 +71,19 @@ python -m compileall -q ai_agent_engine tests
 python -m pip wheel --no-deps --no-build-isolation --wheel-dir /tmp/aae-web16-wheel .
 ```
 
-GitHub CI (матрица Ubuntu Python 3.11/3.12/3.13, Windows Python 3.12 и
-отдельный isolated-wheel job), версию исходника, SHA/rollback и результаты
-внести **после завершения соответствующего workflow**, не предвосхищать.
-Историческая `CI-WIN-001` (`fcntl`/`pwd`/`grp` и POSIX-тесты) остаётся
-отдельной от WEB-16 проблемой общего Windows job.
+**Реальный результат:** 8/8 новых Linux integration tests PASS; полный
+локальный regression **1316 OK (3 skipped)**, повторён на финальной
+версии; `compileall`, `git diff --check` и wheel
+`ai_agent_engine-0.3.41a0-py3-none-any.whl` PASS, SHA-256
+`ec6cb19927fbc5242832d2686457184ce586c12c1fce2d1a0722be0b2d5c8b8c`.
+[Исходный commit `6d3fcec313bb339200f2dbdf29b918eeb2b25811`](https://github.com/vl-ktk/ai-agent-engine/commit/6d3fcec313bb339200f2dbdf29b918eeb2b25811)
+(tree `7c033e5eea832b9c7000f36dd86c559e3d23accc`), исходный rollback
+baseline `2aac70eda003a0cee3c22e031ef40373dd40a05d`.
+[CI #44910201321](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44910201321):
+Ubuntu Python **3.11/3.12/3.13 PASS**, isolated wheel **PASS**;
+Windows Python 3.12 общий **FAIL** на ранее известной `CI-WIN-001`
+(`fcntl`/`pwd`/`grp`/POSIX-тесты: 4 failures, 44 errors, 238 skipped,
+в том числе все 8 новых Linux-only WEB-16). **Общая матрица не зелёная.**
 
 **Остаточные риски:** настоящий browser session, quota, доступ к платному
 или подписочному ChatGPT, устойчивость живого UI, серверный deploy, непрерывная
