@@ -24,7 +24,7 @@
 
 **WEB-06 локальные проверки:** 18/18 новых unit PASS; общий регресс **1151 OK (3 skipped)**, wheel `0.3.31a0` и `compileall` PASS. `WEB-06` принят только в offline/mock-объёме, реальный UI и пределы подписки остаются неподтверждёнными.
 
-**WEB-07 локальные проверки:** 22/22 новых unit PASS; source `0.3.32a0`, reasoning proof проверяется до BrowserPort внутри per-agent FIFO. Полный regression и CI — см. [протокол](../infra/orchestrator/CHATGPT_WEB_WEB07_REASONING_SELECTION.md). Mock не означает реального выбора effort в UI.
+**WEB-07 проверки:** 22/22 новых unit и 1173 локальный regression OK (3 skipped), source `0.3.32a0`, compileall/wheel PASS, reasoning proof до BrowserPort внутри FIFO. [GitHub CI #44894136371](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44894136371): Linux 3.11/3.12/3.13 и wheel PASS, Windows global FAIL на CI-WIN-001, все 22 новых Windows unit PASS. [Протокол](../infra/orchestrator/CHATGPT_WEB_WEB07_REASONING_SELECTION.md). Mock не означает реального выбора effort в UI.
 
 ## 2. Точка остановки — текущий 7.11
 
