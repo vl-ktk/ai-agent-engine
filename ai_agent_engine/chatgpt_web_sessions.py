@@ -1,7 +1,8 @@
 """WEB-03: owner-scoped in-memory agent identities and mock browser isolation.
 
-No ChatGPT Project membership, persistent mailbox, disk browser profile or
-live web access is implied here. Those belong to later WEB steps.
+WEB-04 adds an opt-in trusted mock Project membership gate. No real ChatGPT
+Project membership, persistent mailbox, disk browser profile or live web
+access is implied here.
 """
 
 from __future__ import annotations
@@ -11,12 +12,18 @@ from dataclasses import dataclass
 import hashlib
 import re
 from threading import Condition, Lock
-from typing import Callable, Iterator, Protocol
+from typing import TYPE_CHECKING, Callable, Iterator, Protocol
 
 from .chatgpt_web import (
     BrowserPort, ChatGPTWebConfig, ChatGPTWebModel, ChatGPTWebUnavailable,
 )
 from .core import AgentResult, AgentRole, AgentSession, SessionContext
+
+if TYPE_CHECKING:
+    from .chatgpt_web_projects import (
+        ProjectMembershipVerifier, TrustedChatGPTProjectBinding,
+        TrustedChatGPTProjectRegistry,
+    )
 
 
 _SCOPE_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}\Z")
@@ -134,13 +141,24 @@ class WebAgentSessionRegistry:
     """
 
     def __init__(self, config: ChatGPTWebConfig, *,
-                 browser_factory: ProfileBrowserFactory | None = None) -> None:
+                 browser_factory: ProfileBrowserFactory | None = None,
+                 project_registry: TrustedChatGPTProjectRegistry | None = None,
+                 project_verifier: ProjectMembershipVerifier | None = None) -> None:
         if not isinstance(config, ChatGPTWebConfig):
             raise TypeError("invalid web adapter config")
         if browser_factory is not None and not callable(browser_factory):
             raise ValueError("invalid scoped browser factory")
+        if (project_registry is None) != (project_verifier is None):
+            raise ValueError("project registry and verifier must be paired")
+        if project_registry is not None:
+            from .chatgpt_web_projects import TrustedChatGPTProjectRegistry
+            if (not isinstance(project_registry, TrustedChatGPTProjectRegistry)
+                    or not callable(getattr(project_verifier, "verify", None))):
+                raise ValueError("invalid trusted project gate")
         self._config = config
         self._browser_factory = browser_factory
+        self._project_registry = project_registry
+        self._project_verifier = project_verifier
         self._lock = Lock()
         self._agents: dict[str, _AgentSlot] = {}
         self._browser_ids: set[int] = set()
@@ -152,6 +170,9 @@ class WebAgentSessionRegistry:
             raise ChatGPTWebUnavailable("chatgpt_web is disabled")
         if self._browser_factory is None:
             raise ChatGPTWebUnavailable("no trusted scoped browser factory")
+        if self._project_registry is not None:
+            self._project_registry.binding_for(owner_id=identity.owner_id,
+                                               project_id=identity.project_id)
         with self._lock:
             # Even the same agent must not be rebound silently. A browser
             # session and its scope are pinned for the registry lifetime.
@@ -200,6 +221,16 @@ class WebAgentSessionRegistry:
         return self._slot(owner_id=owner_id, project_id=project_id,
                           agent_id=agent_id).queue.pending
 
+    def project_binding(self, *, owner_id: str, project_id: str,
+                        agent_id: str) -> TrustedChatGPTProjectBinding:
+        """Only trusted registered identities may inspect their mapping."""
+        slot = self._slot(owner_id=owner_id, project_id=project_id,
+                          agent_id=agent_id)
+        if self._project_registry is None:
+            raise WebAgentScopeError("no trusted ChatGPT Project gate")
+        return self._project_registry.binding_for(
+            owner_id=slot.identity.owner_id, project_id=slot.identity.project_id)
+
     def run(self, *, owner_id: str, project_id: str,
             agent_id: str, model_id: str, prompt: str) -> AgentResult:
         """One scoped synthetic task, FIFO per agent, parallel across agents.
@@ -211,6 +242,9 @@ class WebAgentSessionRegistry:
         slot = self._slot(owner_id=owner_id, project_id=project_id,
                           agent_id=agent_id)
         with slot.queue.turn():
+            if self._project_registry is not None:
+                self._project_registry.verify_member(
+                    profile=slot.profile, verifier=self._project_verifier)
             model = ChatGPTWebModel(self._config, model_id, slot.browser)
             context = SessionContext(slot.identity.project_id,
                                      slot.identity.agent_id,

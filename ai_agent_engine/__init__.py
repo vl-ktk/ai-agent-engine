@@ -14,6 +14,10 @@ from .chatgpt_web_sessions import (
     ScopedBrowserPort, WebAgentIdentity, WebAgentProfile, WebAgentScopeError,
     WebAgentSessionRegistry,
 )
+from .chatgpt_web_projects import (
+    ProjectMembershipEvidence, ProjectMembershipVerifier,
+    TrustedChatGPTProjectBinding, TrustedChatGPTProjectRegistry,
+)
 
 __all__ = [
     "Action", "Agent", "AgentResult", "AgentRole", "AgentSession", "Message", "Model",
@@ -24,4 +28,6 @@ __all__ = [
     "ChatGPTWebUnavailable", "chatgpt_web_provider_spec",
     "ScopedBrowserPort", "WebAgentIdentity", "WebAgentProfile", "WebAgentScopeError",
     "WebAgentSessionRegistry",
+    "ProjectMembershipEvidence", "ProjectMembershipVerifier",
+    "TrustedChatGPTProjectBinding", "TrustedChatGPTProjectRegistry",
 ]

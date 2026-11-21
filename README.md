@@ -284,8 +284,15 @@ queue. A mock port must attest to the expected profile/mailbox keys. Two fake
 agents run independently; a mismatch or attempted port reuse fails closed.
 Declared action labels are private metadata, **not tool grants**.
 There are still **no on-disk ChatGPT profiles, live connections, durable
-mailboxes or project-chat membership checks**. See
+mailboxes or real project-chat membership checks**. See
 [WEB-03 isolation evidence](./infra/orchestrator/CHATGPT_WEB_WEB03_SESSIONS.md).
+
+WEB-04 optionally wires a **trusted internal→ChatGPT Project registry** and a
+mandatory mock membership verifier into each per-agent turn. An unknown
+binding or mismatched/unverified Project/profile/agent claim fails **before**
+the mock browser sends anything; the verifier is called again on every turn.
+This is a synthetic trust-boundary test, **not proof of live ChatGPT Project
+membership**. See [WEB-04 evidence](./infra/orchestrator/CHATGPT_WEB_WEB04_PROJECT_MEMBERSHIP.md).
 
 ## Sign in with ChatGPT — local pilot (phase 1.5)
 

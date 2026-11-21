@@ -1,4 +1,16 @@
-# HANDOFF — 21.11.2026 / WEB-03 OFFLINE MOCK PASS → следующий WEB-04
+# HANDOFF — 21.11.2026 / WEB-04 OFFLINE MOCK PASS → следующий WEB-05
+
+**Единственный источник:** `vl-ktk/ai-agent-engine/main`. **База/source rollback до WEB-04:** `ae6f027411c83c90af8569e57776abd02bc211a0` (при чужих последующих изменениях только адресный revert). **Исходная Python-версия:** `0.3.29a0`, это не production. **Netcup не трогали:** по последней зафиксированной проверке controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, task SQLite `v14`; live VPS на WEB-04 не проверялся.
+
+**Сделан только WEB-04 [x] в offline mock:** `ai_agent_engine/chatgpt_web_projects.py` вводит доверенное неизменяемое сопоставление `(owner_id, project_id) → chatgpt_project_id`, запрет дублирования/перепривязки. `WebAgentSessionRegistry` при переданных `project_registry + project_verifier` требует известный project при регистрации и *свежий* exact-scope `ProjectMembershipEvidence` перед **каждым** mock browser-turn (owner, internal/external project, agent, profile/mailbox, строго bool True). Wrong/missing/foreign/error — fail-closed **до** `BrowserPort.complete`. WEB-03 mock-only режим оставлен для старых тестов, его нельзя принимать за real project verification. [WEB-04 спецификация и границы](./infra/orchestrator/CHATGPT_WEB_WEB04_PROJECT_MEMBERSHIP.md). **Нет реального UI membership, чатов, login, account automation, cookie/token/платного API.**
+
+**Проверки:** 14/14 новых unit PASS, `python -m unittest discover -s tests -q` **1116 OK, 3 skipped**, `compileall`, `git diff --check`, wheel `ai_agent_engine-0.3.29a0-py3-none-any.whl` с включённым модулем PASS. Из-за отсутствующего локально `python -m build` wheel собран `pip wheel --no-deps --no-build-isolation` с установленным `setuptools==84.2.1`; это не ошибка source. GitHub CI результат записать после публикации и повторной проверки. Старый общий Windows CI-WIN-001 пока открыт, не объявлять общий CI зелёным.
+
+**Статус плана:** WEB-01…04 [x] в своих доказанных границах, **4/20**, WEB-05…20 [ ]; основные 169 задач, прежние 86/169 `[x]` без изменений. 7.11 `[ ] PARTIAL`, 7.12 HOLD, WEB-17 policy `HOLD`, ordinary ChatGPT allowance не подтверждён. **Следующий только WEB-05 [ ]**, после новой команды владельца: scoped mock ChatManager, agent→active conversation, создание в своём ChatGPT Project и predecessor/next, отрицательные тесты. WEB-06…20 не начинать одновременно.
+
+---
+
+# АРХИВ HANDOFF — 21.11.2026 / WEB-03 OFFLINE MOCK PASS → следующий WEB-04
 
 **Единственный источник:** `vl-ktk/ai-agent-engine/main`. **Git baseline / source rollback до WEB-03:** `62fc0f060268cd033baf2371505d74b27946bc32` (при новых чужих commit откатить только WEB-03, не перезаписывать ветку). **Новая source Python-версия:** `0.3.28a0`, не Netcup production. **Production не трогали:** последняя записанная версия controller `v0.3.11a0`, release/rollback `0e04af007375d82daf8f7d3b36c71abb0c784e0b`, рабочая SQLite `v14`; live VPS не перепроверяли.
 
