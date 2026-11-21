@@ -30,7 +30,7 @@
 
 **WEB-09 проверки:** 15/15 новых unit, полный локальный регресс **1211 OK (3 skipped)**, wheel `0.3.34a0`, compileall и diff check PASS. [CI #44897250136](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44897250136): Ubuntu 3.11/3.12/3.13 и wheel PASS; Windows global FAIL по прежней CI-WIN-001 (4 failures/44 errors), но 15/15 новых Windows unit PASS. [Протокол WEB-09](../infra/orchestrator/CHATGPT_WEB_WEB09_CONTEXT_PRESSURE.md). Это лишь scoped offline preflight, не настоящий ChatGPT token count или ротация чата.
 
-**WEB-10 проверки:** 17/17 новых offline unit с idempotent mock-port, SQLite-journal и настоящим kill дочернего процесса между mock create и commit; полный локальный regression **1228 OK (3 skipped)**, wheel `0.3.35a1`, compileall/diff check PASS. GitHub CI дописать после публикации. [Протокол WEB-10](../infra/orchestrator/CHATGPT_WEB_WEB10_ROTATION.md). Никакой live-автоматизации ChatGPT; ограниченный журнал ротации не заменяет TaskInbox/WEB-15.
+**WEB-10 проверки:** 17/17 новых offline unit с idempotent mock-port, SQLite-journal и настоящим kill дочернего процесса между mock create и commit; полный локальный regression **1228 OK (3 skipped)**, wheel `0.3.35a1`, compileall/diff check PASS. [CI #44898972473](https://github.com/vl-ktk/ai-agent-engine/actions/runs/44898972473): Ubuntu 3.11/3.12/3.13 и wheel PASS, 17/17 WEB-10 Windows unit PASS, global Windows FAIL лишь по прежней CI-WIN-001 (4 failures/44 errors). [Протокол WEB-10](../infra/orchestrator/CHATGPT_WEB_WEB10_ROTATION.md). Никакой live-автоматизации ChatGPT; ограниченный журнал ротации не заменяет TaskInbox/WEB-15.
 
 ## 2. Точка остановки — текущий 7.11
 
